@@ -1,0 +1,15 @@
+.DS_Store
+
+.omx/
+
+.build/
+.swiftpm/
+
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+DerivedData/
+
+.env
+.env.*
+!.env.example

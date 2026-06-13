@@ -1,0 +1,1707 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lingobar Prototype</title>
+  <style>
+    :root {
+      --bg: #f3f1ec;
+      --ink: #141414;
+      --muted: #68645d;
+      --line: rgba(20, 20, 20, 0.12);
+      --surface-line: rgba(20, 20, 20, 0.13);
+      --surface-ink: var(--ink);
+      --surface-muted: var(--muted);
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: #ffffff;
+      --sidebar-bg: rgba(255, 255, 255, 0.38);
+      --window-bg: #fbfaf7;
+      --chrome-bg: #eee9df;
+      --doc-ink: #1f1b16;
+      --doc-muted: #786f62;
+      --bar-bg: rgba(255, 255, 255, 0.86);
+      --control-bg: rgba(255, 255, 255, 0.5);
+      --control-hover: rgba(255, 255, 255, 0.78);
+      --active-bg: #191715;
+      --active-ink: #fff8ec;
+      --nav-active-bg: var(--active-bg);
+      --nav-active-ink: var(--active-ink);
+      --action-ink: #22201c;
+      --side-bg: rgba(246, 243, 236, 0.74);
+      --footer-bg: rgba(255, 255, 255, 0.62);
+      --result-ink: #25221e;
+      --chip-bg: rgba(47, 111, 95, 0.08);
+      --chip-line: rgba(47, 111, 95, 0.22);
+      --chip-ink: #1f5145;
+      --input-scrim: rgba(251, 250, 247, 0.68);
+      --warm: #f0cf8f;
+      --green: #2f6f5f;
+      --blue: #285f9d;
+      --red: #b65346;
+      --shadow: 0 22px 58px rgba(28, 26, 22, 0.18);
+      --radius: 8px;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    body[data-theme="mac"] {
+      --bg: #ecebea;
+      --ink: #171717;
+      --muted: #707070;
+      --line: rgba(0, 0, 0, 0.1);
+      --surface-line: rgba(0, 0, 0, 0.1);
+      --surface-ink: #171717;
+      --surface-muted: #707070;
+      --panel: rgba(248, 248, 248, 0.98);
+      --panel-strong: #ffffff;
+      --sidebar-bg: rgba(247, 247, 247, 0.72);
+      --window-bg: #ffffff;
+      --chrome-bg: #f3f3f3;
+      --doc-ink: #202020;
+      --doc-muted: #6b6b6b;
+      --bar-bg: rgba(250, 250, 250, 0.98);
+      --control-bg: rgba(0, 0, 0, 0.04);
+      --control-hover: rgba(255, 255, 255, 0.96);
+      --active-bg: #0a84ff;
+      --active-ink: #ffffff;
+      --nav-active-bg: #0a84ff;
+      --nav-active-ink: #ffffff;
+      --action-ink: #1d1d1f;
+      --side-bg: rgba(240, 240, 240, 0.86);
+      --footer-bg: rgba(242, 242, 242, 0.9);
+      --result-ink: #1d1d1f;
+      --chip-bg: rgba(0, 122, 255, 0.08);
+      --chip-line: rgba(0, 122, 255, 0.2);
+      --chip-ink: #075aa6;
+      --input-scrim: rgba(246, 246, 246, 0.74);
+      --green: #0a84ff;
+      --blue: #0a84ff;
+      --shadow: 0 24px 62px rgba(0, 0, 0, 0.16);
+      --radius: 12px;
+    }
+
+    body[data-theme="dark"] {
+      --bg: #f1efea;
+      --ink: #171717;
+      --muted: #706c66;
+      --line: rgba(20, 20, 20, 0.12);
+      --surface-line: rgba(255, 255, 255, 0.1);
+      --surface-ink: #f4f4f5;
+      --surface-muted: #a1a1aa;
+      --panel: rgba(29, 29, 31, 0.98);
+      --panel-strong: #222224;
+      --sidebar-bg: rgba(255, 255, 255, 0.34);
+      --window-bg: #fbfaf7;
+      --chrome-bg: #eee9df;
+      --doc-ink: #1f1b16;
+      --doc-muted: #786f62;
+      --bar-bg: rgba(29, 29, 31, 0.98);
+      --control-bg: rgba(255, 255, 255, 0.1);
+      --control-hover: rgba(255, 255, 255, 0.15);
+      --active-bg: rgba(255, 255, 255, 0.18);
+      --active-ink: #ffffff;
+      --nav-active-bg: #191715;
+      --nav-active-ink: #fff8ec;
+      --action-ink: #f4f4f5;
+      --side-bg: rgba(22, 22, 24, 0.96);
+      --footer-bg: rgba(24, 24, 26, 0.98);
+      --result-ink: #ededee;
+      --chip-bg: rgba(255, 255, 255, 0.08);
+      --chip-line: rgba(255, 255, 255, 0.12);
+      --chip-ink: #d8d8dc;
+      --input-scrim: rgba(251, 250, 247, 0.56);
+      --green: #6e6e73;
+      --blue: #c7c7cc;
+      --shadow: 0 26px 72px rgba(0, 0, 0, 0.34);
+      --radius: 14px;
+    }
+
+    body[data-theme="glass"] {
+      --bg: #e8edf0;
+      --ink: #101820;
+      --muted: #50606b;
+      --line: rgba(31, 45, 56, 0.12);
+      --surface-line: rgba(255, 255, 255, 0.48);
+      --surface-ink: #101820;
+      --surface-muted: #50606b;
+      --panel: rgba(255, 255, 255, 0.56);
+      --panel-strong: rgba(255, 255, 255, 0.76);
+      --sidebar-bg: rgba(255, 255, 255, 0.32);
+      --window-bg: rgba(255, 255, 255, 0.62);
+      --chrome-bg: rgba(255, 255, 255, 0.44);
+      --doc-ink: #1c2630;
+      --doc-muted: #5e6e78;
+      --bar-bg: rgba(255, 255, 255, 0.52);
+      --control-bg: rgba(255, 255, 255, 0.36);
+      --control-hover: rgba(255, 255, 255, 0.64);
+      --active-bg: rgba(18, 31, 42, 0.82);
+      --active-ink: #ffffff;
+      --nav-active-bg: rgba(18, 31, 42, 0.82);
+      --nav-active-ink: #ffffff;
+      --action-ink: #111b24;
+      --side-bg: rgba(255, 255, 255, 0.34);
+      --footer-bg: rgba(255, 255, 255, 0.4);
+      --result-ink: #10202b;
+      --chip-bg: rgba(16, 24, 32, 0.08);
+      --chip-line: rgba(16, 24, 32, 0.18);
+      --chip-ink: #123d55;
+      --input-scrim: rgba(255, 255, 255, 0.22);
+      --green: #1f6f86;
+      --blue: #255f91;
+      --shadow: 0 30px 74px rgba(43, 69, 82, 0.22);
+      --radius: 16px;
+    }
+
+    body[data-theme="wine"] {
+      --bg: #eff1ee;
+      --ink: #171312;
+      --muted: #766b67;
+      --line: rgba(54, 28, 24, 0.12);
+      --surface-line: rgba(255, 210, 198, 0.12);
+      --surface-ink: #f7eeee;
+      --surface-muted: #b9a6a1;
+      --panel: rgba(42, 18, 18, 0.94);
+      --panel-strong: rgba(66, 25, 22, 0.96);
+      --sidebar-bg: rgba(255, 255, 255, 0.36);
+      --window-bg: rgba(252, 250, 246, 0.92);
+      --chrome-bg: rgba(238, 232, 225, 0.78);
+      --doc-ink: #211b18;
+      --doc-muted: #756963;
+      --bar-bg: rgba(74, 24, 20, 0.9);
+      --control-bg: rgba(255, 229, 221, 0.09);
+      --control-hover: rgba(255, 229, 221, 0.16);
+      --active-bg: #fff7f1;
+      --active-ink: #3a1714;
+      --nav-active-bg: #4b201d;
+      --nav-active-ink: #fff7f1;
+      --action-ink: #f9efec;
+      --side-bg: rgba(30, 18, 20, 0.86);
+      --footer-bg: rgba(27, 18, 20, 0.92);
+      --result-ink: #f5eeee;
+      --chip-bg: rgba(255, 226, 216, 0.08);
+      --chip-line: rgba(255, 226, 216, 0.14);
+      --chip-ink: #ead4cd;
+      --input-scrim: rgba(252, 250, 246, 0.5);
+      --green: #f2c7b8;
+      --blue: #e8b0a0;
+      --shadow: 0 30px 90px rgba(48, 18, 18, 0.34);
+      --radius: 14px;
+    }
+
+    body[data-theme="spotlight"] {
+      --bg: #f4f5f6;
+      --ink: #111316;
+      --muted: #6d737b;
+      --line: rgba(12, 18, 24, 0.1);
+      --surface-line: rgba(12, 18, 24, 0.1);
+      --surface-ink: #111316;
+      --surface-muted: #737983;
+      --panel: rgba(255, 255, 255, 0.98);
+      --panel-strong: #ffffff;
+      --sidebar-bg: rgba(255, 255, 255, 0.62);
+      --window-bg: #ffffff;
+      --chrome-bg: #f6f6f7;
+      --doc-ink: #202328;
+      --doc-muted: #747982;
+      --bar-bg: rgba(255, 255, 255, 0.98);
+      --control-bg: rgba(8, 14, 20, 0.045);
+      --control-hover: rgba(8, 14, 20, 0.075);
+      --active-bg: #111316;
+      --active-ink: #ffffff;
+      --nav-active-bg: #111316;
+      --nav-active-ink: #ffffff;
+      --action-ink: #171a1f;
+      --side-bg: rgba(247, 248, 249, 0.96);
+      --footer-bg: rgba(249, 249, 250, 0.96);
+      --result-ink: #1c2025;
+      --chip-bg: rgba(8, 14, 20, 0.045);
+      --chip-line: rgba(8, 14, 20, 0.08);
+      --chip-ink: #343a42;
+      --input-scrim: rgba(255, 255, 255, 0.62);
+      --green: #111316;
+      --blue: #111316;
+      --shadow: 0 18px 54px rgba(18, 24, 31, 0.18);
+      --radius: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    .workspace {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) minmax(660px, 1fr);
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0)),
+        var(--bg);
+    }
+
+    body[data-theme="dark"] .workspace {
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+        var(--bg);
+    }
+
+    body[data-theme="glass"] .workspace {
+      background:
+        linear-gradient(120deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.08)),
+        linear-gradient(150deg, #d8e4ee 0%, #ecf1e8 42%, #d7e3ef 100%);
+    }
+
+    body[data-theme="wine"] .workspace {
+      background:
+        linear-gradient(120deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0)),
+        linear-gradient(150deg, #eef2ee 0%, #f3eee8 48%, #e8edf2 100%);
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--line);
+      padding: 26px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      background: var(--sidebar-bg);
+      backdrop-filter: blur(22px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--nav-active-bg);
+      color: var(--nav-active-ink);
+      font-weight: 720;
+      font-size: 18px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 21px;
+      line-height: 1.05;
+    }
+
+    .brand p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mode-switch {
+      display: grid;
+      gap: 8px;
+    }
+
+    .theme-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .theme-button {
+      min-height: 58px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--control-bg);
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      gap: 4px;
+      justify-items: start;
+      padding: 10px;
+      transition: background 160ms ease, transform 160ms ease, border-color 160ms ease;
+    }
+
+    .theme-button:hover {
+      background: var(--control-hover);
+      transform: translateY(-1px);
+    }
+
+    .theme-button.is-active {
+      background: var(--nav-active-bg);
+      color: var(--nav-active-ink);
+      border-color: var(--nav-active-bg);
+    }
+
+    .theme-button strong {
+      font-size: 13px;
+      line-height: 1.1;
+    }
+
+    .theme-button span {
+      color: currentColor;
+      opacity: 0.66;
+      font-size: 11px;
+      line-height: 1.2;
+      text-align: left;
+    }
+
+    .mode-button {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--control-bg);
+      color: var(--ink);
+      border-radius: var(--radius);
+      padding: 11px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+    }
+
+    .mode-button:hover {
+      transform: translateY(-1px);
+      background: var(--control-hover);
+    }
+
+    .mode-button.is-active {
+      background: var(--nav-active-bg);
+      color: var(--nav-active-ink);
+      border-color: var(--nav-active-bg);
+    }
+
+    .mode-button span:first-child {
+      font-weight: 680;
+    }
+
+    .mode-button span:last-child {
+      color: currentColor;
+      opacity: 0.64;
+      font-size: 12px;
+    }
+
+    .library {
+      margin-top: auto;
+      border-top: 1px solid var(--line);
+      padding-top: 20px;
+    }
+
+    .library h2,
+    .panel-section h2 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0 0 12px;
+      color: var(--muted);
+    }
+
+    .saved-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .saved-item {
+      border: 1px solid var(--line);
+      background: var(--control-bg);
+      border-radius: var(--radius);
+      padding: 10px;
+    }
+
+    .saved-item strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .saved-item span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 100vh;
+      padding: 28px;
+      overflow: hidden;
+    }
+
+    .mac-window {
+      height: calc(100vh - 56px);
+      min-height: 620px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--window-bg);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .chrome {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--chrome-bg);
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .dot.red { background: #e26a5d; }
+    .dot.yellow { background: #e8bd52; }
+    .dot.green { background: #65bd63; }
+
+    .doc {
+      width: min(760px, calc(100% - 96px));
+      margin: 52px auto;
+      font-family: ui-serif, Georgia, "Times New Roman", serif;
+      color: var(--doc-ink);
+      line-height: 1.72;
+      font-size: 20px;
+    }
+
+    .doc h2 {
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--doc-muted);
+      margin: 0 0 16px;
+    }
+
+    .doc p {
+      margin: 0 0 22px;
+    }
+
+    .selection {
+      background: rgba(240, 207, 143, 0.76);
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+      border-radius: 4px;
+      padding: 2px 3px;
+    }
+
+    .floating-shell {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-18%);
+      top: 232px;
+      width: min(720px, calc(100% - 80px));
+      display: grid;
+      gap: 8px;
+      z-index: 5;
+    }
+
+    body[data-action="parse"] .floating-shell {
+      top: 192px;
+      width: min(900px, calc(100% - 80px));
+    }
+
+    .floating-shell::before {
+      content: "";
+      position: absolute;
+      inset: -14px;
+      z-index: -1;
+      border-radius: 10px;
+      opacity: 0;
+      transition: opacity 180ms ease;
+      background: var(--input-scrim);
+      backdrop-filter: blur(4px);
+    }
+
+    .floating-shell.input-mode {
+      top: 156px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(680px, calc(100% - 72px));
+    }
+
+    .floating-shell.input-mode::before {
+      opacity: 1;
+    }
+
+    body[data-mode="input"] .selection {
+      background: transparent;
+      padding: 0;
+    }
+
+    body[data-mode="input"] .doc {
+      color: rgba(31, 27, 22, 0.52);
+    }
+
+    body[data-theme="dark"][data-mode="input"] .doc {
+      color: rgba(31, 27, 22, 0.5);
+    }
+
+    body[data-theme="glass"][data-mode="input"] .doc {
+      color: rgba(28, 38, 48, 0.5);
+    }
+
+    body[data-theme="wine"][data-mode="input"] .doc {
+      color: rgba(33, 27, 24, 0.46);
+    }
+
+    .bar {
+      min-height: 44px;
+      border: 1px solid var(--surface-line);
+      border-radius: var(--radius);
+      background: var(--bar-bg);
+      color: var(--surface-ink);
+      backdrop-filter: blur(22px);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+    }
+
+    .selected-chip {
+      min-width: 280px;
+      max-width: 500px;
+      flex: 1 1 340px;
+      min-height: 32px;
+      border: 1px solid var(--surface-line);
+      border-radius: 7px;
+      background: var(--control-bg);
+      padding: 5px 9px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .selected-chip strong {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 12px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .selected-chip span {
+      flex: 0 0 auto;
+      color: var(--surface-muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .action {
+      height: 32px;
+      min-width: 38px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--action-ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 0 9px;
+      transition: background 150ms ease, color 150ms ease;
+      flex: 0 0 auto;
+    }
+
+    .action:hover {
+      background: var(--control-hover);
+    }
+
+    .action.is-active {
+      background: var(--active-bg);
+      color: var(--active-ink);
+      min-width: 50px;
+    }
+
+    .action .glyph {
+      display: none;
+      font-size: 13px;
+      width: 14px;
+      text-align: center;
+    }
+
+    .action .label {
+      display: inline;
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .action[data-action="copy"],
+    .action[data-action="expand"],
+    .action[data-action="pronounce"] {
+      min-width: 32px;
+      padding: 0 8px;
+    }
+
+    .action[data-action="copy"] .glyph,
+    .action[data-action="expand"] .glyph,
+    .action[data-action="pronounce"] .glyph {
+      display: inline;
+    }
+
+    .action[data-action="copy"] .label,
+    .action[data-action="expand"] .label,
+    .action[data-action="pronounce"] .label {
+      display: none;
+    }
+
+    .quick-input {
+      flex: 1;
+      min-width: 120px;
+      height: 38px;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--surface-ink);
+      padding: 0 8px;
+      font-size: 15px;
+    }
+
+    .submit {
+      height: 38px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--green);
+      color: #fff;
+      padding: 0 14px;
+      cursor: pointer;
+      font-weight: 680;
+    }
+
+    .voice {
+      width: 38px;
+      height: 38px;
+      border: 0;
+      border-radius: 7px;
+      background: rgba(40, 95, 157, 0.1);
+      color: var(--blue);
+      cursor: pointer;
+    }
+
+    .result-panel {
+      border: 1px solid var(--surface-line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--surface-ink);
+      backdrop-filter: blur(24px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-grid {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.8fr);
+      min-height: 238px;
+    }
+
+    .panel-main,
+    .panel-side {
+      padding: 18px;
+    }
+
+    .panel-side {
+      border-left: 1px solid var(--surface-line);
+      background: var(--side-bg);
+    }
+
+    .result-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 13px;
+    }
+
+    .result-title h3 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .keycap {
+      color: var(--surface-muted);
+      font-size: 12px;
+      border: 1px solid var(--surface-line);
+      border-radius: 6px;
+      padding: 3px 7px;
+      background: var(--control-bg);
+      white-space: nowrap;
+    }
+
+    .result-copy {
+      margin: 0 0 16px;
+      color: var(--result-ink);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+
+    .parse-controls {
+      display: none;
+      gap: 6px;
+      margin: -2px 0 14px;
+    }
+
+    body[data-action="parse"] .parse-controls {
+      display: flex;
+    }
+
+    .parse-tab {
+      height: 30px;
+      border: 1px solid var(--surface-line);
+      border-radius: 7px;
+      background: var(--control-bg);
+      color: var(--surface-ink);
+      padding: 0 9px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .parse-tab.is-active {
+      background: var(--active-bg);
+      color: var(--active-ink);
+      border-color: var(--active-bg);
+    }
+
+    .parse-visual {
+      display: none;
+      margin-bottom: 14px;
+    }
+
+    body[data-action="parse"] .parse-visual {
+      display: block;
+    }
+
+    body[data-action="parse"] .breakdown {
+      display: none;
+    }
+
+    .sentence-line {
+      color: var(--result-ink);
+      font-size: 13px;
+      line-height: 1.55;
+      margin-bottom: 12px;
+    }
+
+    .sentence-line .phrase {
+      border-radius: 5px;
+      padding: 1px 4px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    }
+
+    .phrase.core { background: rgba(47, 111, 95, 0.13); color: var(--result-ink); }
+    .phrase.relative { background: rgba(40, 95, 157, 0.13); color: var(--result-ink); }
+    .phrase.contrast { background: rgba(182, 83, 70, 0.12); color: var(--result-ink); }
+    .phrase.result { background: rgba(240, 207, 143, 0.22); color: var(--result-ink); }
+
+    .tree-board {
+      display: grid;
+      gap: 8px;
+    }
+
+    .tree-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+    }
+
+    .tree-row.level-1 { padding-left: 24px; }
+    .tree-row.level-2 { padding-left: 54px; }
+    .tree-row.level-3 { padding-left: 84px; }
+
+    .tree-node {
+      border: 1px solid var(--surface-line);
+      border-radius: 7px;
+      background: var(--control-bg);
+      color: var(--surface-ink);
+      padding: 7px 9px;
+      font-size: 12px;
+      line-height: 1.3;
+      min-width: 118px;
+    }
+
+    .tree-node strong {
+      display: block;
+      color: var(--green);
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+
+    .branch {
+      width: 30px;
+      height: 1px;
+      background: var(--surface-line);
+      flex: 0 0 auto;
+    }
+
+    .track-board {
+      display: grid;
+      gap: 10px;
+    }
+
+    .track {
+      display: grid;
+      grid-template-columns: 86px 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .track-label {
+      color: var(--surface-muted);
+      font-size: 11px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .track-lane {
+      position: relative;
+      min-height: 32px;
+      border-radius: 8px;
+      background: rgba(127, 127, 127, 0.08);
+      overflow: hidden;
+    }
+
+    .track-span {
+      position: absolute;
+      top: 5px;
+      bottom: 5px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8px;
+      font-size: 11px;
+      white-space: nowrap;
+      color: var(--surface-ink);
+      border: 1px solid var(--surface-line);
+      background: var(--panel-strong);
+    }
+
+    .track-span.main { left: 5%; width: 38%; }
+    .track-span.relative { left: 16%; width: 32%; }
+    .track-span.contrast { left: 49%; width: 27%; }
+    .track-span.result { left: 72%; width: 23%; }
+    .track-span.modifier { left: 6%; width: 89%; }
+
+    .blocks-board {
+      display: grid;
+      gap: 9px;
+    }
+
+    .block-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .grammar-block {
+      border: 1px solid var(--surface-line);
+      border-radius: 8px;
+      background: var(--panel-strong);
+      color: var(--surface-ink);
+      padding: 8px 10px;
+      min-height: 44px;
+      display: grid;
+      gap: 3px;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.06);
+    }
+
+    .grammar-block strong {
+      font-size: 11px;
+      color: var(--green);
+    }
+
+    .grammar-block span {
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .arrow {
+      color: var(--surface-muted);
+      font-size: 15px;
+    }
+
+    .logic-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .logic-card {
+      border-radius: 7px;
+      border: 1px solid var(--surface-line);
+      background: var(--control-bg);
+      padding: 7px;
+      min-height: 58px;
+    }
+
+    .logic-card b {
+      display: block;
+      color: var(--green);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .logic-card span {
+      display: block;
+      color: var(--surface-ink);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .breakdown li {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      gap: 10px;
+      align-items: start;
+      border-top: 1px solid var(--surface-line);
+      padding-top: 8px;
+      font-size: 13px;
+      line-height: 1.42;
+    }
+
+    .breakdown b {
+      color: var(--green);
+      font-size: 12px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .mini-chip {
+      border: 1px solid var(--chip-line);
+      background: var(--chip-bg);
+      color: var(--chip-ink);
+      border-radius: 999px;
+      padding: 5px 8px;
+      font-size: 12px;
+    }
+
+    .toolbar-footer {
+      height: 48px;
+      border-top: 1px solid var(--surface-line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 0 12px;
+      background: var(--footer-bg);
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .footer-button {
+      height: 32px;
+      border: 1px solid var(--surface-line);
+      border-radius: 7px;
+      background: var(--control-bg);
+      color: var(--surface-ink);
+      padding: 0 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .footer-button.primary {
+      background: var(--active-bg);
+      color: var(--active-ink);
+      border-color: var(--active-bg);
+    }
+
+    .status {
+      color: var(--surface-muted);
+      font-size: 12px;
+      min-width: 128px;
+      text-align: right;
+    }
+
+    .toast {
+      position: absolute;
+      right: 30px;
+      bottom: 26px;
+      border-radius: 7px;
+      background: var(--active-bg);
+      color: var(--active-ink);
+      padding: 9px 12px;
+      font-size: 13px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 180ms ease, transform 180ms ease;
+      pointer-events: none;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: auto;
+      }
+
+      .stage {
+        min-height: 720px;
+      }
+
+      .mac-window {
+        height: 680px;
+        min-height: 680px;
+      }
+
+      .floating-shell,
+      .floating-shell.input-mode {
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 42px);
+      }
+
+      .bar {
+        overflow-x: auto;
+      }
+
+      .panel-grid {
+        grid-template-columns: 1fr;
+      }
+
+      body[data-action="parse"] .floating-shell {
+        width: calc(100% - 42px);
+      }
+
+      .panel-side {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .logic-strip {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 620px) {
+      .stage {
+        padding: 12px;
+      }
+
+      .mac-window {
+        height: 720px;
+      }
+
+      .doc {
+        width: calc(100% - 34px);
+        margin-top: 36px;
+        font-size: 17px;
+      }
+
+      .floating-shell,
+      .floating-shell.input-mode {
+        top: 96px;
+        width: calc(100% - 24px);
+      }
+
+      .selected-chip {
+        min-width: 144px;
+      }
+
+      .action {
+        min-width: 44px;
+        padding: 0 8px;
+      }
+
+      .action .label {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body data-theme="current">
+  <main class="workspace">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="mark">L</div>
+        <div>
+          <h1>Lingobar</h1>
+          <p>Selection-first language layer</p>
+        </div>
+      </div>
+
+      <div class="mode-switch" aria-label="Prototype mode">
+        <button class="mode-button is-active" type="button" data-mode="selection">
+          <span>选中文本</span>
+          <span>理解当前语境</span>
+        </button>
+        <button class="mode-button" type="button" data-mode="input">
+          <span>直接输入</span>
+          <span>生成自然表达</span>
+        </button>
+      </div>
+
+      <section class="panel-section">
+        <h2>Visual direction</h2>
+        <div class="theme-switch" aria-label="Visual direction">
+          <button class="theme-button is-active" type="button" data-theme-choice="current">
+            <strong>现在</strong>
+            <span>温和、学习感</span>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="mac">
+            <strong>浅色 Mac</strong>
+            <span>原生、素净</span>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="dark">
+            <strong>深色浮窗</strong>
+            <span>软件、夜间</span>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="glass">
+            <strong>毛玻璃</strong>
+            <span>轻透、浮层</span>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="wine">
+            <strong>暖暗玻璃</strong>
+            <span>工具、质感</span>
+          </button>
+          <button class="theme-button" type="button" data-theme-choice="spotlight">
+            <strong>极简浮窗</strong>
+            <span>Spotlight 感</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <h2>Session</h2>
+        <div class="saved-list">
+          <div class="saved-item">
+            <strong>It turns the text into a learning object.</strong>
+            <span>文本不只是被翻译，而是进入理解、拆解和积累。</span>
+          </div>
+          <div class="saved-item">
+            <strong>in context</strong>
+            <span>搭配：read in context, explain in context</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="library">
+        <h2>Saved phrases</h2>
+        <div class="saved-list" id="savedList">
+          <div class="saved-item">
+            <strong>selection-first</strong>
+            <span>以选区为入口，而不是先打开 App。</span>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="stage" data-screen-label="Lingobar desktop prototype">
+      <div class="mac-window">
+        <div class="chrome" aria-hidden="true">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <article class="doc">
+          <h2>Reading in Safari</h2>
+          <p>
+            In a long essay about learning tools, the sentence that slowed the reader down was:
+            <span class="selection">Although the researchers who designed the study expected that students would remember more vocabulary when examples were shown in context, the results suggested that memory improved only when learners actively compared similar phrases and explained why one sounded more natural than another.</span>
+          </p>
+          <p>
+            The best moment is not when the user opens another app. It is the instant the meaning starts to blur.
+          </p>
+          <p>
+            A good language tool should stay close to the text, keep the learner in flow, and make the next action obvious.
+          </p>
+        </article>
+
+        <div class="floating-shell" id="floatingShell">
+          <div class="bar" id="bar"></div>
+          <section class="result-panel">
+            <div class="panel-grid">
+              <div class="panel-main">
+                <div class="result-title">
+                  <h3 id="resultTitle">自然翻译</h3>
+                  <span class="keycap" id="keycap">⌘ 1</span>
+                </div>
+                <p class="result-copy" id="resultCopy">
+                  任何句子都可以变成一个小型学习对象：它能被翻译、拆解、记住，也能继续延展成新的表达。
+                </p>
+                <div class="parse-controls" id="parseControls"></div>
+                <div class="parse-visual" id="parseVisual"></div>
+                <ul class="breakdown" id="breakdown"></ul>
+              </div>
+              <aside class="panel-side">
+                <div class="result-title">
+                  <h3 id="sideTitle">表达积累</h3>
+                </div>
+                <div class="chips" id="chips"></div>
+              </aside>
+            </div>
+            <div class="toolbar-footer">
+              <div class="footer-actions">
+                <button class="footer-button" type="button" data-footer="copy">复制</button>
+                <button class="footer-button primary" type="button" data-footer="save">保存</button>
+                <button class="footer-button" type="button" data-footer="follow">继续展开</button>
+                <button class="footer-button" type="button" data-footer="insert">插入当前 App</button>
+              </div>
+              <div class="status" id="status">Ready</div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div class="toast" id="toast">已保存</div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      mode: "selection",
+      action: "translate",
+      theme: "current",
+      parseView: "tree",
+      prompt: "帮我把这句话改写成自然英文",
+      savedCount: 1
+    };
+
+    const selectionActions = [
+      { id: "copy", label: "复制", glyph: "⌘C", key: "⌘ C" },
+      { id: "translate", label: "翻译", glyph: "中", key: "⌘ 1" },
+      { id: "parse", label: "拆解", glyph: "⌁", key: "⌘ 2" },
+      { id: "save", label: "收藏", glyph: "＋", key: "⌘ S" },
+      { id: "expand", label: "扩写", glyph: "↗", key: "⌘ 3" },
+      { id: "examples", label: "例句", glyph: "“”", key: "⌘ 4" },
+      { id: "pronounce", label: "发音", glyph: "♪", key: "⌘ P" }
+    ];
+
+    const results = {
+      copy: {
+        title: "已复制选区",
+        key: "⌘ C",
+        copy: "any sentence can become a small object for translation, parsing, memory, and expression.",
+        rows: [
+          ["选区", "保留原文，方便复制到笔记、聊天或文档。"],
+          ["下一步", "可继续翻译、拆解或收藏为短句。"]
+        ],
+        sideTitle: "可继续处理",
+        chips: ["翻译", "拆解", "生成例句"]
+      },
+      translate: {
+        title: "自然翻译",
+        key: "⌘ 1",
+        copy: "任何句子都可以变成一个小型学习对象：它能被翻译、拆解、记住，也能继续延展成新的表达。",
+        rows: [
+          ["any sentence", "强调任意文本都能成为入口。"],
+          ["learning object", "不是普通资料，而是可拆、可存、可复用的学习对象。"],
+          ["expression", "这里指表达能力，不只是表情或表达式。"]
+        ],
+        sideTitle: "表达积累",
+        chips: ["learning object", "turn into", "in flow", "stay close to"]
+      },
+      parse: {
+        title: "长难句图形拆解",
+        key: "⌘ 2",
+        copy: "主干是 the results suggested that memory improved。前面 Although 引导让步从句，中间 who designed the study 修饰 researchers，最后 when 引导条件/时间从句说明记忆提升发生的条件。",
+        rows: [
+          ["让步从句", "Although the researchers ... expected ..."],
+          ["定语从句", "who designed the study 修饰 researchers"],
+          ["主句", "the results suggested that memory improved"],
+          ["条件从句", "when learners actively compared ... and explained ..."]
+        ],
+        sideTitle: "拆解重点",
+        chips: ["Although", "who designed", "that students would", "the results suggested", "when learners compared"]
+      },
+      save: {
+        title: "收藏到短句库",
+        key: "⌘ S",
+        copy: "已保存：learning object。这个表达适合描述“可被拆解、标注、复用的一段语言材料”。",
+        rows: [
+          ["标签", "product framing, language learning"],
+          ["复习", "明天提醒一次，三天后再次出现。"]
+        ],
+        sideTitle: "本地短句库",
+        chips: ["learning object", "selection-first", "language layer"]
+      },
+      expand: {
+        title: "扩展表达",
+        key: "⌘ 3",
+        copy: "更自然的产品表达：Every piece of text becomes a starting point for understanding, remembering, and expressing yourself better.",
+        rows: [
+          ["更口语", "Any text, one tap, next step."],
+          ["更产品", "A language layer that lives wherever text appears."],
+          ["更正式", "It transforms selected text into structured language insight."]
+        ],
+        sideTitle: "命名语感",
+        chips: ["Lingobar", "PhraseBar", "LingoLift"]
+      },
+      examples: {
+        title: "例句",
+        key: "⌘ 4",
+        copy: "The app turns every highlighted sentence into a learning object you can translate, break down, and save.",
+        rows: [
+          ["阅读", "This paragraph becomes a learning object instead of a dead end."],
+          ["写作", "Treat each rough sentence as a small object you can refine."],
+          ["产品", "The bar makes language feel editable at the point of need."]
+        ],
+        sideTitle: "搭配",
+        chips: ["turn into", "break down", "point of need"]
+      },
+      pronounce: {
+        title: "发音",
+        key: "⌘ P",
+        copy: "learning object /ˈlɝːnɪŋ ˈɑːbdʒekt/。重音落在 learning 和 object 的第一音节。",
+        rows: [
+          ["节奏", "LEARN-ing OB-ject"],
+          ["连读", "learning object 中间自然衔接，不要明显停顿。"]
+        ],
+        sideTitle: "可跟读",
+        chips: ["0.75x", "1x", "shadowing"]
+      },
+      ask: {
+        title: "表达生成",
+        key: "Return",
+        copy: "A natural version: I want to build a selection-first language bar that helps people understand, rewrite, and remember English wherever they are reading or writing.",
+        rows: [
+          ["语气", "清楚、产品化，比万能工具栏更聚焦。"],
+          ["改写", "I want a lightweight language layer that appears whenever text needs understanding."],
+          ["用途", "适合作为 pitch、README 或产品首页第一句。"]
+        ],
+        sideTitle: "后续动作",
+        chips: ["翻译成英文", "更口语", "更像 pitch", "保存为产品描述"]
+      }
+    };
+
+    const bar = document.getElementById("bar");
+    const floatingShell = document.getElementById("floatingShell");
+    const resultTitle = document.getElementById("resultTitle");
+    const resultCopy = document.getElementById("resultCopy");
+    const breakdown = document.getElementById("breakdown");
+    const parseControls = document.getElementById("parseControls");
+    const parseVisual = document.getElementById("parseVisual");
+    const chips = document.getElementById("chips");
+    const keycap = document.getElementById("keycap");
+    const sideTitle = document.getElementById("sideTitle");
+    const statusEl = document.getElementById("status");
+    const toast = document.getElementById("toast");
+    const savedList = document.getElementById("savedList");
+
+    function renderBar() {
+      bar.innerHTML = "";
+      document.body.dataset.mode = state.mode;
+      document.body.dataset.theme = state.theme;
+      document.body.dataset.action = state.action;
+      floatingShell.classList.toggle("input-mode", state.mode === "input");
+
+      if (state.mode === "selection") {
+        const selectedChip = document.createElement("div");
+        selectedChip.className = "selected-chip";
+        selectedChip.innerHTML = "<strong>Although the researchers who designed the study expected...</strong><span>Long sentence · Safari</span>";
+        bar.appendChild(selectedChip);
+
+        selectionActions.forEach((item) => {
+          const button = document.createElement("button");
+          button.className = "action" + (state.action === item.id ? " is-active" : "");
+          button.type = "button";
+          button.dataset.action = item.id;
+          button.title = item.label + " " + item.key;
+          button.innerHTML = '<span class="glyph">' + item.glyph + '</span><span class="label">' + item.label + '</span>';
+          button.addEventListener("click", () => {
+            state.action = item.id;
+            render();
+            if (item.id === "save") addSaved("learning object", "把文本当作可拆解、可复用的学习对象。");
+          });
+          bar.appendChild(button);
+        });
+      } else {
+        const input = document.createElement("input");
+        input.className = "quick-input";
+        input.value = state.prompt;
+        input.placeholder = "输入、粘贴或说一句想表达的话";
+        input.addEventListener("input", (event) => {
+          state.prompt = event.target.value;
+        });
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            state.action = "ask";
+            renderResult(results.ask);
+            flashStatus("Generated");
+          }
+        });
+
+        const voice = document.createElement("button");
+        voice.className = "voice";
+        voice.type = "button";
+        voice.title = "语音输入";
+        voice.textContent = "◦";
+        voice.addEventListener("click", () => flashStatus("Listening"));
+
+        const submit = document.createElement("button");
+        submit.className = "submit";
+        submit.type = "button";
+        submit.textContent = "生成";
+        submit.addEventListener("click", () => {
+          state.action = "ask";
+          renderResult(results.ask);
+          flashStatus("Generated");
+        });
+
+        bar.appendChild(input);
+        bar.appendChild(voice);
+        bar.appendChild(submit);
+        requestAnimationFrame(() => input.focus());
+      }
+    }
+
+    function renderResult(result) {
+      resultTitle.textContent = result.title;
+      resultCopy.textContent = result.copy;
+      keycap.textContent = result.key;
+      sideTitle.textContent = result.sideTitle;
+      breakdown.innerHTML = "";
+      chips.innerHTML = "";
+
+      result.rows.forEach((row) => {
+        const li = document.createElement("li");
+        li.innerHTML = "<b>" + row[0] + "</b><span>" + row[1] + "</span>";
+        breakdown.appendChild(li);
+      });
+
+      result.chips.forEach((chip) => {
+        const span = document.createElement("span");
+        span.className = "mini-chip";
+        span.textContent = chip;
+        chips.appendChild(span);
+      });
+
+      renderParseVisual();
+    }
+
+    function renderParseVisual() {
+      parseControls.innerHTML = "";
+      parseVisual.innerHTML = "";
+
+      if (state.action !== "parse") return;
+
+      const tabs = [
+        ["tree", "结构树"],
+        ["tracks", "从句轨道"],
+        ["blocks", "句子积木"]
+      ];
+
+      tabs.forEach(([id, label]) => {
+        const button = document.createElement("button");
+        button.className = "parse-tab" + (state.parseView === id ? " is-active" : "");
+        button.type = "button";
+        button.textContent = label;
+        button.addEventListener("click", () => {
+          state.parseView = id;
+          renderParseVisual();
+          flashStatus(label);
+        });
+        parseControls.appendChild(button);
+      });
+
+      if (state.parseView === "tree") {
+        parseVisual.innerHTML = `
+          <div class="sentence-line">
+            <span class="phrase contrast">Although the researchers <b>who designed the study</b> expected...</span>
+            <span class="phrase core">the results suggested that memory improved</span>
+            <span class="phrase result">only when learners actively compared similar phrases...</span>
+          </div>
+          <div class="tree-board">
+            <div class="tree-row"><div class="tree-node"><strong>Sentence</strong>让步从句 + 主句 + 条件从句</div></div>
+            <div class="tree-row level-1"><span class="branch"></span><div class="tree-node"><strong>Although clause</strong>researchers expected that students would remember more vocabulary</div></div>
+            <div class="tree-row level-2"><span class="branch"></span><div class="tree-node"><strong>Relative clause</strong>who designed the study</div></div>
+            <div class="tree-row level-1"><span class="branch"></span><div class="tree-node"><strong>Main clause</strong>the results suggested that memory improved</div></div>
+            <div class="tree-row level-2"><span class="branch"></span><div class="tree-node"><strong>That clause</strong>memory improved only when...</div></div>
+            <div class="tree-row level-3"><span class="branch"></span><div class="tree-node"><strong>When clause</strong>learners compared phrases and explained the difference</div></div>
+          </div>
+        `;
+      }
+
+      if (state.parseView === "tracks") {
+        parseVisual.innerHTML = `
+          <div class="sentence-line">把长句看成多条同时运行的轨道：谁在修饰谁、主句在哪里、逻辑转折在哪里。</div>
+          <div class="track-board">
+            <div class="track"><div class="track-label">Main</div><div class="track-lane"><div class="track-span main">the results suggested</div><div class="track-span result">memory improved</div></div></div>
+            <div class="track"><div class="track-label">Concession</div><div class="track-lane"><div class="track-span modifier">Although the researchers expected...</div></div></div>
+            <div class="track"><div class="track-label">Relative</div><div class="track-lane"><div class="track-span relative">who designed the study</div></div></div>
+            <div class="track"><div class="track-label">Content</div><div class="track-lane"><div class="track-span contrast">that students would remember more vocabulary</div></div></div>
+            <div class="track"><div class="track-label">Condition</div><div class="track-lane"><div class="track-span result">when learners compared and explained</div></div></div>
+          </div>
+        `;
+      }
+
+      if (state.parseView === "blocks") {
+        parseVisual.innerHTML = `
+          <div class="blocks-board">
+            <div class="block-row">
+              <div class="grammar-block"><strong>让步</strong><span>Although ... expected</span></div>
+              <span class="arrow">→</span>
+              <div class="grammar-block"><strong>主句</strong><span>the results suggested</span></div>
+              <span class="arrow">→</span>
+              <div class="grammar-block"><strong>结论</strong><span>memory improved</span></div>
+            </div>
+            <div class="block-row">
+              <div class="grammar-block"><strong>插入修饰</strong><span>who designed the study</span></div>
+              <div class="grammar-block"><strong>原本预期</strong><span>students would remember more vocabulary</span></div>
+              <div class="grammar-block"><strong>真正条件</strong><span>when learners compared and explained</span></div>
+            </div>
+            <div class="logic-strip">
+              <div class="logic-card"><b>1. 先让步</b><span>研究者原本以为：语境例句会提高记忆。</span></div>
+              <div class="logic-card"><b>2. 找主干</b><span>真正主句从 the results 开始。</span></div>
+              <div class="logic-card"><b>3. 看结论</b><span>记忆提升不是自动发生的。</span></div>
+              <div class="logic-card"><b>4. 看条件</b><span>主动比较并解释差异才有效。</span></div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function render() {
+      renderBar();
+      renderResult(results[state.action] || results.translate);
+    }
+
+    function flashStatus(text) {
+      statusEl.textContent = text;
+      window.clearTimeout(window.statusTimer);
+      window.statusTimer = window.setTimeout(() => {
+        statusEl.textContent = "Ready";
+      }, 1200);
+    }
+
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.add("is-visible");
+      window.clearTimeout(window.toastTimer);
+      window.toastTimer = window.setTimeout(() => {
+        toast.classList.remove("is-visible");
+      }, 1300);
+    }
+
+    function addSaved(title, body) {
+      state.savedCount += 1;
+      const item = document.createElement("div");
+      item.className = "saved-item";
+      item.innerHTML = "<strong>" + title + "</strong><span>" + body + "</span>";
+      savedList.prepend(item);
+      showToast("已保存到短句库");
+      flashStatus("Saved");
+    }
+
+    document.querySelectorAll(".mode-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.mode = button.dataset.mode;
+        state.action = state.mode === "selection" ? "translate" : "ask";
+        document.querySelectorAll(".mode-button").forEach((item) => {
+          item.classList.toggle("is-active", item === button);
+        });
+        render();
+      });
+    });
+
+    document.querySelectorAll(".theme-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.theme = button.dataset.themeChoice;
+        document.querySelectorAll(".theme-button").forEach((item) => {
+          item.classList.toggle("is-active", item === button);
+        });
+        document.body.dataset.theme = state.theme;
+        flashStatus(button.querySelector("strong").textContent + " style");
+      });
+    });
+
+    document.querySelectorAll("[data-footer]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const action = button.dataset.footer;
+        if (action === "save") {
+          addSaved("Every piece of text", "Every piece of text becomes a starting point.");
+        } else if (action === "copy") {
+          showToast("已复制结果");
+          flashStatus("Copied");
+        } else if (action === "insert") {
+          showToast("已准备插入当前 App");
+          flashStatus("Insert ready");
+        } else {
+          state.action = "expand";
+          render();
+          flashStatus("Expanded");
+        }
+      });
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.metaKey && event.key === "1") {
+        state.mode = "selection";
+        state.action = "translate";
+        render();
+      }
+      if (event.metaKey && event.key === "2") {
+        state.mode = "selection";
+        state.action = "parse";
+        render();
+      }
+      if (event.metaKey && event.key.toLowerCase() === "k") {
+        state.mode = state.mode === "selection" ? "input" : "selection";
+        document.querySelectorAll(".mode-button").forEach((item) => {
+          item.classList.toggle("is-active", item.dataset.mode === state.mode);
+        });
+        state.action = state.mode === "selection" ? "translate" : "ask";
+        render();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>

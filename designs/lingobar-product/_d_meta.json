@@ -1,0 +1,18 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Prototype": {
+      "versions": [
+        {
+          "path": "Lingobar Prototype.html",
+          "createdAt": "2026-06-11T15:09:53.186Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-11T15:09:53.187Z",
+  "updatedAt": "2026-06-13T13:20:19.803Z"
+}

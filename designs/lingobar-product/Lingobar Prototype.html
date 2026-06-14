@@ -315,6 +315,50 @@
       gap: 8px;
     }
 
+    .scenario-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .scenario-button {
+      min-height: 48px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--control-bg);
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      gap: 3px;
+      justify-items: start;
+      padding: 9px 10px;
+      transition: background 160ms ease, transform 160ms ease, border-color 160ms ease;
+    }
+
+    .scenario-button:hover {
+      background: var(--control-hover);
+      transform: translateY(-1px);
+    }
+
+    .scenario-button.is-active {
+      background: var(--nav-active-bg);
+      color: var(--nav-active-ink);
+      border-color: var(--nav-active-bg);
+    }
+
+    .scenario-button strong {
+      font-size: 13px;
+      line-height: 1.1;
+    }
+
+    .scenario-button span {
+      color: currentColor;
+      opacity: 0.66;
+      font-size: 11px;
+      line-height: 1.2;
+      text-align: left;
+    }
+
     .theme-switch {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -433,6 +477,19 @@
       line-height: 1.35;
     }
 
+    .item-type {
+      display: inline-flex;
+      align-items: center;
+      height: 16px;
+      border-radius: 5px;
+      padding: 0 5px;
+      margin-right: 4px;
+      background: var(--chip-bg);
+      color: var(--chip-ink);
+      font-size: 10px;
+      font-weight: 760;
+    }
+
     .stage {
       position: relative;
       min-height: 100vh;
@@ -502,20 +559,38 @@
       padding: 2px 3px;
     }
 
+    .source-zh {
+      display: none;
+    }
+
+    body[data-selection-kind="zh"] .source-en {
+      display: none;
+    }
+
+    body[data-selection-kind="zh"] .source-zh {
+      display: block;
+    }
+
     .floating-shell {
+      --shell-width: 820px;
+      --shell-max-height: min(560px, calc(100vh - 116px));
       position: absolute;
-      left: 50%;
-      transform: translateX(-18%);
+      right: 28px;
       top: 232px;
-      width: min(720px, calc(100% - 80px));
+      width: min(var(--shell-width), calc(100% - 56px));
       display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
       gap: 8px;
+      max-height: var(--shell-max-height);
       z-index: 5;
+    }
+
+    .floating-shell.is-closed {
+      display: none;
     }
 
     body[data-action="parse"] .floating-shell {
       top: 192px;
-      width: min(900px, calc(100% - 80px));
     }
 
     .floating-shell::before {
@@ -533,8 +608,9 @@
     .floating-shell.input-mode {
       top: 156px;
       left: 50%;
+      right: auto;
       transform: translateX(-50%);
-      width: min(680px, calc(100% - 72px));
+      width: min(var(--shell-width), calc(100% - 72px));
     }
 
     .floating-shell.input-mode::before {
@@ -571,16 +647,17 @@
       backdrop-filter: blur(22px);
       box-shadow: var(--shadow);
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       align-items: center;
       gap: 6px;
       padding: 6px;
+      overflow: hidden;
     }
 
     .selected-chip {
-      min-width: 280px;
-      max-width: 500px;
-      flex: 1 1 340px;
+      min-width: 380px;
+      max-width: none;
+      flex: 1 1 auto;
       min-height: 32px;
       border: 1px solid var(--surface-line);
       border-radius: 7px;
@@ -611,9 +688,29 @@
       text-overflow: ellipsis;
     }
 
+    .action-group,
+    .input-actions,
+    .window-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+
+    .action-group {
+      margin-left: auto;
+    }
+
+    .window-actions {
+      margin-left: 2px;
+      padding-left: 6px;
+      border-left: 1px solid var(--surface-line);
+    }
+
     .action {
-      height: 32px;
-      min-width: 38px;
+      height: 30px;
+      width: 28px;
+      min-width: 28px;
       border: 0;
       border-radius: 7px;
       background: transparent;
@@ -623,7 +720,7 @@
       justify-content: center;
       gap: 4px;
       cursor: pointer;
-      padding: 0 9px;
+      padding: 0;
       transition: background 150ms ease, color 150ms ease;
       flex: 0 0 auto;
     }
@@ -632,40 +729,49 @@
       background: var(--control-hover);
     }
 
+    .action:disabled,
+    .action.is-disabled {
+      color: var(--surface-muted);
+      cursor: not-allowed;
+      opacity: 0.38;
+    }
+
+    .action:disabled:hover,
+    .action.is-disabled:hover {
+      background: transparent;
+    }
+
     .action.is-active {
       background: var(--active-bg);
       color: var(--active-ink);
-      min-width: 50px;
+      min-width: 28px;
     }
 
     .action .glyph {
-      display: none;
+      display: inline;
       font-size: 13px;
-      width: 14px;
+      width: 16px;
       text-align: center;
     }
 
     .action .label {
-      display: inline;
+      display: none;
       font-size: 12px;
       font-weight: 680;
     }
 
     .action[data-action="copy"],
-    .action[data-action="expand"],
     .action[data-action="pronounce"] {
-      min-width: 32px;
-      padding: 0 8px;
+      min-width: 28px;
+      padding: 0;
     }
 
     .action[data-action="copy"] .glyph,
-    .action[data-action="expand"] .glyph,
     .action[data-action="pronounce"] .glyph {
       display: inline;
     }
 
     .action[data-action="copy"] .label,
-    .action[data-action="expand"] .label,
     .action[data-action="pronounce"] .label {
       display: none;
     }
@@ -693,14 +799,54 @@
       font-weight: 680;
     }
 
+    .submit:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+
     .voice {
-      width: 38px;
+      width: 34px;
       height: 38px;
       border: 0;
       border-radius: 7px;
       background: rgba(40, 95, 157, 0.1);
       color: var(--blue);
       cursor: pointer;
+    }
+
+    .icon-action {
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--action-ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 150ms ease, color 150ms ease;
+      flex: 0 0 auto;
+    }
+
+    .icon-action:hover {
+      background: var(--control-hover);
+    }
+
+    .icon-action.is-active {
+      background: var(--active-bg);
+      color: var(--active-ink);
+    }
+
+    .icon-action svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .result-panel {
@@ -711,12 +857,19 @@
       backdrop-filter: blur(24px);
       box-shadow: var(--shadow);
       overflow: hidden;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      max-height: calc(var(--shell-max-height) - 54px);
+      min-height: 0;
     }
 
     .panel-grid {
       display: grid;
       grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.8fr);
       min-height: 238px;
+      overflow-y: auto;
+      min-height: 0;
+      scrollbar-gutter: stable;
     }
 
     .panel-main,
@@ -1046,6 +1199,11 @@
       font-weight: 650;
     }
 
+    .footer-button:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+
     .footer-button.primary {
       background: var(--active-bg);
       color: var(--active-ink);
@@ -1104,6 +1262,7 @@
       .floating-shell,
       .floating-shell.input-mode {
         left: 50%;
+        right: auto;
         transform: translateX(-50%);
         width: calc(100% - 42px);
       }
@@ -1156,8 +1315,8 @@
       }
 
       .action {
-        min-width: 44px;
-        padding: 0 8px;
+        min-width: 28px;
+        padding: 0;
       }
 
       .action .label {
@@ -1173,7 +1332,7 @@
         <div class="mark">L</div>
         <div>
           <h1>Lingobar</h1>
-          <p>Selection-first language layer</p>
+          <p>选中即理解，输入即改写</p>
         </div>
       </div>
 
@@ -1184,9 +1343,23 @@
         </button>
         <button class="mode-button" type="button" data-mode="input">
           <span>直接输入</span>
-          <span>生成自然表达</span>
+          <span>改写自然英文</span>
         </button>
       </div>
+
+      <section class="panel-section">
+        <h2>Selection sample</h2>
+        <div class="scenario-switch" aria-label="Selection sample">
+          <button class="scenario-button is-active" type="button" data-selection-kind="en">
+            <strong>英文选区</strong>
+            <span>默认翻译</span>
+          </button>
+          <button class="scenario-button" type="button" data-selection-kind="zh">
+            <strong>中文选区</strong>
+            <span>默认改写</span>
+          </button>
+        </div>
+      </section>
 
       <section class="panel-section">
         <h2>Visual direction</h2>
@@ -1223,7 +1396,7 @@
         <div class="saved-list">
           <div class="saved-item">
             <strong>It turns the text into a learning object.</strong>
-            <span>文本不只是被翻译，而是进入理解、拆解和积累。</span>
+            <span>文本不只是被翻译，而是进入理解、语法和收藏。</span>
           </div>
           <div class="saved-item">
             <strong>in context</strong>
@@ -1233,11 +1406,11 @@
       </section>
 
       <section class="library">
-        <h2>Saved phrases</h2>
+        <h2>收藏</h2>
         <div class="saved-list" id="savedList">
           <div class="saved-item">
             <strong>selection-first</strong>
-            <span>以选区为入口，而不是先打开 App。</span>
+            <span><b class="item-type">文本</b> 以选区为入口，而不是先打开 App。</span>
           </div>
         </div>
       </section>
@@ -1252,9 +1425,13 @@
         </div>
         <article class="doc">
           <h2>Reading in Safari</h2>
-          <p>
+          <p class="source-en">
             In a long essay about learning tools, the sentence that slowed the reader down was:
             <span class="selection">Although the researchers who designed the study expected that students would remember more vocabulary when examples were shown in context, the results suggested that memory improved only when learners actively compared similar phrases and explained why one sounded more natural than another.</span>
+          </p>
+          <p class="source-zh">
+            In a writing draft, the sentence the user wants to express in natural English is:
+            <span class="selection">我想表达这个功能用起来很顺手，而且不会打断我正在阅读或写作的节奏。</span>
           </p>
           <p>
             The best moment is not when the user opens another app. It is the instant the meaning starts to blur.
@@ -1274,7 +1451,7 @@
                   <span class="keycap" id="keycap">⌘ 1</span>
                 </div>
                 <p class="result-copy" id="resultCopy">
-                  任何句子都可以变成一个小型学习对象：它能被翻译、拆解、记住，也能继续延展成新的表达。
+                  文本可以先被理解，再进入语法、改写、例句和收藏。
                 </p>
                 <div class="parse-controls" id="parseControls"></div>
                 <div class="parse-visual" id="parseVisual"></div>
@@ -1290,16 +1467,16 @@
             <div class="toolbar-footer">
               <div class="footer-actions">
                 <button class="footer-button" type="button" data-footer="copy">复制</button>
-                <button class="footer-button primary" type="button" data-footer="save">保存</button>
-                <button class="footer-button" type="button" data-footer="follow">继续展开</button>
-                <button class="footer-button" type="button" data-footer="insert">插入当前 App</button>
+                <button class="footer-button primary" type="button" data-footer="collect" id="collectButton">收藏</button>
+                <button class="footer-button" type="button" data-footer="more" id="contextMoreButton">解释更多</button>
+                <button class="footer-button" type="button" data-footer="close">关闭</button>
               </div>
               <div class="status" id="status">Ready</div>
             </div>
           </section>
         </div>
       </div>
-      <div class="toast" id="toast">已保存</div>
+      <div class="toast" id="toast">已收藏</div>
     </section>
   </main>
 
@@ -1308,47 +1485,79 @@
       mode: "selection",
       action: "translate",
       theme: "current",
+      selectionKind: "en",
       parseView: "tree",
-      prompt: "帮我把这句话改写成自然英文",
+      prompt: "",
+      inputSubmitted: false,
+      pinned: false,
       savedCount: 1
     };
 
+    const selectionSamples = {
+      en: {
+        chipTitle: "Although the researchers who designed the study expected that students would remember more vocabulary when examples were shown in context, the results suggested that memory improved only when learners actively compared similar phrases.",
+        chipMeta: "Long sentence · Safari",
+        defaultAction: "translate"
+      },
+      zh: {
+        chipTitle: "我想表达这个功能用起来很顺手，而且不会打断我正在阅读或写作的节奏。",
+        chipMeta: "中文想法 · Draft",
+        defaultAction: "rewrite"
+      }
+    };
+
     const selectionActions = [
-      { id: "copy", label: "复制", glyph: "⌘C", key: "⌘ C" },
+      { id: "copy", label: "复制", glyph: "⧉", key: "⌘ C" },
       { id: "translate", label: "翻译", glyph: "中", key: "⌘ 1" },
-      { id: "parse", label: "拆解", glyph: "⌁", key: "⌘ 2" },
-      { id: "save", label: "收藏", glyph: "＋", key: "⌘ S" },
-      { id: "expand", label: "扩写", glyph: "↗", key: "⌘ 3" },
+      { id: "parse", label: "语法", glyph: "⌁", key: "⌘ 2" },
+      { id: "rewrite", label: "改写", glyph: "↗", key: "⌘ 3" },
       { id: "examples", label: "例句", glyph: "“”", key: "⌘ 4" },
+      { id: "save", label: "收藏", glyph: "＋", key: "⌘ S" },
       { id: "pronounce", label: "发音", glyph: "♪", key: "⌘ P" }
     ];
+
+    const moreLabels = {
+      translate: "解释更多",
+      parse: "继续拆解",
+      rewrite: "更多版本",
+      examples: "更多例句",
+      pronounce: "慢速播放"
+    };
+
+    const collectTargets = {
+      translate: ["短语", "in context", "从翻译结果中收藏关键英文表达。"],
+      parse: ["句型", "Although X expected Y, the results suggested Z.", "收藏可复用的长难句句型。"],
+      rewrite: ["英文", "This feature feels effortless and never interrupts my reading or writing flow.", "收藏改写主结果。"],
+      examples: ["例句", "The data suggested that performance improved only when teams received clear feedback.", "收藏当前高亮例句。"],
+      pronounce: ["文本", "Although the researchers...", "收藏当前发音文本。"]
+    };
 
     const results = {
       copy: {
         title: "已复制选区",
         key: "⌘ C",
-        copy: "any sentence can become a small object for translation, parsing, memory, and expression.",
+        copy: "已复制当前选区或当前结果。复制是 MVP 的写回路径，直接写回留到后续版本。",
         rows: [
-          ["选区", "保留原文，方便复制到笔记、聊天或文档。"],
-          ["下一步", "可继续翻译、拆解或收藏为短句。"]
+          ["写回", "先复制，再由用户粘贴到邮件、聊天或文档。"],
+          ["边界", "直接替换选区留到后续版本。"]
         ],
         sideTitle: "可继续处理",
-        chips: ["翻译", "拆解", "生成例句"]
+        chips: ["翻译", "语法", "改写", "例句"]
       },
       translate: {
         title: "自然翻译",
         key: "⌘ 1",
-        copy: "任何句子都可以变成一个小型学习对象：它能被翻译、拆解、记住，也能继续延展成新的表达。",
+        copy: "虽然设计这项研究的研究者原本预计，在语境中展示例句会让学生记住更多词汇，但结果表明，只有当学习者主动比较相似短语，并解释为什么其中一个听起来更自然时，记忆才会真正提升。",
         rows: [
-          ["any sentence", "强调任意文本都能成为入口。"],
-          ["learning object", "不是普通资料，而是可拆、可存、可复用的学习对象。"],
-          ["expression", "这里指表达能力，不只是表情或表达式。"]
+          ["Although", "让步：研究者原本以为 A，但结果显示 B。"],
+          ["only when", "限制条件：记忆提升只在主动比较和解释时发生。"],
+          ["one sounded more natural", "这里的 one 指两个相似表达中的其中一个。"]
         ],
-        sideTitle: "表达积累",
-        chips: ["learning object", "turn into", "in flow", "stay close to"]
+        sideTitle: "可收藏表达",
+        chips: ["in context", "actively compared", "sounded more natural", "the results suggested"]
       },
       parse: {
-        title: "长难句图形拆解",
+        title: "语法拆解",
         key: "⌘ 2",
         copy: "主干是 the results suggested that memory improved。前面 Although 引导让步从句，中间 who designed the study 修饰 researchers，最后 when 引导条件/时间从句说明记忆提升发生的条件。",
         rows: [
@@ -1357,66 +1566,51 @@
           ["主句", "the results suggested that memory improved"],
           ["条件从句", "when learners actively compared ... and explained ..."]
         ],
-        sideTitle: "拆解重点",
+        sideTitle: "语法重点",
         chips: ["Although", "who designed", "that students would", "the results suggested", "when learners compared"]
       },
-      save: {
-        title: "收藏到短句库",
-        key: "⌘ S",
-        copy: "已保存：learning object。这个表达适合描述“可被拆解、标注、复用的一段语言材料”。",
-        rows: [
-          ["标签", "product framing, language learning"],
-          ["复习", "明天提醒一次，三天后再次出现。"]
-        ],
-        sideTitle: "本地短句库",
-        chips: ["learning object", "selection-first", "language layer"]
-      },
-      expand: {
-        title: "扩展表达",
+      rewrite: {
+        title: "自然英文",
         key: "⌘ 3",
-        copy: "更自然的产品表达：Every piece of text becomes a starting point for understanding, remembering, and expressing yourself better.",
+        copy: "This feature feels effortless and never interrupts my reading or writing flow.",
         rows: [
-          ["更口语", "Any text, one tap, next step."],
-          ["更产品", "A language layer that lives wherever text appears."],
-          ["更正式", "It transforms selected text into structured language insight."]
+          ["更口语", "It feels smooth and stays out of the way while I read or write."],
+          ["更正式", "The feature is easy to use and does not interrupt the user's reading or writing flow."],
+          ["更简洁", "It feels effortless and keeps me in flow."]
         ],
-        sideTitle: "命名语感",
-        chips: ["Lingobar", "PhraseBar", "LingoLift"]
+        sideTitle: "改写方向",
+        chips: ["更口语", "更正式", "更简单", "更地道"]
       },
       examples: {
         title: "例句",
         key: "⌘ 4",
-        copy: "The app turns every highlighted sentence into a learning object you can translate, break down, and save.",
+        copy: "这些例句不是词典式查句，而是帮助用户模仿和迁移当前表达。",
         rows: [
-          ["阅读", "This paragraph becomes a learning object instead of a dead end."],
-          ["写作", "Treat each rough sentence as a small object you can refine."],
-          ["产品", "The bar makes language feel editable at the point of need."]
+          ["同结构", "The survey showed that confidence increased only when students practiced daily."],
+          ["同结构", "The data suggested that performance improved only when teams received clear feedback."],
+          ["同场景", "This tool stays close to the text without interrupting the user's flow."]
         ],
-        sideTitle: "搭配",
-        chips: ["turn into", "break down", "point of need"]
+        sideTitle: "例句类型",
+        chips: ["同结构", "同语气", "同场景", "搭配"]
       },
       pronounce: {
         title: "发音",
         key: "⌘ P",
-        copy: "learning object /ˈlɝːnɪŋ ˈɑːbdʒekt/。重音落在 learning 和 object 的第一音节。",
+        copy: "Although the researchers /ɔːlˈðoʊ ðə rɪˈsɝːtʃɚz/。轻量播放、音标、重音提示即可；MVP 不做跟读评分。",
         rows: [
-          ["节奏", "LEARN-ing OB-ject"],
-          ["连读", "learning object 中间自然衔接，不要明显停顿。"]
+          ["节奏", "Although | the researchers | who designed the study"],
+          ["慢速", "适合长句先拆短语再听。"]
         ],
-        sideTitle: "可跟读",
-        chips: ["0.75x", "1x", "shadowing"]
+        sideTitle: "播放",
+        chips: ["1x", "0.75x", "重音", "音标"]
       },
-      ask: {
-        title: "表达生成",
+      inputEmpty: {
+        title: "自然英文",
         key: "Return",
-        copy: "A natural version: I want to build a selection-first language bar that helps people understand, rewrite, and remember English wherever they are reading or writing.",
-        rows: [
-          ["语气", "清楚、产品化，比万能工具栏更聚焦。"],
-          ["改写", "I want a lightweight language layer that appears whenever text needs understanding."],
-          ["用途", "适合作为 pitch、README 或产品首页第一句。"]
-        ],
-        sideTitle: "后续动作",
-        chips: ["翻译成英文", "更口语", "更像 pitch", "保存为产品描述"]
+        copy: "输入中文、英文或粗糙想法，点击改写后生成自然英文表达。",
+        rows: [],
+        sideTitle: "改写方向",
+        chips: ["更口语", "更正式", "更简单", "更地道"]
       }
     };
 
@@ -1433,47 +1627,130 @@
     const statusEl = document.getElementById("status");
     const toast = document.getElementById("toast");
     const savedList = document.getElementById("savedList");
+    const contextMoreButton = document.getElementById("contextMoreButton");
+    const collectButton = document.getElementById("collectButton");
+
+    const icons = {
+      pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M7 3h10l-3 6v4l3 3H7l3-3V9L7 3z"/></svg>',
+      close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>'
+    };
+
+    function currentSelection() {
+      return selectionSamples[state.selectionKind];
+    }
+
+    function currentResult() {
+      if (state.mode === "input" && !state.inputSubmitted) return results.inputEmpty;
+      if (state.action === "parse" && state.selectionKind !== "en") return results.rewrite;
+      return results[state.action] || results.translate;
+    }
+
+    function createIconButton(kind, title, active, onClick) {
+      const button = document.createElement("button");
+      button.className = "icon-action" + (active ? " is-active" : "");
+      button.type = "button";
+      button.dataset.windowAction = kind;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.innerHTML = icons[kind];
+      button.addEventListener("click", onClick);
+      return button;
+    }
+
+    function appendWindowActions(parent) {
+      const windowActions = document.createElement("div");
+      windowActions.className = "window-actions";
+
+      const pin = createIconButton("pin", state.pinned ? "取消固定窗口" : "固定窗口", state.pinned, () => {
+        state.pinned = !state.pinned;
+        document.body.dataset.pinned = state.pinned ? "true" : "false";
+        pin.classList.toggle("is-active", state.pinned);
+        pin.title = state.pinned ? "取消固定窗口" : "固定窗口";
+        pin.setAttribute("aria-label", pin.title);
+        flashStatus(state.pinned ? "Pinned" : "Unpinned");
+      });
+
+      const close = createIconButton("close", "关闭", false, () => {
+        floatingShell.classList.add("is-closed");
+        flashStatus("Closed");
+      });
+
+      windowActions.appendChild(pin);
+      windowActions.appendChild(close);
+      parent.appendChild(windowActions);
+    }
 
     function renderBar() {
       bar.innerHTML = "";
       document.body.dataset.mode = state.mode;
       document.body.dataset.theme = state.theme;
       document.body.dataset.action = state.action;
+      document.body.dataset.selectionKind = state.selectionKind;
+      document.body.dataset.pinned = state.pinned ? "true" : "false";
+      floatingShell.classList.remove("is-closed");
       floatingShell.classList.toggle("input-mode", state.mode === "input");
 
       if (state.mode === "selection") {
+        const sample = currentSelection();
         const selectedChip = document.createElement("div");
         selectedChip.className = "selected-chip";
-        selectedChip.innerHTML = "<strong>Although the researchers who designed the study expected...</strong><span>Long sentence · Safari</span>";
+        selectedChip.innerHTML = "<strong>" + sample.chipTitle + "</strong><span>" + sample.chipMeta + "</span>";
         bar.appendChild(selectedChip);
 
+        const actionGroup = document.createElement("div");
+        actionGroup.className = "action-group";
+
         selectionActions.forEach((item) => {
+          const disabled = item.id === "parse" && state.selectionKind !== "en";
           const button = document.createElement("button");
-          button.className = "action" + (state.action === item.id ? " is-active" : "");
+          button.className = "action" + (state.action === item.id ? " is-active" : "") + (disabled ? " is-disabled" : "");
           button.type = "button";
           button.dataset.action = item.id;
-          button.title = item.label + " " + item.key;
+          button.disabled = disabled;
+          button.title = disabled ? "语法仅支持英文内容" : item.label + " " + item.key;
+          button.setAttribute("aria-label", disabled ? "语法仅支持英文内容" : item.label);
           button.innerHTML = '<span class="glyph">' + item.glyph + '</span><span class="label">' + item.label + '</span>';
           button.addEventListener("click", () => {
+            if (disabled) return;
+            if (item.id === "copy") {
+              showToast("已复制");
+              flashStatus("Copied");
+              return;
+            }
+            if (item.id === "save") {
+              collectCurrent();
+              return;
+            }
             state.action = item.id;
             render();
-            if (item.id === "save") addSaved("learning object", "把文本当作可拆解、可复用的学习对象。");
           });
-          bar.appendChild(button);
+          actionGroup.appendChild(button);
         });
+        appendWindowActions(actionGroup);
+        bar.appendChild(actionGroup);
       } else {
         const input = document.createElement("input");
         input.className = "quick-input";
+        input.id = "promptInput";
         input.value = state.prompt;
-        input.placeholder = "输入、粘贴或说一句想表达的话";
+        input.placeholder = "输入中文、英文或想法，改写成自然英文";
         input.addEventListener("input", (event) => {
           state.prompt = event.target.value;
+          state.inputSubmitted = false;
+          const submitButton = bar.querySelector(".submit-button");
+          if (submitButton) submitButton.disabled = !state.prompt.trim();
+          renderResult(currentResult());
         });
         input.addEventListener("keydown", (event) => {
           if (event.key === "Enter") {
-            state.action = "ask";
-            renderResult(results.ask);
-            flashStatus("Generated");
+            if (!state.prompt.trim()) {
+              flashStatus("输入后再改写");
+              return;
+            }
+            state.action = "rewrite";
+            state.inputSubmitted = true;
+            renderResult(currentResult());
+            flashStatus("改写完成");
           }
         });
 
@@ -1485,18 +1762,29 @@
         voice.addEventListener("click", () => flashStatus("Listening"));
 
         const submit = document.createElement("button");
-        submit.className = "submit";
+        submit.className = "submit submit-button";
         submit.type = "button";
-        submit.textContent = "生成";
+        submit.textContent = "改写";
+        submit.disabled = !state.prompt.trim();
         submit.addEventListener("click", () => {
-          state.action = "ask";
-          renderResult(results.ask);
-          flashStatus("Generated");
+          if (!state.prompt.trim()) {
+            flashStatus("输入后再改写");
+            return;
+          }
+          state.action = "rewrite";
+          state.inputSubmitted = true;
+          renderResult(currentResult());
+          flashStatus("改写完成");
         });
 
+        const inputActions = document.createElement("div");
+        inputActions.className = "input-actions";
+        inputActions.appendChild(voice);
+        inputActions.appendChild(submit);
+        appendWindowActions(inputActions);
+
         bar.appendChild(input);
-        bar.appendChild(voice);
-        bar.appendChild(submit);
+        bar.appendChild(inputActions);
         requestAnimationFrame(() => input.focus());
       }
     }
@@ -1506,6 +1794,9 @@
       resultCopy.textContent = result.copy;
       keycap.textContent = result.key;
       sideTitle.textContent = result.sideTitle;
+      contextMoreButton.textContent = moreLabels[state.action] || "更多";
+      contextMoreButton.disabled = state.mode === "input" && !state.inputSubmitted;
+      collectButton.disabled = state.mode === "input" && !state.inputSubmitted;
       breakdown.innerHTML = "";
       chips.innerHTML = "";
 
@@ -1609,7 +1900,7 @@
 
     function render() {
       renderBar();
-      renderResult(results[state.action] || results.translate);
+      renderResult(currentResult());
     }
 
     function flashStatus(text) {
@@ -1629,24 +1920,49 @@
       }, 1300);
     }
 
-    function addSaved(title, body) {
+    function collectCurrent() {
+      const target = collectTargets[state.action] || collectTargets.translate;
+      addSaved(target[1], target[2], target[0]);
+      flashStatus("Collected");
+    }
+
+    function addSaved(title, body, type = "文本") {
       state.savedCount += 1;
       const item = document.createElement("div");
       item.className = "saved-item";
-      item.innerHTML = "<strong>" + title + "</strong><span>" + body + "</span>";
+      item.innerHTML = "<strong>" + title + "</strong><span><b class=\"item-type\">" + type + "</b>" + body + "</span>";
       savedList.prepend(item);
-      showToast("已保存到短句库");
-      flashStatus("Saved");
+      showToast("已收藏");
+      flashStatus("Collected");
     }
 
     document.querySelectorAll(".mode-button").forEach((button) => {
       button.addEventListener("click", () => {
         state.mode = button.dataset.mode;
-        state.action = state.mode === "selection" ? "translate" : "ask";
+        state.action = state.mode === "selection" ? currentSelection().defaultAction : "rewrite";
+        state.inputSubmitted = false;
+        if (state.mode === "input") state.prompt = "";
         document.querySelectorAll(".mode-button").forEach((item) => {
           item.classList.toggle("is-active", item === button);
         });
         render();
+      });
+    });
+
+    document.querySelectorAll(".scenario-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.selectionKind = button.dataset.selectionKind;
+        state.mode = "selection";
+        state.action = currentSelection().defaultAction;
+        state.inputSubmitted = false;
+        document.querySelectorAll(".scenario-button").forEach((item) => {
+          item.classList.toggle("is-active", item === button);
+        });
+        document.querySelectorAll(".mode-button").forEach((item) => {
+          item.classList.toggle("is-active", item.dataset.mode === "selection");
+        });
+        render();
+        flashStatus(state.action === "translate" ? "默认翻译" : "默认改写");
       });
     });
 
@@ -1664,18 +1980,17 @@
     document.querySelectorAll("[data-footer]").forEach((button) => {
       button.addEventListener("click", () => {
         const action = button.dataset.footer;
-        if (action === "save") {
-          addSaved("Every piece of text", "Every piece of text becomes a starting point.");
+        if (action === "collect") {
+          collectCurrent();
         } else if (action === "copy") {
-          showToast("已复制结果");
+          showToast("已复制");
           flashStatus("Copied");
-        } else if (action === "insert") {
-          showToast("已准备插入当前 App");
-          flashStatus("Insert ready");
+        } else if (action === "close") {
+          floatingShell.classList.add("is-closed");
+          flashStatus("Closed");
         } else {
-          state.action = "expand";
-          render();
-          flashStatus("Expanded");
+          flashStatus(contextMoreButton.textContent);
+          showToast(contextMoreButton.textContent);
         }
       });
     });
@@ -1688,7 +2003,7 @@
       }
       if (event.metaKey && event.key === "2") {
         state.mode = "selection";
-        state.action = "parse";
+        state.action = state.selectionKind === "en" ? "parse" : currentSelection().defaultAction;
         render();
       }
       if (event.metaKey && event.key.toLowerCase() === "k") {
@@ -1696,7 +2011,9 @@
         document.querySelectorAll(".mode-button").forEach((item) => {
           item.classList.toggle("is-active", item.dataset.mode === state.mode);
         });
-        state.action = state.mode === "selection" ? "translate" : "ask";
+        state.action = state.mode === "selection" ? currentSelection().defaultAction : "rewrite";
+        state.inputSubmitted = false;
+        if (state.mode === "input") state.prompt = "";
         render();
       }
     });

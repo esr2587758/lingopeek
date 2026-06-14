@@ -1,0 +1,18 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Interactions": {
+      "versions": [
+        {
+          "path": "Lingobar Interactions.html",
+          "createdAt": "2026-06-14T06:01:40.794Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-14T06:01:40.794Z",
+  "updatedAt": "2026-06-14T09:17:21.376Z"
+}

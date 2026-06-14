@@ -1,14 +1,15 @@
 # LingoPeek
 
-LingoPeek is a native macOS prototype for a selection-first language and AI bar.
+LingoPeek is a native macOS prototype for a selection-first language bar.
 
 Working positioning:
 
-> 选中即解析，输入即生成。
+> 选中即理解，输入即改写。
 
 The current codebase contains:
 
 - [Product brief](docs/product-brief.md)
+- [Interaction guide](docs/interaction-guide.md)
 - [Lingobar prototype](designs/lingobar-product/Lingobar Prototype.html)
 - Native macOS app built with Swift, SwiftUI, and AppKit.
 

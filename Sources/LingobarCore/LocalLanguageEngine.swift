@@ -17,100 +17,102 @@ public struct LocalLanguageEngine: Sendable {
                 summary: source,
                 rows: [
                     LingobarRow("选区", "保留原文，方便复制到笔记、聊天或文档。"),
-                    LingobarRow("下一步", "可继续翻译、拆解或收藏为短句。")
+                    LingobarRow("下一步", "可继续翻译、语法分析或收藏为短句。")
                 ],
                 sideTitle: "可继续处理",
-                chips: ["翻译", "拆解", "生成例句"]
+                chips: ["翻译", "语法", "生成例句"],
+                moreActionTitle: action.moreActionTitle,
+                defaultCollectionTitle: source
             )
         case .translate:
             return LingobarResult(
-                title: "自然翻译",
+                title: "翻译",
                 shortcut: action.shortcut,
-                summary: "任何句子都可以变成一个小型学习对象：它能被翻译、拆解、记住，也能继续延展成新的表达。",
+                summary: "这些发现使人们对“睡眠期间记忆如何巩固”这一长期假设产生了质疑。",
                 rows: [
                     LingobarRow("原文", source),
-                    LingobarRow("语感", "自然、偏产品表达，不像逐词翻译。"),
-                    LingobarRow("重点", "learning object 表示可拆解、可存储、可复用的学习对象。")
+                    LingobarRow("通用", "这些发现让人们开始质疑关于睡眠如何帮助巩固记忆的长期假设。"),
+                    LingobarRow("书面", "这些发现对有关睡眠促进记忆巩固机制的长期假设提出了质疑。"),
+                    LingobarRow("意译", "这项研究让我们重新思考：睡眠到底是否像过去认为的那样帮助大脑保存记忆。"),
+                    LingobarRow("语感", "通用版本更自然，书面版本更适合报告或论文，意译版本更强调整体意思。")
                 ],
-                sideTitle: "表达积累",
-                chips: ["learning object", "turn into", "in flow", "stay close to"]
+                sideTitle: "翻译选项",
+                chips: ["通用翻译", "书面表达", "意译", "语感"],
+                moreActionTitle: action.moreActionTitle,
+                defaultCollectionTitle: "这些发现让人们开始质疑关于睡眠如何帮助巩固记忆的长期假设。"
             )
-        case .parse:
+        case .grammar:
             return LingobarResult(
-                title: "语法 / 短语拆解",
+                title: "语法",
                 shortcut: action.shortcut,
-                summary: "主干是 any sentence can become a small object。后面的 for translation, parsing, memory, and expression 说明用途。",
+                summary: "这句话的主干是 The findings call into question assumptions，后面的 about how... 说明被质疑的具体假设。",
                 rows: [
-                    LingobarRow("主语", "any sentence"),
-                    LingobarRow("谓语", "can become"),
-                    LingobarRow("补足", "a small object for ..."),
-                    LingobarRow("并列名词", "translation, parsing, memory, expression")
+                    LingobarRow("主句", "The findings call into question ... assumptions"),
+                    LingobarRow("固定搭配", "call into question"),
+                    LingobarRow("后置定语", "long-held assumptions about how ..."),
+                    LingobarRow("宾语从句", "how memory consolidates during sleep")
                 ],
-                sideTitle: "可替换说法",
-                chips: ["a unit of learning", "a reusable phrase", "a piece of language"]
+                sideTitle: "拆解粒度",
+                chips: ["主干", "完整", "中文", "术语"],
+                moreActionTitle: action.moreActionTitle,
+                defaultCollectionTitle: "sth. calls into question assumptions about how …"
             )
-        case .save:
+        case .collect:
             return LingobarResult(
-                title: "收藏到短句库",
+                title: "收藏",
                 shortcut: action.shortcut,
-                summary: "已保存：learning object。这个表达适合描述可被拆解、标注、复用的一段语言材料。",
+                summary: "已收藏：learning object。这个表达适合描述可被拆解、标注、复用的一段语言材料。",
                 rows: [
                     LingobarRow("标签", "product framing, language learning"),
                     LingobarRow("复习", "明天提醒一次，三天后再次出现。")
                 ],
                 sideTitle: "本地短句库",
-                chips: ["learning object", "selection-first", "language layer"]
+                chips: ["learning object", "selection-first", "language layer"],
+                moreActionTitle: action.moreActionTitle,
+                defaultCollectionTitle: source
             )
-        case .expand:
+        case .rewrite:
             return LingobarResult(
-                title: "扩展表达",
+                title: "改写",
                 shortcut: action.shortcut,
-                summary: "Every piece of text becomes a starting point for understanding, remembering, and expressing yourself better.",
+                summary: "These results challenge what we've long assumed about how sleep helps the brain lock in memories.",
                 rows: [
-                    LingobarRow("更口语", "Any text, one tap, next step."),
-                    LingobarRow("更产品", "A language layer that lives wherever text appears."),
-                    LingobarRow("更正式", "It transforms selected text into structured language insight.")
+                    LingobarRow("更口语", "Turns out what we thought about memory and sleep might be wrong."),
+                    LingobarRow("更正式", "The evidence undermines prevailing assumptions regarding sleep-dependent memory consolidation."),
+                    LingobarRow("更简洁", "This study makes us rethink how sleep stores our memories.")
                 ],
-                sideTitle: "命名语感",
-                chips: ["Lingobar", "PhraseBar", "LingoLift"]
+                sideTitle: "改写方向",
+                chips: ["更口语", "更正式", "更简洁", "更地道"],
+                moreActionTitle: action.moreActionTitle,
+                defaultCollectionTitle: "These results challenge what we've long assumed about how sleep helps the brain lock in memories."
             )
         case .examples:
             return LingobarResult(
                 title: "例句",
                 shortcut: action.shortcut,
-                summary: "The app turns every highlighted sentence into a learning object you can translate, break down, and save.",
+                summary: "The report calls into question the safety of the new drug.",
                 rows: [
-                    LingobarRow("阅读", "This paragraph becomes a learning object instead of a dead end."),
-                    LingobarRow("写作", "Treat each rough sentence as a small object you can refine."),
-                    LingobarRow("产品", "The bar makes language feel editable at the point of need.")
+                    LingobarRow("2", "Her testimony calls into question everything we believed about that night."),
+                    LingobarRow("3", "These numbers call into question the company's growth story.")
                 ],
-                sideTitle: "搭配",
-                chips: ["turn into", "break down", "point of need"]
+                sideTitle: "同结构句型 · 可直接套用",
+                chips: ["搭配", "同结构", "同场景", "基础"],
+                moreActionTitle: action.moreActionTitle,
+                defaultCollectionTitle: "The report calls into question the safety of the new drug."
             )
         case .pronounce:
             return LingobarResult(
                 title: "发音",
                 shortcut: action.shortcut,
-                summary: "learning object /ˈlɝːnɪŋ ˈɑːbdʒekt/。重音落在 learning 和 object 的第一音节。",
+                summary: "consolidate /kənˈsɑː.lə.deɪt/。重音在第二音节 -sol-。",
                 rows: [
-                    LingobarRow("节奏", "LEARN-ing OB-ject"),
-                    LingobarRow("连读", "learning object 中间自然衔接，不要明显停顿。")
+                    LingobarRow("节奏", "con-SOL-i-date"),
+                    LingobarRow("连读", "memory consolidates during sleep 中自然连接，不要逐词停顿。")
                 ],
                 sideTitle: "可跟读",
-                chips: ["0.75x", "1x", "shadowing"]
-            )
-        case .ask:
-            return LingobarResult(
-                title: "表达生成",
-                shortcut: action.shortcut,
-                summary: "I want to build a selection-first language bar that helps people understand, rewrite, and remember English wherever they are reading or writing.",
-                rows: [
-                    LingobarRow("语气", "清楚、产品化，比万能工具栏更聚焦。"),
-                    LingobarRow("改写", "I want a lightweight language layer that appears whenever text needs understanding."),
-                    LingobarRow("用途", "适合作为 pitch、README 或产品首页第一句。")
-                ],
-                sideTitle: "后续动作",
-                chips: ["翻译成英文", "更口语", "更像 pitch", "保存为产品描述"]
+                chips: ["美音", "英音", "正常", "慢速"],
+                moreActionTitle: action.moreActionTitle,
+                defaultCollectionTitle: "consolidate"
             )
         }
     }

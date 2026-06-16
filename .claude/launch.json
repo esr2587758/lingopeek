@@ -1,9 +1,1 @@
-{
-  "configurations": [
-    {
-      "name": "designs",
-      "command": "python3 -m http.server 4311 --directory designs",
-      "url": "http://localhost:4311/"
-    }
-  ]
-}
+{ "configs": { "designs": { "command": "python3 -m http.server 4311 --directory designs" } } }

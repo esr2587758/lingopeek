@@ -1,0 +1,38 @@
+{
+  "title": "Lingobar 语法解析",
+  "slug": "lingobar-grammar",
+  "summary": "Structure Peek：选中英文句子后在 Lingobar 浮窗里把句子拆成可视化结构图。温暖阅读（reader）配色。结构图（彩色成分块 + SVG 关系弧 + 嵌套从句画板）与 层次结构 树可切换；入门/进阶 级别、显示/隐藏成分标签、点击成分/图例/洞察卡联动高亮、复制解析 / 收藏句型 / 导出结构图；带「推荐解析」歧义提示。设计画布并排 3 个布局方向（A 经典浮窗 / B 宽幅双栏 / C 极简入门）。成分配色：主语绿/谓语蓝/宾语紫/定语青/状语琥珀/从句浅板。旧的 dark-glass 四视图方案归档在 archive-v1/。",
+  "entry": "Lingobar Grammar.html",
+  "scheme": "reader 温暖阅读 (accent #c0673c)",
+  "views": [
+    "结构图（成分块 + 关系弧）",
+    "层次结构（从句树）"
+  ],
+  "variants": [
+    "A 经典浮窗（结构图优先）",
+    "B 宽幅双栏（图 + 洞察侧栏）",
+    "C 极简入门（少术语）"
+  ],
+  "modules": [
+    "固定搭配",
+    "语法洞察卡片",
+    "可复用句型"
+  ],
+  "stack": "React 18.3.1 UMD + Babel standalone, 多文件 JSX, SVG 关系弧, design-canvas",
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Grammar": {
+      "versions": [
+        {
+          "path": "Lingobar Grammar.html",
+          "createdAt": "2026-06-16T16:04:30.316Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-16T16:04:30.316Z",
+  "updatedAt": "2026-06-16T16:33:19.133Z"
+}

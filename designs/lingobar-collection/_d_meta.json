@@ -1,0 +1,37 @@
+{
+  "title": "Lingobar 收藏界面探索",
+  "slug": "lingobar-collection",
+  "summary": "收藏功能的三套形态设计：紧凑浮窗 / 中等双栏 / 大库视图。单一深色玻璃配色，5 种类型定制卡片（短语/句型/例句/英文/文本），支持筛选、搜索、分类⇄最近切换、复制、删除、重新唤起 Lingobar、详情抽屉。",
+  "entry": "Lingobar Collection.html",
+  "scheme": "dark-glass (accent #6e8bff)",
+  "forms": [
+    "紧凑浮窗 (392px)",
+    "中等双栏 (640px)",
+    "大库视图 (980px + 详情抽屉)"
+  ],
+  "types": [
+    "短语",
+    "句型",
+    "例句",
+    "英文",
+    "文本"
+  ],
+  "data_count": 46,
+  "stack": "React 18.3.1 UMD + Babel standalone, 多文件 JSX",
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Collection": {
+      "versions": [
+        {
+          "path": "Lingobar Collection.html",
+          "createdAt": "2026-06-15T16:42:42.817Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-15T16:42:42.818Z",
+  "updatedAt": "2026-06-15T16:42:42.818Z"
+}

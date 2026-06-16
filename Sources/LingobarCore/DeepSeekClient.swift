@@ -76,54 +76,26 @@ public enum DeepSeekRequestFactory {
         system: String,
         user: String
     ) throws -> URLRequest {
-        let endpoint = baseURL.appending(path: "chat/completions")
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-
-        let body = DeepSeekChatRequest(
-            model: model,
-            messages: [
-                DeepSeekMessage(role: "system", content: system),
-                DeepSeekMessage(role: "user", content: user)
-            ],
-            temperature: 0.2,
-            stream: false
+        let configuration = AIProviderConfiguration(
+            apiToken: apiKey,
+            baseURLString: baseURL.absoluteString,
+            model: model
         )
-        request.httpBody = try JSONEncoder().encode(body)
-        return request
+        return try OpenAICompatibleRequestFactory.request(
+            configuration: configuration,
+            system: system,
+            user: user
+        )
     }
 }
 
-public struct DeepSeekChatRequest: Codable, Equatable, Sendable {
-    public var model: String
-    public var messages: [DeepSeekMessage]
-    public var temperature: Double
-    public var stream: Bool
-
-    public init(model: String, messages: [DeepSeekMessage], temperature: Double, stream: Bool) {
-        self.model = model
-        self.messages = messages
-        self.temperature = temperature
-        self.stream = stream
-    }
-}
-
-public struct DeepSeekMessage: Codable, Equatable, Sendable {
-    public var role: String
-    public var content: String
-
-    public init(role: String, content: String) {
-        self.role = role
-        self.content = content
-    }
-}
+public typealias DeepSeekChatRequest = OpenAIChatRequest
+public typealias DeepSeekMessage = OpenAIMessage
 
 struct DeepSeekChatResponse: Decodable {
     var choices: [Choice]
 
     struct Choice: Decodable {
-        var message: DeepSeekMessage
+        var message: OpenAIMessage
     }
 }

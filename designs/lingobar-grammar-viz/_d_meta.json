@@ -1,0 +1,37 @@
+{
+  "title": "Lingobar 语法解析（可视化）",
+  "slug": "lingobar-grammar-viz",
+  "summary": "图文并茂的长难句语法解析。四种可视化切换：成分标注（彩色高亮+图例联动）、依存关系（SVG 句法弧线）、层次结构（主句→从句→修饰嵌套树）、主干提取（剥离修饰看骨架）。配套知识模块：固定搭配、常见词组、语法点、可复用句型。成分按角色分配色相。",
+  "entry": "Lingobar Grammar Viz.html",
+  "scheme": "dark-glass (accent #6e8bff)",
+  "views": [
+    "成分标注",
+    "依存关系",
+    "层次结构",
+    "主干提取"
+  ],
+  "modules": [
+    "固定搭配",
+    "常见词组",
+    "语法点",
+    "可复用句型"
+  ],
+  "stack": "React 18.3.1 UMD + Babel standalone, 多文件 JSX, SVG 弧线",
+  "note": "与既有 lingobar-grammar（另一套语法界面设计）并存，互不依赖。",
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Grammar Viz": {
+      "versions": [
+        {
+          "path": "Lingobar Grammar Viz.html",
+          "createdAt": "2026-06-16T16:32:53.323Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-16T16:32:53.325Z",
+  "updatedAt": "2026-06-16T16:32:53.325Z"
+}

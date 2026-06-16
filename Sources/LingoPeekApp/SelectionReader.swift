@@ -8,6 +8,9 @@ struct SelectionReader {
         if let selectedText = selectedText() {
             return selectedText
         }
+        if selectedTextRangeLength() == 0 {
+            return nil
+        }
         return selectedTextByCopyingSelection()
     }
 
@@ -30,6 +33,29 @@ struct SelectionReader {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private func selectedTextRangeLength() -> Int? {
+        let system = AXUIElementCreateSystemWide()
+        var focusedValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
+              let focused = focusedValue else {
+            return nil
+        }
+
+        let focusedElement = focused as! AXUIElement
+        var rangeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focusedElement, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
+              let rangeValue else {
+            return nil
+        }
+
+        let rangeAXValue = rangeValue as! AXValue
+        var range = CFRange()
+        guard AXValueGetValue(rangeAXValue, .cfRange, &range) else {
+            return nil
+        }
+        return range.length
+    }
+
     private func selectedTextByCopyingSelection() -> String? {
         let pasteboard = NSPasteboard.general
         let snapshot = PasteboardSnapshot(pasteboard: pasteboard)
@@ -39,6 +65,10 @@ struct SelectionReader {
         let deadline = Date().addingTimeInterval(0.22)
         while pasteboard.changeCount == oldChangeCount, Date() < deadline {
             RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+
+        guard pasteboard.changeCount != oldChangeCount else {
+            return nil
         }
 
         let copiedText = pasteboard.string(forType: .string)?

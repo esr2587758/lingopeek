@@ -1,0 +1,117 @@
+import Foundation
+
+public enum OpenAICompatibleError: LocalizedError, Equatable, Sendable {
+    case unusableConfiguration
+    case invalidResponse
+    case server(statusCode: Int, message: String)
+    case emptyCompletion
+
+    public var errorDescription: String? {
+        switch self {
+        case .unusableConfiguration:
+            "AI provider configuration is incomplete."
+        case .invalidResponse:
+            "AI provider returned an invalid response."
+        case .server(let statusCode, let message):
+            "AI provider request failed with HTTP \(statusCode): \(message)"
+        case .emptyCompletion:
+            "AI provider returned an empty completion."
+        }
+    }
+}
+
+public struct OpenAICompatibleClient: Sendable {
+    public var configuration: AIProviderConfiguration
+    public var urlSession: URLSession
+
+    public init(configuration: AIProviderConfiguration, urlSession: URLSession = .shared) {
+        self.configuration = configuration
+        self.urlSession = urlSession
+    }
+
+    public func complete(system: String, user: String) async throws -> String {
+        let request = try OpenAICompatibleRequestFactory.request(
+            configuration: configuration,
+            system: system,
+            user: user
+        )
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenAICompatibleError.invalidResponse
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let message = String(data: data, encoding: .utf8) ?? "No response body"
+            throw OpenAICompatibleError.server(statusCode: http.statusCode, message: message)
+        }
+
+        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
+        guard let content = decoded.choices.first?.message.content,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw OpenAICompatibleError.emptyCompletion
+        }
+        return content
+    }
+}
+
+public enum OpenAICompatibleRequestFactory {
+    public static func request(
+        configuration: AIProviderConfiguration,
+        system: String,
+        user: String
+    ) throws -> URLRequest {
+        guard configuration.isUsable,
+              let baseURL = configuration.normalizedBaseURL else {
+            throw OpenAICompatibleError.unusableConfiguration
+        }
+
+        let endpoint = baseURL.appending(path: "chat/completions")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(configuration.normalizedAPIToken)", forHTTPHeaderField: "Authorization")
+
+        let body = OpenAIChatRequest(
+            model: configuration.normalizedModel,
+            messages: [
+                OpenAIMessage(role: "system", content: system),
+                OpenAIMessage(role: "user", content: user)
+            ],
+            temperature: 0.2,
+            stream: false
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+        return request
+    }
+}
+
+public struct OpenAIChatRequest: Codable, Equatable, Sendable {
+    public var model: String
+    public var messages: [OpenAIMessage]
+    public var temperature: Double
+    public var stream: Bool
+
+    public init(model: String, messages: [OpenAIMessage], temperature: Double, stream: Bool) {
+        self.model = model
+        self.messages = messages
+        self.temperature = temperature
+        self.stream = stream
+    }
+}
+
+public struct OpenAIMessage: Codable, Equatable, Sendable {
+    public var role: String
+    public var content: String
+
+    public init(role: String, content: String) {
+        self.role = role
+        self.content = content
+    }
+}
+
+struct OpenAIChatResponse: Decodable {
+    var choices: [Choice]
+
+    struct Choice: Decodable {
+        var message: OpenAIMessage
+    }
+}

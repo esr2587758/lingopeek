@@ -1,11 +1,27 @@
 import SwiftUI
 
 extension Color {
-    static let lingoPanel = Color(red: 0.11, green: 0.11, blue: 0.12)
-    static let lingoBar = Color(red: 0.12, green: 0.12, blue: 0.13)
-    static let lingoText = Color(red: 0.88, green: 0.88, blue: 0.9)
-    static let lingoMuted = Color(red: 0.63, green: 0.63, blue: 0.67)
-    static let lingoAccent = Color(red: 0.78, green: 0.78, blue: 0.8)
+    static let lingoAccent = Color(red: 110 / 255, green: 139 / 255, blue: 1.0)
+    static let lingoAccent2 = Color(red: 138 / 255, green: 125 / 255, blue: 1.0)
+    static let lingoAccentText = Color(red: 170 / 255, green: 182 / 255, blue: 1.0)
+    static let lingoAccentWeak = Color(red: 110 / 255, green: 139 / 255, blue: 1.0, opacity: 0.16)
+    static let lingoGlass = Color(red: 28 / 255, green: 30 / 255, blue: 40 / 255, opacity: 0.78)
+    static let lingoGlass2 = Color(red: 40 / 255, green: 43 / 255, blue: 56 / 255, opacity: 0.70)
+    static let lingoHairline = Color.white.opacity(0.09)
+    static let lingoHairlineStrong = Color.white.opacity(0.15)
+    static let lingoText = Color.white.opacity(0.95)
+    static let lingoMuted = Color.white.opacity(0.60)
+    static let lingoSubtle = Color.white.opacity(0.38)
+    static let lingoPlaceholder = Color.white.opacity(0.38)
+    static let lingoChip = Color.white.opacity(0.06)
+    static let lingoChipHover = Color.white.opacity(0.11)
+    static let lingoShadow = Color.black.opacity(0.75)
+    static let lingoOuterStroke = Color.white.opacity(0.06)
+
+    static let lingoPanel = lingoGlass
+    static let lingoBar = lingoGlass
+    static let lingoBand = Color.white.opacity(0.022)
+    static let lingoSurface = lingoGlass2
 }
 
 struct FilledCapsuleButtonStyle: ButtonStyle {

@@ -1,0 +1,33 @@
+{
+  "title": "Lingobar 设置界面",
+  "slug": "lingobar-settings",
+  "summary": "左右两栏设置界面。左侧 7 个分区导航（通用/AI服务/权限/划词与唤起/语言动作/收藏/关于），右侧内容区。深色玻璃单配色。控件：开关、分段、下拉、密文输入、外观方案卡、可拖拽动作排序、状态徽章、快捷键、setup gate 联动提示。",
+  "entry": "Lingobar Settings.html",
+  "scheme": "dark-glass (accent #6e8bff)",
+  "sections": [
+    "通用",
+    "AI 服务",
+    "权限",
+    "划词与唤起",
+    "语言动作",
+    "收藏",
+    "关于"
+  ],
+  "stack": "React 18.3.1 UMD + Babel standalone, 多文件 JSX",
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Settings": {
+      "versions": [
+        {
+          "path": "Lingobar Settings.html",
+          "createdAt": "2026-06-16T15:39:14.700Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-16T15:39:14.700Z",
+  "updatedAt": "2026-06-16T15:39:14.700Z"
+}

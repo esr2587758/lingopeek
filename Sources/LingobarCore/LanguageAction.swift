@@ -75,6 +75,35 @@ public enum LanguageAction: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    public var keyEquivalent: String {
+        switch self {
+        case .copy: "c"
+        case .translate: "1"
+        case .grammar: "2"
+        case .rewrite: "3"
+        case .examples: "4"
+        case .collect: "s"
+        case .pronounce: "p"
+        }
+    }
+
+    public static func matchingKeyboardShortcut(
+        keyEquivalent: String,
+        command: Bool,
+        option: Bool = false,
+        control: Bool = false,
+        shift: Bool = false
+    ) -> LanguageAction? {
+        guard command, !option, !control, !shift else {
+            return nil
+        }
+
+        let normalizedKey = keyEquivalent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return allCases.first { $0.keyEquivalent == normalizedKey }
+    }
+
     public var moreActionTitle: String {
         switch self {
         case .translate: "解释更多"

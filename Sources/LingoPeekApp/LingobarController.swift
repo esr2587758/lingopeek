@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import LingobarCore
 import SwiftUI
 
 @MainActor
@@ -153,6 +154,9 @@ final class LingobarController: NSObject, NSWindowDelegate {
         )
         panel.onCancel = { [weak self] in
             self?.hide()
+        }
+        panel.onLanguageAction = { [weak self] action in
+            self?.viewModel.perform(action)
         }
         panel.isReleasedWhenClosed = false
         panel.level = .floating
@@ -321,6 +325,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
 
 private final class LingobarPanel: NSPanel {
     var onCancel: (() -> Void)?
+    var onLanguageAction: ((LanguageAction) -> Void)?
 
     override var canBecomeKey: Bool {
         true
@@ -335,10 +340,35 @@ private final class LingobarPanel: NSPanel {
             onCancel?()
             return
         }
+        if event.type == .keyDown, handleLingobarShortcut(event) {
+            return
+        }
         super.sendEvent(event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        handleLingobarShortcut(event) || super.performKeyEquivalent(with: event)
     }
 
     override func cancelOperation(_ sender: Any?) {
         onCancel?()
+    }
+
+    private func handleLingobarShortcut(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown,
+              let keyEquivalent = event.charactersIgnoringModifiers,
+              let action = LanguageAction.matchingKeyboardShortcut(
+                keyEquivalent: keyEquivalent,
+                command: event.modifierFlags.contains(.command),
+                option: event.modifierFlags.contains(.option),
+                control: event.modifierFlags.contains(.control),
+                shift: event.modifierFlags.contains(.shift)
+              ),
+              action != .copy else {
+            return false
+        }
+
+        onLanguageAction?(action)
+        return true
     }
 }

@@ -79,6 +79,41 @@ func checkLocalLanguageEngine() throws {
     try check(rewrite.shortcut == "⌘3", "rewrite shortcut should be ⌘3")
 }
 
+func checkLanguageActionKeyboardShortcuts() throws {
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "1", command: true) == .translate,
+        "⌘1 should trigger translate"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "2", command: true) == .grammar,
+        "⌘2 should trigger grammar"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "3", command: true) == .rewrite,
+        "⌘3 should trigger rewrite"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "4", command: true) == .examples,
+        "⌘4 should trigger examples"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "S", command: true) == .collect,
+        "⌘S should trigger collect"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "P", command: true) == .pronounce,
+        "⌘P should trigger pronounce"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "1", command: false) == nil,
+        "bare 1 should not trigger a Lingobar action"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "1", command: true, option: true) == nil,
+        "⌥⌘1 should not trigger the ⌘1 action"
+    )
+}
+
 func checkDeepSeekRequestFactory() throws {
     let request = try DeepSeekRequestFactory.request(
         baseURL: URL(string: "https://api.deepseek.com")!,
@@ -227,6 +262,7 @@ func checkPhraseStore() throws {
 
 do {
     try checkLocalLanguageEngine()
+    try checkLanguageActionKeyboardShortcuts()
     try checkDeepSeekRequestFactory()
     try checkOpenAICompatibleRequestFactory()
     try checkSetupGate()

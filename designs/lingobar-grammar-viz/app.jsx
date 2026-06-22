@@ -2,10 +2,12 @@
 const { useState, useRef } = React;
 
 const VIEWS = [
-  { id: "annot", icon: "highlight", name: "成分标注", desc: "彩色高亮句子成分" },
+  { id: "annot", icon: "highlight", name: "成分标注", desc: "彩色高亮+点词看词性形态" },
   { id: "dep",   icon: "arc",       name: "依存关系", desc: "词块之间的句法弧" },
   { id: "tree",  icon: "tree",      name: "层次结构", desc: "主句→从句→修饰" },
   { id: "trunk", icon: "trunk",     name: "主干提取", desc: "剥离修饰看骨架" },
+  { id: "tense", icon: "clock",     name: "时态语态", desc: "时态·语态·语气+施受" },
+  { id: "order", icon: "swap",      name: "语序对照", desc: "英文→中文语序重排" },
 ];
 
 function App() {
@@ -56,6 +58,8 @@ function App() {
             {view === "dep" && <DependencyView hover={hover} onHover={setHover} />}
             {view === "tree" && <TreeView />}
             {view === "trunk" && <TrunkView />}
+            {view === "tense" && <TenseVoiceView />}
+            {view === "order" && <OrderContrastView />}
           </div>
 
           <div className="g-pattern">

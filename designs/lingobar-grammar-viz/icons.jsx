@@ -20,5 +20,10 @@ const LB_ICON_PATHS = {
   link2: (<><path d="M9.5 14.5l5-5" /><path d="M8 11l-2 2a3 3 0 0 0 4.2 4.2l2-2" /><path d="M16 13l2-2a3 3 0 0 0-4.2-4.2l-2 2" /></>),
   book: (<><path d="M5 5.5A2 2 0 0 1 7 4h11v14H7a2 2 0 0 0-2 2z" /><path d="M5 5.5V20" /></>),
   bulb: (<><path d="M9 17h6" /><path d="M10 20h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.5 1 .5 1.6h6c0-.6 0-1.2.5-1.6A6 6 0 0 0 12 3z" /></>),
+  arrowRight: (<><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>),
+  arrowDown: (<><path d="M12 5v14" /><path d="M6 13l6 6 6-6" /></>),
+  chevronRight: <path d="M9 6l6 6-6 6" />,
+  clock: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>),
+  swap: (<><path d="M7 8h11l-3-3" /><path d="M17 16H6l3 3" /></>),
 };
 Object.assign(window, { LBIcon, LB_ICON_PATHS });

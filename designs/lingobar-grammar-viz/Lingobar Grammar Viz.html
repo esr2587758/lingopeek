@@ -90,9 +90,55 @@ body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang 
 .gx-note { display: flex; gap: 10px; transition: opacity .14s; }
 .gx-note[data-dim] { opacity: .32; }
 .gx-note-bar { width: 3px; border-radius: 2px; flex: none; }
-.gx-note-label { font-size: 11px; font-weight: 600; margin-right: 8px; }
+.gx-note-main { flex: 1; min-width: 0; }
+.gx-note-line { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.gx-note-label { font-size: 11px; font-weight: 600; }
 .gx-note-text { font-size: 13.5px; color: var(--text); font-family: var(--read); }
+.gx-note-caret { margin-left: auto; color: var(--text-3); display: grid; place-items: center; transition: transform .16s; }
+.gx-note-caret[data-open] { transform: rotate(90deg); color: var(--text); }
 .gx-note-zh { font-size: 12px; color: var(--text-3); margin-top: 3px; line-height: 1.55; }
+.gx-annot-hint { font-size: 11px; color: var(--text-3); margin-top: 14px; }
+
+/* 词级下钻 */
+.gx-wordrow { margin-top: 9px; display: flex; flex-direction: column; gap: 5px; padding: 9px 10px; border-radius: 9px; background: rgba(0,0,0,.18); animation: word-in .18s var(--ease); }
+@keyframes word-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; } }
+.gx-word { display: grid; grid-template-columns: minmax(80px,auto) auto 1fr; align-items: baseline; gap: 10px; }
+.gx-word-w { font-family: var(--read); font-size: 13.5px; color: var(--text); font-weight: 500; }
+.gx-word-pos { font-size: 11px; font-weight: 600; flex: none; }
+.gx-word-infl { font-size: 11.5px; color: var(--text-3); line-height: 1.4; }
+
+/* 时态·语态·语气 */
+.gx-tense { display: flex; flex-direction: column; gap: 10px; }
+.gx-tense-card { padding: 12px 13px; border-radius: 12px; background: var(--chip); border-left: 3px solid var(--accent); }
+.gx-tense-card[data-voice="被动"] { border-left-color: #4fb8c9; }
+.gx-tense-head { display: flex; align-items: baseline; gap: 9px; }
+.gx-tense-scope { font-size: 11px; font-weight: 600; color: var(--text-3); flex: none; }
+.gx-tense-verb { font-family: var(--mono); font-size: 14px; color: var(--text); }
+.gx-tense-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.gx-tbadge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 6px; background: var(--chip-hover); color: var(--text-2); }
+.gx-tbadge.t-tense { background: rgba(138,125,255,.18); color: #b3aaff; }
+.gx-tbadge.t-voice[data-passive] { background: rgba(79,184,201,.2); color: #7fd6e3; }
+.gx-svo { display: flex; align-items: center; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
+.gx-svo-node { font-size: 12.5px; padding: 5px 11px; border-radius: 8px; font-family: var(--read); }
+.gx-svo-node.n-agent { background: rgba(110,139,255,.18); color: #b3c0ff; }
+.gx-svo-node.n-recv { background: rgba(79,184,201,.18); color: #8fdce8; }
+.gx-svo-node.n-none { background: var(--chip-hover); color: var(--text-3); }
+.gx-svo-arrow { display: inline-flex; align-items: center; gap: 5px; color: var(--text-3); font-size: 11px; }
+.gx-svo-arrow em { font-style: normal; font-family: var(--mono); color: var(--text-2); }
+.gx-tense-why { font-size: 12px; color: var(--text-3); line-height: 1.6; margin-top: 10px; }
+
+/* 中英语序对照 */
+.gx-order { display: flex; flex-direction: column; gap: 4px; }
+.gx-order-row { display: flex; align-items: flex-start; gap: 12px; }
+.gx-order-lang { flex: none; width: 56px; font-size: 11px; font-weight: 600; color: var(--text-3); padding-top: 7px; }
+.gx-order-line { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--read); }
+.gx-order-seg { position: relative; display: inline-flex; align-items: center; gap: 5px; font-size: 14px; padding: 5px 9px 5px 7px;
+  border-radius: 8px; background: var(--role-hl); color: var(--text); box-shadow: inset 0 -2px 0 var(--role-color); }
+.gx-order-seg[data-moved] { box-shadow: inset 0 0 0 1.5px var(--role-color); }
+.gx-order-num { width: 16px; height: 16px; border-radius: 50%; background: var(--role-color); color: #0d0e12; font-size: 10px; font-weight: 700; display: grid; place-items: center; flex: none; font-family: var(--mono); }
+.gx-order-mapline { display: flex; align-items: center; gap: 7px; padding: 8px 0 8px 68px; font-size: 11.5px; color: var(--accent-text); }
+.gx-order-note { font-size: 12px; color: var(--text-2); line-height: 1.6; margin-top: 10px; padding: 10px 12px; border-radius: 9px; background: rgba(224,145,92,.1); border: 1px solid rgba(224,145,92,.22); }
+.gx-order-movedkey { display: inline-block; width: 18px; height: 11px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--accent-text); vertical-align: middle; margin-right: 4px; }
 
 .gx-dep { position: relative; padding-top: 4px; }
 .gx-dep-svg { display: block; }

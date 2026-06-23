@@ -27,6 +27,14 @@ Run:
 swift run LingoPeek
 ```
 
+Package an unsigned local `.app` bundle:
+
+```sh
+scripts/package_app.sh
+```
+
+The package is written to `dist/LingoPeek.zip`. GitHub Actions runs the same packaging script on every push and uploads the zip from the workflow run's artifacts.
+
 The app launches as a menu bar utility and shows the dark Lingobar panel. Select text in any app and press `Option-Command-L`; Lingobar captures the selected text into the panel and opens translation by default.
 
 Move the floating panel by dragging the small header strip at the top of Lingobar.

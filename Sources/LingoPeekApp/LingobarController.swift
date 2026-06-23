@@ -7,6 +7,7 @@ import SwiftUI
 final class LingobarController: NSObject, NSWindowDelegate {
     private static let setupPanelSize = NSSize(width: 720, height: 360)
     private static let selectionPanelSize = NSSize(width: 720, height: 532)
+    private static let grammarPanelSize = NSSize(width: 720, height: 812)
     private static let selectionLoadingPanelSize = NSSize(width: 720, height: 441)
     private static let inputEmptyPanelSize = NSSize(width: 720, height: 72)
     private static let inputLoadingPanelSize = NSSize(width: 720, height: 287)
@@ -92,6 +93,15 @@ final class LingobarController: NSObject, NSWindowDelegate {
     }
 
     private func present(captureSelectionByCopying: Bool) {
+        if AppSettings.usesGrammarFixture {
+            viewModel.presentGrammarFixture()
+            let panel = ensurePanel()
+            panel.setContentSize(contentSize)
+            position(panel)
+            show(panel)
+            return
+        }
+
         let setupGateStatus = AppSettings.setupGateStatus
         guard setupGateStatus.requiredAction == .useLingobar else {
             viewModel.presentSetupGate(setupGateStatus)
@@ -193,7 +203,13 @@ final class LingobarController: NSObject, NSWindowDelegate {
         case .setup:
             Self.setupPanelSize
         case .selection:
-            viewModel.isLoading ? Self.selectionLoadingPanelSize : Self.selectionPanelSize
+            if viewModel.isLoading {
+                Self.selectionLoadingPanelSize
+            } else if viewModel.action == .grammar, viewModel.grammarResult != nil {
+                Self.grammarPanelSize
+            } else {
+                Self.selectionPanelSize
+            }
         case .input:
             if viewModel.isLoading {
                 Self.inputLoadingPanelSize

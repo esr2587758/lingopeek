@@ -10,14 +10,16 @@ let package = Package(
     products: [
         .executable(name: "LingoPeek", targets: ["LingoPeekApp"]),
         .executable(name: "LingoPeekAIProbe", targets: ["LingoPeekAIProbe"]),
+        .executable(name: "LingoPeekGrammarUIChecks", targets: ["LingoPeekGrammarUIChecks"]),
         .executable(name: "LingoPeekCoreChecks", targets: ["LingoPeekCoreChecks"]),
+        .library(name: "LingobarUI", targets: ["LingobarUI"]),
         .library(name: "LingobarCore", targets: ["LingobarCore"])
     ],
     targets: [
         .target(name: "LingobarCore"),
         .executableTarget(
             name: "LingoPeekApp",
-            dependencies: ["LingobarCore"],
+            dependencies: ["LingobarCore", "LingobarUI"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
@@ -33,6 +35,17 @@ let package = Package(
         .executableTarget(
             name: "LingoPeekCoreChecks",
             dependencies: ["LingobarCore"]
+        ),
+        .target(
+            name: "LingobarUI",
+            dependencies: ["LingobarCore"]
+        ),
+        .executableTarget(
+            name: "LingoPeekGrammarUIChecks",
+            dependencies: [
+                "LingobarCore",
+                "LingobarUI"
+            ]
         )
     ]
 )

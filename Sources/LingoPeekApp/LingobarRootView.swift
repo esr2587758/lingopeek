@@ -1,5 +1,6 @@
 import AppKit
 import LingobarCore
+import LingobarUI
 import SwiftUI
 
 struct LingobarRootView: View {
@@ -39,6 +40,7 @@ struct LingobarRootView: View {
         .onChange(of: viewModel.result) { _, _ in
             activeResultTextSelection = nil
         }
+        .environment(\.colorScheme, .dark)
     }
 
     private var setupPanel: some View {
@@ -247,6 +249,35 @@ struct LingobarRootView: View {
         .frame(maxWidth: .infinity)
     }
     private func resultPanel(showActionBar: Bool) -> some View {
+        if viewModel.action == .grammar, let grammarResult = viewModel.grammarResult, !viewModel.isLoading {
+            return AnyView(grammarResultPanel(grammarResult))
+        }
+
+        return AnyView(genericResultPanel(showActionBar: showActionBar))
+    }
+
+    private func grammarResultPanel(_ grammarResult: GrammarResult) -> some View {
+        VStack(spacing: 0) {
+            actionBar
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    GrammarResultPanel(result: grammarResult)
+
+                    if !viewModel.isLoading {
+                        footer
+                    }
+                }
+            }
+        }
+        .background(surfaceBackground)
+        .clipShape(surfaceShape)
+        .overlay(surfaceBorder)
+        .lingobarShadow(pinned: viewModel.isPinned)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func genericResultPanel(showActionBar: Bool) -> some View {
         VStack(spacing: 0) {
             if showActionBar {
                 actionBar
@@ -329,7 +360,7 @@ struct LingobarRootView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if viewModel.isLoading {
-                    loadingRow("正在生成…")
+                    loadingBody
                 } else {
                     resultBody
                 }
@@ -398,7 +429,11 @@ struct LingobarRootView: View {
         case .setup:
             360
         case .selection:
-            viewModel.isLoading ? 441 : 480
+            if viewModel.action == .grammar, viewModel.grammarResult != nil, !viewModel.isLoading {
+                812
+            } else {
+                viewModel.isLoading ? 441 : 480
+            }
         case .input:
             if viewModel.isLoading {
                 287
@@ -464,13 +499,32 @@ struct LingobarRootView: View {
                 }
             }
         case .grammar:
-            VStack(spacing: 0) {
-                ForEach(viewModel.result.rows, id: \.label) { row in
-                    grammarBlock(row)
+            if viewModel.result.title == "出错" {
+                selectableText(
+                    viewModel.result.summary,
+                    id: "grammar-error-summary",
+                    size: 15,
+                    color: .lingoTextColor,
+                    lineSpacing: 3
+                )
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(spacing: 0) {
+                    ForEach(viewModel.result.rows, id: \.label) { row in
+                        resultRow(row)
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(viewModel.result.rows, id: \.label) { row in
+                        grammarBlock(row)
+                    }
+                }
+                if !viewModel.result.defaultCollectionTitle.isEmpty {
+                    keyCard(title: viewModel.result.defaultCollectionTitle, detail: "可复用句型")
+                        .background(Color.lingoAccent.opacity(0.09), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             }
-            keyCard(title: viewModel.result.defaultCollectionTitle, detail: "可复用句型")
-                .background(Color.lingoAccent.opacity(0.09), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         case .rewrite:
             selectableText(
                 viewModel.result.summary,
@@ -697,6 +751,57 @@ struct LingobarRootView: View {
         }
         .padding(.vertical, 16)
         .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder
+    private var loadingBody: some View {
+        if viewModel.action == .grammar {
+            grammarLoadingBody
+        } else {
+            loadingRow("正在生成…")
+        }
+    }
+
+    private var grammarLoadingBody: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 9) {
+                LingobarSpinner()
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("正在解析语法结构…")
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(Color.lingoText)
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text("通常需要 15-20 秒 · 已等待 \(elapsedLoadingSeconds(now: context.date)) 秒")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.lingoSubtle)
+                    }
+                }
+                Spacer()
+            }
+
+            Text("正在生成成分标注、依存关系、层次结构、主干、时态语态和语序对照。你可以直接切换上方动作，旧请求不会覆盖新结果。")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.lingoMuted)
+                .lineSpacing(3)
+
+            FlowLayout(items: ["成分标注", "依存关系", "层次结构", "主干提取", "时态语态", "语序对照"], spacing: 7) { item in
+                    Text(item)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(Color.lingoAccentText)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.lingoAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 4)
+    }
+
+    private func elapsedLoadingSeconds(now: Date) -> Int {
+        guard let loadingStartedAt = viewModel.loadingStartedAt else {
+            return 0
+        }
+        return max(0, Int(now.timeIntervalSince(loadingStartedAt)))
     }
 
     private func setupRequirementRow(title: String, detail: String, isComplete: Bool) -> some View {

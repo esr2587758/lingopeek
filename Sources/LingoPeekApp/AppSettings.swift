@@ -49,6 +49,14 @@ enum AppSettings {
         )
     }
 
+    static var usesGrammarFixture: Bool {
+        firstNonEmpty(ProcessInfo.processInfo.environment["LINGOPEEK_GRAMMAR_FIXTURE"]) == "1"
+    }
+
+    static var grammarFixtureID: String {
+        firstNonEmpty(ProcessInfo.processInfo.environment["LINGOPEEK_GRAMMAR_FIXTURE_ID"], "mockup")
+    }
+
     static var hotKey: LingobarHotKey {
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: hotKeyCodeKey) != nil,

@@ -1,12 +1,12 @@
 import SwiftUI
 
-extension Color {
+public extension Color {
     static let lingoAccent = Color(red: 110 / 255, green: 139 / 255, blue: 1.0)
     static let lingoAccent2 = Color(red: 138 / 255, green: 125 / 255, blue: 1.0)
     static let lingoAccentText = Color(red: 170 / 255, green: 182 / 255, blue: 1.0)
     static let lingoAccentWeak = Color(red: 110 / 255, green: 139 / 255, blue: 1.0, opacity: 0.16)
-    static let lingoGlass = Color(red: 28 / 255, green: 30 / 255, blue: 40 / 255, opacity: 0.78)
-    static let lingoGlass2 = Color(red: 40 / 255, green: 43 / 255, blue: 56 / 255, opacity: 0.70)
+    static let lingoGlass = Color(red: 28 / 255, green: 30 / 255, blue: 40 / 255, opacity: 0.90)
+    static let lingoGlass2 = Color(red: 40 / 255, green: 43 / 255, blue: 56 / 255, opacity: 0.82)
     static let lingoHairline = Color.white.opacity(0.09)
     static let lingoHairlineStrong = Color.white.opacity(0.15)
     static let lingoText = Color.white.opacity(0.95)

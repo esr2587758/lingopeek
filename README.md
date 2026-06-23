@@ -53,12 +53,20 @@ This machine's Command Line Tools installation does not provide `XCTest` or Swif
 
 ```sh
 swift run LingoPeekCoreChecks
+swift run LingoPeekGrammarUIChecks
 ```
 
 DeepSeek connectivity can be verified without writing secrets to the repository:
 
 ```sh
 DEEPSEEK_API_KEY="..." DEEPSEEK_MODEL="deepseek-v4-flash" swift run LingoPeekAIProbe
+```
+
+The grammar panel can be launched with deterministic long-sentence fixtures:
+
+```sh
+LINGOPEEK_GRAMMAR_FIXTURE=1 LINGOPEEK_GRAMMAR_FIXTURE_ID=policy-incentives swift run LingoPeek
+LINGOPEEK_GRAMMAR_FIXTURE=1 LINGOPEEK_GRAMMAR_FIXTURE_ID=engineering-redesign swift run LingoPeek
 ```
 
 ## Design Preview

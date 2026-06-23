@@ -67,6 +67,7 @@ public enum OpenAICompatibleRequestFactory {
         let endpoint = baseURL.appending(path: "chat/completions")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
+        request.timeoutInterval = 120
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(configuration.normalizedAPIToken)", forHTTPHeaderField: "Authorization")
 
@@ -77,6 +78,8 @@ public enum OpenAICompatibleRequestFactory {
                 OpenAIMessage(role: "user", content: user)
             ],
             temperature: 0.2,
+            maxTokens: 4096,
+            responseFormat: OpenAIResponseFormat(type: "json_object"),
             stream: false
         )
         request.httpBody = try JSONEncoder().encode(body)
@@ -88,13 +91,41 @@ public struct OpenAIChatRequest: Codable, Equatable, Sendable {
     public var model: String
     public var messages: [OpenAIMessage]
     public var temperature: Double
+    public var maxTokens: Int?
+    public var responseFormat: OpenAIResponseFormat?
     public var stream: Bool
 
-    public init(model: String, messages: [OpenAIMessage], temperature: Double, stream: Bool) {
+    public init(
+        model: String,
+        messages: [OpenAIMessage],
+        temperature: Double,
+        maxTokens: Int? = nil,
+        responseFormat: OpenAIResponseFormat? = nil,
+        stream: Bool
+    ) {
         self.model = model
         self.messages = messages
         self.temperature = temperature
+        self.maxTokens = maxTokens
+        self.responseFormat = responseFormat
         self.stream = stream
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case temperature
+        case maxTokens = "max_tokens"
+        case responseFormat = "response_format"
+        case stream
+    }
+}
+
+public struct OpenAIResponseFormat: Codable, Equatable, Sendable {
+    public var type: String
+
+    public init(type: String) {
+        self.type = type
     }
 }
 

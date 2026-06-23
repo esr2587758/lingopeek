@@ -135,6 +135,8 @@ func checkDeepSeekRequestFactory() throws {
     try check(decoded.model == "deepseek-v4-flash", "request should keep configured model")
     try check(decoded.messages.map(\.role) == ["system", "user"], "request should include system and user messages")
     try check(decoded.messages.last?.content == "hello", "request should keep user content")
+    try check(decoded.responseFormat?.type == "json_object", "request should ask provider for JSON object output")
+    try check(decoded.maxTokens == 4096, "request should reserve enough tokens for structured JSON")
     try check(!decoded.stream, "request should be non-streaming")
 }
 
@@ -152,6 +154,7 @@ func checkOpenAICompatibleRequestFactory() throws {
 
     try check(request.url?.absoluteString == "https://api.deepseek.com/chat/completions", "OpenAI-compatible request should use chat completions endpoint")
     try check(request.httpMethod == "POST", "OpenAI-compatible request should use POST")
+    try check(request.timeoutInterval == 120, "OpenAI-compatible request should allow long grammar generations")
     try check(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token", "OpenAI-compatible request should use bearer token")
     try check(request.value(forHTTPHeaderField: "Content-Type") == "application/json", "OpenAI-compatible request should send JSON")
 
@@ -162,6 +165,8 @@ func checkOpenAICompatibleRequestFactory() throws {
     try check(decoded.model == "deepseek-chat", "OpenAI-compatible request should keep configured model")
     try check(decoded.messages.map(\.role) == ["system", "user"], "OpenAI-compatible request should include system and user messages")
     try check(decoded.messages.last?.content == "hello", "OpenAI-compatible request should keep user content")
+    try check(decoded.responseFormat?.type == "json_object", "OpenAI-compatible request should ask for JSON object output")
+    try check(decoded.maxTokens == 4096, "OpenAI-compatible request should reserve enough tokens for structured JSON")
     try check(!decoded.stream, "OpenAI-compatible request should be non-streaming")
 }
 
@@ -244,6 +249,172 @@ func checkStructuredAIResultParsing() throws {
     }
 }
 
+func checkGrammarResultFixture() throws {
+    let fixture = GrammarResult.mockupFixture
+
+    try check(fixture.title == "语法解析", "grammar fixture should use expanded panel title")
+    try check(fixture.chunks.count >= 4, "grammar fixture should include phrase-level chunks")
+    try check(fixture.chunks.contains { $0.role == .appos }, "grammar fixture should include appositive clause coverage")
+    try check(fixture.dependencies.contains { $0.label == "主谓" }, "grammar fixture should include dependency labels")
+    try check(!fixture.tree.children.isEmpty, "grammar fixture should include tree children")
+    try check(fixture.tenseVoice.contains { $0.voice == "被动" }, "grammar fixture should highlight passive voice")
+    try check(fixture.wordOrder.zhOrder == [2, 1, 5, 4, 3], "grammar fixture should capture Chinese reorder mapping")
+    try check(fixture.defaultCollectionItem.type == "句型", "grammar should collect a reusable sentence pattern")
+
+    let data = try JSONEncoder().encode(fixture)
+    let decoded = try JSONDecoder().decode(GrammarResult.self, from: data)
+    try check(decoded == fixture, "grammar fixture should JSON round-trip")
+
+    let bridged = fixture.lingobarResult(shortcut: "⌘2")
+    try check(bridged.title == "语法解析", "grammar bridge should use expanded title")
+    try check(bridged.defaultCollectionTitle == fixture.pattern.en, "grammar bridge should collect pattern")
+    try check(bridged.defaultCollectionItem?.type == "句型", "grammar bridge should preserve collection type")
+}
+
+func checkGrammarUITestFixtures() throws {
+    try check(GrammarResult.grammarUITestFixtures.count == 2, "grammar UI tests should use two long-sentence fixtures")
+    try check(
+        GrammarResult.grammarUITestFixtures.map(\.sourceSentence).allSatisfy { $0.split(separator: " ").count >= 20 },
+        "grammar UI fixtures should be long difficult sentences"
+    )
+
+    for fixture in GrammarResult.grammarUITestFixtures {
+        try checkGrammarTabContracts(fixture)
+    }
+
+    let policy = GrammarResult.policyIncentivesFixture
+    try check(policy.sourceSentence.contains("Although the proposal"), "policy fixture should cover concessive opening")
+    try check(policy.chunks.contains { $0.role == .conj && $0.text == "Although" }, "policy fixture should expose although as a conjunction")
+    try check(policy.tenseVoice.contains { $0.verb == "was designed" && $0.voice == "被动" }, "policy fixture should cover passive design")
+    try check(policy.tenseVoice.contains { $0.verb == "have already invested" && $0.tense == "现在完成时" }, "policy fixture should cover present perfect")
+    try check(policy.wordOrder.zhOrder == [1, 3, 2, 4, 5, 6, 8, 7], "policy fixture should capture Chinese relative-clause movement")
+
+    let engineering = GrammarResult.engineeringRedesignFixture
+    try check(engineering.sourceSentence.contains("By the time the report was released"), "engineering fixture should cover time-clause opening")
+    try check(engineering.tenseVoice.contains { $0.verb == "had already redesigned" && $0.tense == "过去完成时" }, "engineering fixture should cover main past perfect")
+    try check(engineering.tenseVoice.contains { $0.verb == "might fail" && $0.mood == "虚拟" }, "engineering fixture should cover modal risk")
+    try check(engineering.wordOrder.zhOrder == [1, 3, 2, 4, 6, 5], "engineering fixture should capture Chinese relative-clause movement")
+}
+
+func checkGrammarTabContracts(_ fixture: GrammarResult) throws {
+    let label = fixture.sourceSentence.prefix(32)
+    let chunkIDs = Set(fixture.chunks.map(\.id))
+
+    try check(fixture.title == "语法解析", "\(label): grammar title should be expanded")
+    try check(!fixture.sourceSentence.isEmpty, "\(label): source sentence should be present")
+    try check(!fixture.chineseMeaning.isEmpty, "\(label): Chinese meaning should be present")
+
+    try check((4...8).contains(fixture.chunks.count), "\(label): annotated tab should use phrase-level chunks")
+    try check(chunkIDs.count == fixture.chunks.count, "\(label): annotated tab chunk IDs should be unique")
+    try check(fixture.chunks.allSatisfy { !$0.label.isEmpty && !$0.note.isEmpty && !$0.tokens.isEmpty }, "\(label): annotated tab should have labels, notes, and token drilldown")
+    try check(fixture.chunks.contains { $0.role == .subject }, "\(label): annotated tab should include a subject")
+    try check(fixture.chunks.contains { $0.role == .predicate }, "\(label): annotated tab should include a predicate")
+    try check(fixture.chunks.contains { $0.role == .object }, "\(label): annotated tab should include an object")
+
+    try check(!fixture.dependencies.isEmpty, "\(label): dependency tab should include relations")
+    try check(
+        fixture.dependencies.allSatisfy { chunkIDs.contains($0.from) && chunkIDs.contains($0.to) && !$0.label.isEmpty },
+        "\(label): dependency tab should reference valid chunks"
+    )
+    try check(fixture.dependencies.contains { $0.label == "主谓" }, "\(label): dependency tab should include subject-predicate relation")
+
+    let treeNodes = flattenTree(fixture.tree)
+    try check(treeNodes.count >= 8, "\(label): tree tab should include nested clause structure")
+    try check(treeNodes.contains { $0.role == .attr }, "\(label): tree tab should expose relative/modifier clauses")
+    try check(treeNodes.contains { $0.role == .adv }, "\(label): tree tab should expose adverbial context")
+
+    try check(fixture.trunk.core.count >= 3, "\(label): trunk tab should include S/V/O core")
+    try check(fixture.trunk.core.contains { $0.role == .subject }, "\(label): trunk tab should include core subject")
+    try check(fixture.trunk.core.contains { $0.role == .predicate }, "\(label): trunk tab should include core predicate")
+    try check(fixture.trunk.core.contains { $0.role == .object }, "\(label): trunk tab should include core object")
+    try check(!fixture.trunk.dropped.isEmpty && !fixture.trunk.coreZh.isEmpty, "\(label): trunk tab should include dropped modifiers and Chinese core")
+
+    try check(fixture.tenseVoice.count >= 3, "\(label): tense tab should include multiple clauses")
+    try check(fixture.tenseVoice.contains { $0.voice == "被动" }, "\(label): tense tab should highlight passive voice")
+    try check(
+        fixture.tenseVoice.allSatisfy {
+            !$0.scope.isEmpty && !$0.verb.isEmpty && !$0.tense.isEmpty && !$0.aspect.isEmpty && !$0.voice.isEmpty && !$0.mood.isEmpty && !$0.why.isEmpty && !$0.svo.agent.isEmpty && !$0.svo.action.isEmpty
+        },
+        "\(label): tense tab should have complete clause explanations"
+    )
+
+    let orderIDs = Set(fixture.wordOrder.en.map(\.id))
+    try check(fixture.wordOrder.en.count >= 5, "\(label): order tab should split the sentence into comparable segments")
+    try check(Set(fixture.wordOrder.zhOrder) == orderIDs, "\(label): order tab zhOrder should be a permutation of English segment IDs")
+    try check(fixture.wordOrder.zhOrder.count == fixture.wordOrder.zhText.count, "\(label): order tab should align zhOrder and zhText")
+    try check(fixture.wordOrder.en.contains { $0.moved }, "\(label): order tab should mark moved modifier segments")
+    try check(!fixture.wordOrder.note.isEmpty, "\(label): order tab should explain the reordering")
+
+    try check(!fixture.pattern.en.isEmpty && !fixture.pattern.zh.isEmpty, "\(label): pattern section should be reusable")
+    try check(fixture.collocations.count >= 3, "\(label): knowledge section should include collocations")
+    try check(fixture.phrases.count >= 3, "\(label): knowledge section should include phrases")
+    try check(fixture.grammarPoints.count >= 3, "\(label): knowledge section should include grammar points")
+    try check(fixture.defaultCollectionItem.title == fixture.pattern.en, "\(label): default collection should match reusable pattern")
+}
+
+func flattenTree(_ node: GrammarTreeNode) -> [GrammarTreeNode] {
+    [node] + node.children.flatMap(flattenTree)
+}
+
+func checkGrammarAIResponseTolerance() throws {
+    let json = """
+    ```json
+    {
+      "title": "语法解析",
+      "sourceSentence": "The findings call into question assumptions.",
+      "chineseMeaning": "这些发现让人们质疑某些假设。",
+      "chunks": [
+        { "id": "s", "role": "subject", "text": "The findings" },
+        { "id": "v", "role": "predicate", "text": "call into question", "label": "谓语" },
+        { "id": "o", "role": "object", "text": "assumptions", "note": "宾语" }
+      ],
+      "tree": {
+        "label": "主句",
+        "role": "predicate",
+        "text": "The findings call into question assumptions.",
+        "children": [
+          { "label": "主语", "role": "subject", "text": "The findings" },
+          { "label": "谓语", "role": "predicate", "text": "call into question" }
+        ]
+      },
+      "trunk": {
+        "core": [
+          { "w": "The findings", "role": "subject" },
+          { "w": "call into question", "role": "predicate" },
+          { "w": "assumptions", "role": "object" }
+        ],
+        "dropped": [],
+        "coreZh": "这些发现质疑假设。"
+      },
+      "wordOrder": {
+        "en": [
+          { "id": 1, "text": "The findings", "role": "subject" },
+          { "id": 2, "text": "call into question", "role": "predicate" },
+          { "id": 3, "text": "assumptions", "role": "object" }
+        ],
+        "zhOrder": [1, 3, 2],
+        "zhText": ["这些发现", "假设", "受到质疑"],
+        "note": "中文通常把宾语含义提前。"
+      },
+      "pattern": {
+        "en": "sth. calls into question sth.",
+        "zh": "某事使某事受到质疑"
+      }
+    }
+    ```
+    """
+
+    let extracted = try StructuredJSONExtractor.extractObject(from: "Here is the JSON:\n\(json)")
+    let decoded = try JSONDecoder().decode(GrammarResult.self, from: Data(extracted.utf8))
+
+    try check(decoded.analysisScopeNote == "", "grammar decode should default missing scope note")
+    try check(decoded.chunks.first?.label == "主语", "grammar chunk should default label from role")
+    try check(decoded.chunks.first?.tokens == [], "grammar chunk should default missing tokens")
+    try check(decoded.tree.children.first?.children == [], "grammar tree leaf should default missing children")
+    try check(decoded.wordOrder.en.first?.moved == false, "grammar order segment should default missing moved flag")
+    try check(decoded.defaultCollectionItem.title == "sth. calls into question sth.", "grammar decode should default collection item from pattern")
+}
+
 func checkPhraseStore() throws {
     let directory = FileManager.default.temporaryDirectory
         .appending(path: "LingoPeekChecks-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -268,6 +439,9 @@ do {
     try checkSetupGate()
     try checkAIProviderConfiguration()
     try checkStructuredAIResultParsing()
+    try checkGrammarResultFixture()
+    try checkGrammarUITestFixtures()
+    try checkGrammarAIResponseTolerance()
     try checkPhraseStore()
     print("LingoPeekCoreChecks passed")
 } catch {

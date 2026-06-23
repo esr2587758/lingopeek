@@ -8,6 +8,7 @@ BUNDLE_IDENTIFIER="${BUNDLE_IDENTIFIER:-com.lingopeek.LingoPeek}"
 APP_VERSION="${APP_VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 CONFIGURATION="${CONFIGURATION:-release}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -75,6 +76,10 @@ cat > "$INFO_PLIST" <<PLIST
 PLIST
 
 plutil -lint "$INFO_PLIST"
+
+echo "Signing $APP_BUNDLE..."
+codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
+codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 echo "Creating $ZIP_PATH..."
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true

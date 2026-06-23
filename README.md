@@ -33,7 +33,13 @@ Package an unsigned local `.app` bundle:
 scripts/package_app.sh
 ```
 
-The package is written to `dist/LingoPeek.zip`. GitHub Actions runs the same packaging script on every push and uploads the zip from the workflow run's artifacts.
+The package is written to `dist/LingoPeek.zip`. GitHub Actions runs the same packaging script on every push and uploads the zip from the workflow run's artifacts. This package is ad-hoc signed, which costs nothing and fixes local bundle integrity checks, but it is not Apple Developer ID signed or notarized.
+
+If macOS blocks a downloaded artifact on first launch, remove the download quarantine from the extracted app and then open it again:
+
+```sh
+xattr -dr com.apple.quarantine ~/Downloads/LingoPeek.app
+```
 
 The app launches as a menu bar utility and shows the dark Lingobar panel. Select text in any app and press `Option-Command-L`; Lingobar captures the selected text into the panel and opens translation by default.
 

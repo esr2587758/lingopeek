@@ -1259,16 +1259,39 @@ private struct SelectableTextView: NSViewRepresentable {
     ) -> CGSize? {
         context.coordinator.parent = self
         context.coordinator.applyContent(to: textView)
-        let width = max(proposal.width ?? textView.fittingSize.width, 1)
+        let width = resolvedMeasurementWidth(for: proposal, textView: textView)
         guard let layoutManager = textView.layoutManager,
               let textContainer = textView.textContainer else {
             return CGSize(width: width, height: ceil(font.ascender - font.descender + font.leading))
+        }
+        if textView.frame.width != width {
+            textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
         }
         textContainer.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
         layoutManager.ensureLayout(for: textContainer)
         let usedHeight = layoutManager.usedRect(for: textContainer).height
         let lineHeight = ceil(font.ascender - font.descender + font.leading)
         return CGSize(width: width, height: max(ceil(usedHeight), lineHeight))
+    }
+
+    private func resolvedMeasurementWidth(
+        for proposal: ProposedViewSize,
+        textView: LingobarSelectableNSTextView
+    ) -> CGFloat {
+        let panelTextWidth = (textView.window?.contentView?.bounds.width).map { contentWidth in
+            max(contentWidth - 120, 1)
+        }
+        let candidates = [
+            proposal.width,
+            textView.bounds.width,
+            panelTextWidth
+        ]
+        for candidate in candidates {
+            if let candidate, candidate.isFinite, candidate > 1 {
+                return candidate
+            }
+        }
+        return 600
     }
 
     @MainActor

@@ -100,7 +100,7 @@ This roadmap adds the native Hub as a brownfield vertical slice: real persistenc
 
 ## Next Step
 
-Run `$gsd-plan-phase 1` to plan the Hub Data Foundations phase.
+Run `$gsd-execute-phase 1` to implement the Hub Data Foundations phase.
 
 ---
 *Roadmap created: 2026-06-26*

@@ -168,6 +168,21 @@ func checkOpenAICompatibleRequestFactory() throws {
     try check(decoded.responseFormat?.type == "json_object", "OpenAI-compatible request should ask for JSON object output")
     try check(decoded.maxTokens == 4096, "OpenAI-compatible request should reserve enough tokens for structured JSON")
     try check(!decoded.stream, "OpenAI-compatible request should be non-streaming")
+
+    let connectivityRequest = try OpenAICompatibleRequestFactory.connectivityTestRequest(configuration: configuration)
+    try check(connectivityRequest.url?.absoluteString == "https://api.deepseek.com/chat/completions", "connectivity test should use chat completions endpoint")
+    try check(connectivityRequest.timeoutInterval == 30, "connectivity test should fail quickly")
+
+    guard let connectivityBody = connectivityRequest.httpBody else {
+        throw CheckFailure.failed("connectivity test should have an HTTP body")
+    }
+    let connectivityDecoded = try JSONDecoder().decode(OpenAIChatRequest.self, from: connectivityBody)
+    try check(connectivityDecoded.model == "deepseek-chat", "connectivity test should keep configured model")
+    try check(connectivityDecoded.messages.map(\.role) == ["system", "user"], "connectivity test should include system and user messages")
+    try check(connectivityDecoded.messages.last?.content == "ping", "connectivity test should use a tiny ping prompt")
+    try check(connectivityDecoded.responseFormat == nil, "connectivity test should not require JSON mode")
+    try check(connectivityDecoded.maxTokens == 8, "connectivity test should use a small token budget")
+    try check(!connectivityDecoded.stream, "connectivity test should be non-streaming")
 }
 
 func checkSetupGate() throws {
@@ -187,6 +202,103 @@ func checkSetupGate() throws {
         SetupGateStatus(aiAccessConfigured: true, accessibilityPermissionGranted: true).requiredAction == .useLingobar,
         "setup gate should allow Lingobar only after all required setup is complete"
     )
+}
+
+func checkLingobarSettingsNavigationModel() throws {
+    let sections = LingobarSettingsSectionDescriptor.all
+
+    try check(
+        sections.map(\.id) == [.general, .ai, .permissions, .trigger, .actions, .collection, .about],
+        "settings sections should match the restored Lingobar settings order"
+    )
+    try check(
+        sections.map(\.title) == ["通用", "AI 服务", "权限", "划词与唤起", "语言动作", "收藏", "关于"],
+        "settings sections should use restored Lingobar labels"
+    )
+    try check(
+        sections.filter(\.requiresSetupGate).map(\.id) == [.ai, .permissions],
+        "AI 服务 and 权限 should be marked as setup-gated sections"
+    )
+
+    let blockedGate = LingobarSettingsSetupGate(
+        status: SetupGateStatus(aiAccessConfigured: false, accessibilityPermissionGranted: true)
+    )
+    try check(!blockedGate.isReady, "settings setup gate should block when any required setup is missing")
+    try check(blockedGate.footerTitle == "需完成必填项", "blocked settings gate should show required setup copy")
+    try check(
+        blockedGate.sectionIDsNeedingAttention == [.ai],
+        "blocked settings gate should mark only the missing AI section"
+    )
+
+    let missingPermissionGate = LingobarSettingsSetupGate(
+        status: SetupGateStatus(aiAccessConfigured: true, accessibilityPermissionGranted: false)
+    )
+    try check(
+        missingPermissionGate.sectionIDsNeedingAttention == [.permissions],
+        "blocked settings gate should mark only the missing permission section"
+    )
+
+    let readyGate = LingobarSettingsSetupGate(
+        status: SetupGateStatus(aiAccessConfigured: true, accessibilityPermissionGranted: true)
+    )
+    try check(readyGate.isReady, "settings setup gate should be ready after AI and Accessibility are configured")
+    try check(readyGate.footerTitle.isEmpty, "ready settings gate should not expose reminder copy")
+    try check(readyGate.sectionIDsNeedingAttention.isEmpty, "ready settings gate should not mark setup sections")
+}
+
+func checkLingobarSettingsSnapshotBehavior() throws {
+    try check(
+        LingobarAIProvider.allCases.map(\.title) == ["Claude (Anthropic)", "OpenAI", "自定义 / 兼容 OpenAI"],
+        "AI provider picker should expose the restored provider choices"
+    )
+
+    var settings = LingobarSettingsSnapshot.defaultValue
+    try check(settings.launchAtLogin, "settings should default to launch at login enabled")
+    try check(settings.showMenuBarIcon, "settings should default to showing the menu bar icon")
+    try check(settings.appearanceScheme == .glass, "settings should default to Tahoe glass appearance")
+    try check(
+        LingobarAppearanceScheme.allCases.map(\.title) == ["Tahoe 玻璃", "克制工具", "温暖阅读", "品牌珊瑚"],
+        "appearance picker should expose the restored scheme cards"
+    )
+    try check(settings.aiProvider == .openAICompatible, "settings should keep the MVP's OpenAI-compatible provider as the default")
+    try check(settings.model == "deepseek-chat", "settings should keep DeepSeek-compatible default model")
+    try check(settings.baseURLString == "https://api.deepseek.com", "settings should keep DeepSeek-compatible default base URL")
+    try check(!settings.setupGateStatus.aiAccessConfigured, "empty API token should leave AI setup incomplete")
+
+    settings.apiToken = " token "
+    settings.accessibilityPermissionGranted = true
+    try check(settings.setupGateStatus.requiredAction == .useLingobar, "API token and Accessibility should complete setup")
+
+    settings.selectAIProvider(.openAI)
+    try check(settings.model == "gpt-4o", "selecting OpenAI should pick the first OpenAI model")
+    try check(settings.baseURLString == "https://api.openai.com/v1", "selecting OpenAI should update the compatible base URL")
+    settings.selectAIProvider(.claudeAnthropic)
+    try check(settings.model == "claude-opus-4-8", "selecting Claude should pick the restored first Claude model")
+
+    try check(
+        settings.actionOrder == [.grammar, .translate, .rewrite, .examples, .collect, .pronounce],
+        "settings should default language actions to the restored settings prototype order"
+    )
+    settings.moveAction(.rewrite, before: .grammar)
+    try check(
+        settings.actionOrder.prefix(3) == [.rewrite, .grammar, .translate],
+        "settings should move a language action before another action"
+    )
+
+    try check(settings.defaultEnglishAction == .translate, "English selections should default to 翻译")
+    try check(settings.defaultChineseMixedAction == .rewrite, "Chinese and mixed selections should default to 改写")
+    try check(settings.selectDefaultEnglishAction(.examples), "examples should be selectable as the English default action")
+    try check(settings.defaultEnglishAction == .examples, "English default action should update after selection")
+    try check(!settings.selectDefaultChineseMixedAction(.grammar), "grammar should not be selectable as the Chinese or mixed default action")
+    try check(settings.defaultChineseMixedAction == .rewrite, "invalid Chinese or mixed default action should be ignored")
+
+    try check(settings.collectionTarget == .followCurrentPanel, "collection should default to following the current panel")
+    try check(
+        LingobarCollectionTarget.allCases.map(\.title) == ["跟随当前面板", "总是收原文"],
+        "collection target picker should expose restored copy"
+    )
+    settings.collectionTarget = .originalSelection
+    try check(settings.collectionTarget.description.contains("原始文本"), "selection collection target should describe collecting original text")
 }
 
 func checkAIProviderConfiguration() throws {
@@ -437,6 +549,8 @@ do {
     try checkDeepSeekRequestFactory()
     try checkOpenAICompatibleRequestFactory()
     try checkSetupGate()
+    try checkLingobarSettingsNavigationModel()
+    try checkLingobarSettingsSnapshotBehavior()
     try checkAIProviderConfiguration()
     try checkStructuredAIResultParsing()
     try checkGrammarResultFixture()

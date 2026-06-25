@@ -140,6 +140,10 @@ struct LingobarRootView: View {
                         viewModel.togglePinned()
                     }
 
+                    iconButton(systemName: "gearshape", help: "设置") {
+                        onOpenSettings()
+                    }
+
                     iconButton(systemName: "xmark", help: "关闭") {
                         onClose()
                     }
@@ -186,6 +190,10 @@ struct LingobarRootView: View {
             HStack(spacing: 6) {
                 inputIconButton(systemName: "mic", highlighted: false, dimmed: false, help: "语音输入") {
                     viewModel.status = "语音输入暂未启用"
+                }
+
+                inputIconButton(systemName: "gearshape", highlighted: false, dimmed: false, help: "设置") {
+                    onOpenSettings()
                 }
 
                 inputIconButton(

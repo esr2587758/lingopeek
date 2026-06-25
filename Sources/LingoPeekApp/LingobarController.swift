@@ -21,6 +21,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
     private var hotKeyManager: HotKeyManager?
+    private var hotKeyObserver: NSObjectProtocol?
     private var settingsObserver: NSObjectProtocol?
     private var registeredHotKey: LingobarHotKey?
     private var isPositioningProgrammatically = false
@@ -34,15 +35,15 @@ final class LingobarController: NSObject, NSWindowDelegate {
         }
     }
 
-    func start() {
-        installStatusItem()
+    func start(openSettingsOnLaunch: Bool = false) {
+        updateStatusItemVisibility()
         hotKeyManager = HotKeyManager { [weak self] in
             Task { @MainActor in
                 self?.presentFromHotKey()
             }
         }
         registerConfiguredHotKey()
-        settingsObserver = NotificationCenter.default.addObserver(
+        hotKeyObserver = NotificationCenter.default.addObserver(
             forName: AppSettings.hotKeyDidChangeNotification,
             object: nil,
             queue: .main
@@ -51,16 +52,41 @@ final class LingobarController: NSObject, NSWindowDelegate {
                 self?.registerConfiguredHotKey()
             }
         }
-        present(captureSelectionByCopying: false)
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: AppSettings.settingsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else {
+                    return
+                }
+                self.viewModel.actions = AppSettings.actionOrder
+                self.viewModel.setupGateStatus = AppSettings.setupGateStatus
+                self.updateStatusItemVisibility()
+            }
+        }
+        if openSettingsOnLaunch {
+            DispatchQueue.main.async { [settingsWindowController] in
+                settingsWindowController.show()
+            }
+        } else {
+            present(captureSelectionByCopying: false)
+        }
     }
 
     func stop() {
         hotKeyManager?.unregister()
         registeredHotKey = nil
+        if let hotKeyObserver {
+            NotificationCenter.default.removeObserver(hotKeyObserver)
+            self.hotKeyObserver = nil
+        }
         if let settingsObserver {
             NotificationCenter.default.removeObserver(settingsObserver)
             self.settingsObserver = nil
         }
+        removeStatusItem()
     }
 
     func toggle() {
@@ -135,6 +161,9 @@ final class LingobarController: NSObject, NSWindowDelegate {
     }
 
     private func installStatusItem() {
+        guard statusItem == nil else {
+            return
+        }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "L"
         item.button?.toolTip = "Lingobar"
@@ -149,6 +178,22 @@ final class LingobarController: NSObject, NSWindowDelegate {
         menu.items.forEach { $0.target = self }
         item.menu = menu
         statusItem = item
+    }
+
+    private func removeStatusItem() {
+        guard let statusItem else {
+            return
+        }
+        NSStatusBar.system.removeStatusItem(statusItem)
+        self.statusItem = nil
+    }
+
+    private func updateStatusItemVisibility() {
+        if AppSettings.showMenuBarIcon {
+            installStatusItem()
+        } else {
+            removeStatusItem()
+        }
     }
 
     private func ensurePanel() -> NSPanel {

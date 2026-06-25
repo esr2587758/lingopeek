@@ -51,6 +51,25 @@ public struct OpenAICompatibleClient: Sendable {
         }
         return content
     }
+
+    public func testConnection() async throws -> String {
+        let request = try OpenAICompatibleRequestFactory.connectivityTestRequest(configuration: configuration)
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenAICompatibleError.invalidResponse
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let message = String(data: data, encoding: .utf8) ?? "No response body"
+            throw OpenAICompatibleError.server(statusCode: http.statusCode, message: message)
+        }
+
+        let decoded = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
+        guard let content = decoded.choices.first?.message.content,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw OpenAICompatibleError.emptyCompletion
+        }
+        return content
+    }
 }
 
 public enum OpenAICompatibleRequestFactory {
@@ -80,6 +99,36 @@ public enum OpenAICompatibleRequestFactory {
             temperature: 0.2,
             maxTokens: 4096,
             responseFormat: OpenAIResponseFormat(type: "json_object"),
+            stream: false
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+        return request
+    }
+
+    public static func connectivityTestRequest(
+        configuration: AIProviderConfiguration
+    ) throws -> URLRequest {
+        guard configuration.isUsable,
+              let baseURL = configuration.normalizedBaseURL else {
+            throw OpenAICompatibleError.unusableConfiguration
+        }
+
+        let endpoint = baseURL.appending(path: "chat/completions")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(configuration.normalizedAPIToken)", forHTTPHeaderField: "Authorization")
+
+        let body = OpenAIChatRequest(
+            model: configuration.normalizedModel,
+            messages: [
+                OpenAIMessage(role: "system", content: "Reply with exactly: pong"),
+                OpenAIMessage(role: "user", content: "ping")
+            ],
+            temperature: 0,
+            maxTokens: 8,
+            responseFormat: nil,
             stream: false
         )
         request.httpBody = try JSONEncoder().encode(body)

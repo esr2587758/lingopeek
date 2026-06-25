@@ -20,7 +20,7 @@ final class LingobarViewModel: ObservableObject {
     @Published var loadingStartedAt: Date?
     var onLayoutChanged: (() -> Void)?
 
-    let actions: [LanguageAction] = LanguageAction.selectionActions
+    @Published var actions: [LanguageAction] = AppSettings.actionOrder
     private let store: PhraseStore
     private var activeAIRequestID = UUID()
 
@@ -34,11 +34,13 @@ final class LingobarViewModel: ObservableObject {
     }
 
     func present(selection: String?, sourceAppName: String = "当前 App") {
+        actions = AppSettings.actionOrder
+
         if let selection, !selection.isEmpty {
             mode = .selection
             selectionSource = sourceAppName
             selectedText = selection
-            action = LanguageAction.defaultSelectionAction(for: selection)
+            action = configuredDefaultSelectionAction(for: selection)
             result = Self.pendingResult(for: action)
             grammarResult = nil
             showsResult = true
@@ -48,6 +50,7 @@ final class LingobarViewModel: ObservableObject {
         } else {
             mode = .input
             action = .rewrite
+            inputText = AppSettings.autoReadClipboard ? clipboardText() : ""
             result = Self.pendingResult(for: action)
             grammarResult = nil
             showsResult = false
@@ -58,6 +61,7 @@ final class LingobarViewModel: ObservableObject {
     }
 
     func presentGrammarFixture(sourceAppName: String = "Lingobar") {
+        actions = AppSettings.actionOrder
         let grammar = GrammarResult.fixture(id: AppSettings.grammarFixtureID) ?? .mockupFixture
         mode = .selection
         selectionSource = sourceAppName
@@ -73,6 +77,7 @@ final class LingobarViewModel: ObservableObject {
     }
 
     func presentSetupGate(_ setupGateStatus: SetupGateStatus) {
+        actions = AppSettings.actionOrder
         mode = .setup
         self.setupGateStatus = setupGateStatus
         showsResult = false
@@ -129,8 +134,15 @@ final class LingobarViewModel: ObservableObject {
     }
 
     func saveCurrentPhrase() {
-        let collectionTitle = result.defaultCollectionItem?.title ?? (result.defaultCollectionTitle.isEmpty ? activeText : result.defaultCollectionTitle)
-        let note = result.defaultCollectionItem?.note ?? result.summary
+        let collectionTitle: String
+        let note: String
+        if AppSettings.collectionTarget == .originalSelection {
+            collectionTitle = activeText
+            note = "来自原文"
+        } else {
+            collectionTitle = result.defaultCollectionItem?.title ?? (result.defaultCollectionTitle.isEmpty ? activeText : result.defaultCollectionTitle)
+            note = result.defaultCollectionItem?.note ?? result.summary
+        }
         let phrase = SavedPhrase(title: phraseTitle(from: collectionTitle), note: note)
         savedPhrases.insert(phrase, at: 0)
         try? store.save(savedPhrases)
@@ -150,6 +162,20 @@ final class LingobarViewModel: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(selectedText, forType: .string)
         status = "已复制选中文本"
+    }
+
+    private func configuredDefaultSelectionAction(for selection: String) -> LanguageAction {
+        let configured = LanguageAction.defaultSelectionAction(for: selection) == .rewrite
+            ? AppSettings.defaultChineseMixedAction
+            : AppSettings.defaultEnglishAction
+        return configured.isAvailable(for: selection)
+            ? configured
+            : LanguageAction.defaultSelectionAction(for: selection)
+    }
+
+    private func clipboardText() -> String {
+        NSPasteboard.general.string(forType: .string)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     func reopenInlineSelection(_ text: String) {

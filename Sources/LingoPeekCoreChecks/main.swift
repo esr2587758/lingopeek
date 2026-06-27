@@ -826,6 +826,119 @@ func requireHistoryRecord(_ record: LingobarHistoryRecord?, _ message: String) t
     return record
 }
 
+func checkLingobarViewModelHistoryRecordingSourceGate() throws {
+    let sourceURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift")
+    let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+    try check(source.contains("private let historyStore: LingobarHistoryStore"), "view model should own an injected history store")
+    try check(
+        source.contains("init(store: PhraseStore = .defaultStore(), historyStore: LingobarHistoryStore = .defaultStore())"),
+        "view model initializer should preserve PhraseStore default and add a default history store"
+    )
+    try check(source.contains("self.historyStore = historyStore"), "view model initializer should assign the injected history store")
+    try check(
+        source.contains("let historySourceAppName = mode == .input ? \"输入模式\" : selectionSource"),
+        "input-mode history should use the input source label"
+    )
+
+    let runAI = try sourceRegion(source, from: "private func runAIIfAvailable", to: "private func recordCompletedHistory")
+    let successGuard = try requiredRange(
+        in: runAI,
+        needle: "guard self.activeAIRequestID == requestID else",
+        message: "runAIIfAvailable should keep the successful-decode request guard"
+    )
+    let recordCall = try requiredRange(
+        in: runAI,
+        needle: "self.recordCompletedHistory(",
+        message: "runAIIfAvailable should record completed history on the success path"
+    )
+    try check(recordCall.lowerBound > successGuard.lowerBound, "history recording should occur after the successful-decode request guard")
+    try check(
+        String(runAI[..<successGuard.lowerBound]).doesNotMentionHistoryRecording,
+        "history recording should not appear before the successful-decode request guard"
+    )
+    try check(
+        runAI.contains("sourceText: historySourceText") && runAI.contains("sourceAppName: historySourceAppName"),
+        "success-path recording should use captured source text and source label"
+    )
+    try check(
+        countOccurrences(of: "self.recordCompletedHistory(", in: runAI) == 1,
+        "runAIIfAvailable should call the history recording helper exactly once"
+    )
+
+    let catchRegion = String(runAI[try requiredRange(in: runAI, needle: "} catch is DecodingError", message: "runAIIfAvailable should contain the decoding catch branch").lowerBound...])
+    try check(catchRegion.doesNotMentionHistoryRecording, "catch/error paths should not record history")
+
+    let helper = try sourceRegion(source, from: "private func recordCompletedHistory", to: "private func systemPrompt")
+    try check(helper.contains("LingobarHistoryRecord.make"), "recording helper should build a compact history record")
+    try check(helper.contains("_ = try? historyStore.append(record)"), "recording helper should append through the injected history store non-fatally")
+    try check(
+        helper.doesNotContainAny([
+            "AppSettings",
+            "AIProviderConfiguration",
+            "OpenAICompatibleClient",
+            "systemPrompt",
+            "completion",
+            "json",
+            "userFacingAIErrorMessage"
+        ]),
+        "recording helper should not accept provider config, prompts, raw completion text, JSON, or errors"
+    )
+    try check(
+        countOccurrences(of: "historyStore.append", in: source) == 1,
+        "history store append should be isolated to the recording helper"
+    )
+
+    let forbiddenRegions = [
+        ("grammar fixture", try sourceRegion(source, from: "func presentGrammarFixture", to: "func presentSetupGate")),
+        ("setup gate", try sourceRegion(source, from: "func presentSetupGate", to: "func perform")),
+        ("copy/collect actions", try sourceRegion(source, from: "func perform", to: "func submitInput")),
+        ("result copy", try sourceRegion(source, from: "func copyResult", to: "func copyInlineSelection")),
+        ("inline collection", try sourceRegion(source, from: "func collectInlineSelection", to: "func insertResult")),
+        ("error result", try sourceRegion(source, from: "private func errorResult", to: "private func userFacingAIErrorMessage"))
+    ]
+
+    for (name, region) in forbiddenRegions {
+        try check(region.doesNotMentionHistoryRecording, "\(name) region should not record history")
+    }
+}
+
+func sourceRegion(_ source: String, from start: String, to end: String) throws -> String {
+    let startRange = try requiredRange(in: source, needle: start, message: "source should contain \(start)")
+    guard let endRange = source[startRange.upperBound...].range(of: end) else {
+        throw CheckFailure.failed("source should contain \(end) after \(start)")
+    }
+    return String(source[startRange.lowerBound..<endRange.lowerBound])
+}
+
+func requiredRange(in source: String, needle: String, message: String) throws -> Range<String.Index> {
+    guard let range = source.range(of: needle) else {
+        throw CheckFailure.failed(message)
+    }
+    return range
+}
+
+func countOccurrences(of needle: String, in source: String) -> Int {
+    var count = 0
+    var searchStart = source.startIndex
+    while let range = source[searchStart...].range(of: needle) {
+        count += 1
+        searchStart = range.upperBound
+    }
+    return count
+}
+
+private extension String {
+    var doesNotMentionHistoryRecording: Bool {
+        doesNotContainAny(["recordCompletedHistory(", "historyStore.append"])
+    }
+
+    func doesNotContainAny(_ needles: [String]) -> Bool {
+        needles.allSatisfy { !contains($0) }
+    }
+}
+
 func checkPhraseStore() throws {
     let directory = FileManager.default.temporaryDirectory
         .appending(path: "LingoPeekChecks-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -859,6 +972,7 @@ do {
     try checkLingobarHistoryStore()
     try checkLingobarHistoryRecordBuilderPrivacy()
     try checkLingobarHubLibraryItems()
+    try checkLingobarViewModelHistoryRecordingSourceGate()
     try checkPhraseStore()
     print("LingoPeekCoreChecks passed")
 } catch {

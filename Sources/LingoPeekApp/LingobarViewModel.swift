@@ -22,10 +22,12 @@ final class LingobarViewModel: ObservableObject {
 
     @Published var actions: [LanguageAction] = AppSettings.actionOrder
     private let store: PhraseStore
+    private let historyStore: LingobarHistoryStore
     private var activeAIRequestID = UUID()
 
-    init(store: PhraseStore = .defaultStore()) {
+    init(store: PhraseStore = .defaultStore(), historyStore: LingobarHistoryStore = .defaultStore()) {
         self.store = store
+        self.historyStore = historyStore
         self.savedPhrases = (try? store.load()) ?? [
             SavedPhrase(title: "selection-first", note: "以选区为入口，而不是先打开 App。")
         ]
@@ -220,6 +222,8 @@ final class LingobarViewModel: ObservableObject {
             return
         }
 
+        let historySourceText = text
+        let historySourceAppName = mode == .input ? "输入模式" : selectionSource
         let requestID = UUID()
         activeAIRequestID = requestID
         isLoading = true
@@ -248,6 +252,11 @@ final class LingobarViewModel: ObservableObject {
                     self.grammarResult = nil
                     self.result = structured.lingobarResult(shortcut: action.shortcut)
                 }
+                self.recordCompletedHistory(
+                    action: action,
+                    sourceText: historySourceText,
+                    sourceAppName: historySourceAppName
+                )
                 self.status = "AI 完成"
             } catch is DecodingError {
                 guard self.activeAIRequestID == requestID else {
@@ -271,6 +280,22 @@ final class LingobarViewModel: ObservableObject {
             self.loadingStartedAt = nil
             self.onLayoutChanged?()
         }
+    }
+
+    private func recordCompletedHistory(
+        action: LanguageAction,
+        sourceText: String,
+        sourceAppName: String
+    ) {
+        guard let record = LingobarHistoryRecord.make(
+            action: action,
+            sourceText: sourceText,
+            sourceAppName: sourceAppName,
+            result: result
+        ) else {
+            return
+        }
+        _ = try? historyStore.append(record)
     }
 
     private func systemPrompt(for action: LanguageAction) -> String {

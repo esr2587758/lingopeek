@@ -15,22 +15,22 @@
 
 ### Collection
 
-- [ ] **COLL-01**: User can view locally saved phrases from `PhraseStore` in the Hub collection list.
+- [x] **COLL-01**: User can view locally saved phrases from `PhraseStore` in the Hub collection list.
 - [ ] **COLL-02**: User can search collection items by visible text or notes.
 - [ ] **COLL-03**: User can filter collection items by item type using chip controls.
 - [ ] **COLL-04**: User can select a collection item and view its details in the right detail pane.
-- [ ] **COLL-05**: User can copy a collection item from either the card or detail pane.
+- [x] **COLL-05**: User can copy a collection item from either the card or detail pane.
 - [ ] **COLL-06**: User can delete a collection item and see the list/detail state update immediately.
 - [ ] **COLL-07**: User can relaunch a collection item into the Lingobar language workflow when supported.
 
 ### History
 
-- [ ] **HIST-01**: Lingobar records completed language actions into a local bounded history store.
-- [ ] **HIST-02**: User can view recent history records in the Hub history list with action badges, item type, source, and relative time.
+- [x] **HIST-01**: Lingobar records completed language actions into a local bounded history store.
+- [x] **HIST-02**: User can view recent history records in the Hub history list with action badges, item type, source, and relative time.
 - [ ] **HIST-03**: User can search history records by visible text or notes.
 - [ ] **HIST-04**: User can filter history by action (`翻译`, `语法`, `改写`, `例句`, `发音`) using chip controls.
 - [ ] **HIST-05**: User can select a history item and view its details in the right detail pane.
-- [ ] **HIST-06**: User can copy, delete, and clear history records.
+- [x] **HIST-06**: User can copy, delete, and clear history records.
 - [ ] **HIST-07**: User can save a history item into collection without creating an obvious duplicate in the current Hub session.
 - [ ] **HIST-08**: User can relaunch a history item into the Lingobar language workflow when supported.
 
@@ -78,11 +78,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HIST-01 | Phase 1 | Pending |
-| COLL-01 | Phase 1 | Pending |
-| COLL-05 | Phase 1 | Pending |
-| HIST-02 | Phase 1 | Pending |
-| HIST-06 | Phase 1 | Pending |
+| HIST-01 | Phase 1 | Complete |
+| COLL-01 | Phase 1 | Complete |
+| COLL-05 | Phase 1 | Complete |
+| HIST-02 | Phase 1 | Complete |
+| HIST-06 | Phase 1 | Complete |
 | HUB-01 | Phase 2 | Pending |
 | HUB-02 | Phase 2 | Pending |
 | HUB-03 | Phase 2 | Pending |

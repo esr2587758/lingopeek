@@ -527,6 +527,287 @@ func checkGrammarAIResponseTolerance() throws {
     try check(decoded.defaultCollectionItem.title == "sth. calls into question sth.", "grammar decode should default collection item from pattern")
 }
 
+func checkLanguageActionCodable() throws {
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
+    let actions: [LanguageAction] = [.translate, .grammar, .rewrite, .examples, .pronounce]
+
+    for action in actions {
+        let data = try encoder.encode(action)
+        let encoded = String(decoding: data, as: UTF8.self)
+        try check(encoded == "\"\(action.rawValue)\"", "\(action.rawValue) should encode as its raw value")
+        try check(try decoder.decode(LanguageAction.self, from: data) == action, "\(action.rawValue) should decode from its raw value")
+    }
+}
+
+func checkLingobarHistoryStore() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appending(path: "LingoPeekHistoryChecks-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let fileURL = directory.appending(path: "history.json")
+    let store = LingobarHistoryStore(fileURL: fileURL, limit: 2)
+
+    try check(try store.load().isEmpty, "missing history.json should load empty")
+
+    let firstDate = Date(timeIntervalSince1970: 1_710_000_001)
+    let secondDate = Date(timeIntervalSince1970: 1_710_000_002)
+    let thirdDate = Date(timeIntervalSince1970: 1_710_000_003)
+    let first = try makeHistoryRecord(
+        id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+        action: .translate,
+        sourceText: "first source",
+        sourceAppName: "Safari",
+        visibleText: "first visible",
+        note: "first note",
+        itemType: "短语",
+        createdAt: firstDate
+    )
+    let second = try makeHistoryRecord(
+        id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+        action: .grammar,
+        sourceText: "second source",
+        sourceAppName: "Notes",
+        visibleText: "second visible",
+        note: "second note",
+        itemType: "句型",
+        createdAt: secondDate
+    )
+    let third = try makeHistoryRecord(
+        id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+        action: .rewrite,
+        sourceText: "third source",
+        sourceAppName: "Pages",
+        visibleText: "third visible",
+        note: "third note",
+        itemType: "英文",
+        createdAt: thirdDate
+    )
+
+    _ = try store.append(first)
+    _ = try store.append(second)
+    let capped = try store.append(third)
+    try check(capped.map(\.id) == [third.id, second.id], "append should keep the two newest records")
+
+    let reloaded = try store.load()
+    try check(reloaded == capped, "reload should preserve capped history order and fields")
+    try check(reloaded.map(\.createdAt) == [thirdDate, secondDate], "reload should preserve createdAt dates")
+    try check(reloaded.map(\.sourceAppName) == ["Pages", "Notes"], "reload should preserve source app labels")
+
+    let afterDelete = try store.delete(id: second.id)
+    try check(afterDelete.map(\.id) == [third.id], "delete should remove the matching history UUID")
+
+    let afterMissingDelete = try store.delete(id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!)
+    try check(afterMissingDelete.map(\.id) == [third.id], "deleting a missing history UUID should be a no-op")
+
+    try store.clear()
+    try check(try store.load().isEmpty, "clear should persist an empty history list")
+}
+
+func checkLingobarHistoryRecordBuilderPrivacy() throws {
+    let createdAt = Date(timeIntervalSince1970: 1_710_000_100)
+    let reusableResult = LingobarResult(
+        title: "翻译",
+        shortcut: "⌘1",
+        summary: "Summary text",
+        rows: [],
+        sideTitle: "后续动作",
+        chips: [],
+        defaultCollectionItem: DefaultCollectionItem(
+            title: " reusable phrase ",
+            note: " collection note ",
+            type: "短语"
+        )
+    )
+
+    for action in [LanguageAction.translate, .grammar, .rewrite, .examples, .pronounce] {
+        let record = LingobarHistoryRecord.make(
+            action: action,
+            sourceText: "  source text  ",
+            sourceAppName: "  Safari  ",
+            result: reusableResult,
+            createdAt: createdAt,
+            id: UUID()
+        )
+        try check(record != nil, "\(action.rawValue) should produce a history record")
+        try check(record?.action == action, "\(action.rawValue) should be preserved on the history record")
+    }
+
+    let record = try requireHistoryRecord(
+        LingobarHistoryRecord.make(
+            action: .translate,
+            sourceText: "  source text  ",
+            sourceAppName: "  Safari  ",
+            result: reusableResult,
+            createdAt: createdAt,
+            id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!
+        ),
+        "translate should create a history record"
+    )
+    try check(record.sourceText == "source text", "history builder should trim source text")
+    try check(record.sourceAppName == "Safari", "history builder should trim source app label")
+    try check(record.visibleText == "reusable phrase", "history builder should use DefaultCollectionItem title first")
+    try check(record.copyText == "reusable phrase", "history builder should use DefaultCollectionItem title for copy text")
+    try check(record.note == "collection note", "history builder should use DefaultCollectionItem note")
+    try check(record.itemType == "短语", "history builder should use DefaultCollectionItem type")
+
+    let fallbackResult = LingobarResult(
+        title: "发音",
+        shortcut: "⌘P",
+        summary: " pronounced summary ",
+        rows: [],
+        sideTitle: "后续动作",
+        chips: [],
+        defaultCollectionTitle: " fallback title "
+    )
+    let fallback = try requireHistoryRecord(
+        LingobarHistoryRecord.make(
+            action: .pronounce,
+            sourceText: "hello",
+            sourceAppName: "   ",
+            result: fallbackResult,
+            createdAt: createdAt,
+            id: UUID()
+        ),
+        "pronounce should create a fallback history record"
+    )
+    try check(fallback.sourceAppName == "Lingobar", "empty source app label should default to Lingobar")
+    try check(fallback.visibleText == "fallback title", "history builder should fall back to defaultCollectionTitle")
+    try check(fallback.copyText == "fallback title", "history builder should fall back to defaultCollectionTitle for copy text")
+    try check(fallback.note == "pronounced summary", "history builder should fall back to result summary for note")
+    try check(fallback.itemType == "文本", "history builder should fall back to text item type")
+
+    let longText = String(repeating: "A", count: LingobarHistoryLimits.copyTextLength + 20)
+    let longRecord = try requireHistoryRecord(
+        LingobarHistoryRecord.make(
+            action: .examples,
+            sourceText: " \(longText) ",
+            sourceAppName: "Preview",
+            result: LingobarResult(
+                title: "例句",
+                shortcut: "⌘4",
+                summary: longText,
+                rows: [],
+                sideTitle: "后续动作",
+                chips: [],
+                defaultCollectionItem: DefaultCollectionItem(
+                    title: longText,
+                    note: longText,
+                    type: "例句"
+                )
+            ),
+            createdAt: createdAt,
+            id: UUID()
+        ),
+        "long examples record should be created"
+    )
+    try check(longRecord.visibleText.count == LingobarHistoryLimits.visibleTextLength, "visible text should be bounded")
+    try check(longRecord.note.count == LingobarHistoryLimits.noteLength, "note should be bounded")
+    try check(longRecord.copyText.count == LingobarHistoryLimits.copyTextLength, "copy text should be bounded")
+    try check(longRecord.sourceText.count == LingobarHistoryLimits.sourceTextLength, "source text should be bounded")
+
+    try check(
+        LingobarHistoryRecord.make(action: .copy, sourceText: "source", sourceAppName: "Safari", result: reusableResult, createdAt: createdAt, id: UUID()) == nil,
+        "copy action should not enter history"
+    )
+    try check(
+        LingobarHistoryRecord.make(action: .collect, sourceText: "source", sourceAppName: "Safari", result: reusableResult, createdAt: createdAt, id: UUID()) == nil,
+        "collect action should not enter history"
+    )
+
+    let encoded = String(decoding: try JSONEncoder().encode(record), as: UTF8.self)
+    for forbidden in ["sentinel-token", "https://sentinel.invalid", "sentinel-model", "sentinel-provider"] {
+        try check(!encoded.contains(forbidden), "history record should not encode unpassed provider sentinel \(forbidden)")
+    }
+}
+
+func checkLingobarHubLibraryItems() throws {
+    let phraseID = UUID(uuidString: "66666666-6666-6666-6666-666666666666")!
+    let phraseDate = Date(timeIntervalSince1970: 1_710_000_200)
+    let phrase = SavedPhrase(
+        id: phraseID,
+        title: "selection-first",
+        note: "以选区为入口。",
+        createdAt: phraseDate
+    )
+    let collectionItems = LingobarHubLibrary.collectionItems(from: [phrase])
+
+    try check(collectionItems.count == 1, "one saved phrase should adapt into one Hub collection item")
+    let collectionItem = collectionItems[0]
+    try check(collectionItem.id == phraseID, "collection item should preserve SavedPhrase id")
+    try check(collectionItem.createdAt == phraseDate, "collection item should preserve SavedPhrase date")
+    try check(collectionItem.title == phrase.title, "collection item should preserve SavedPhrase title")
+    try check(collectionItem.note == phrase.note, "collection item should preserve SavedPhrase note")
+    try check(collectionItem.copyText == phrase.title, "collection item copy text should equal title")
+    try check(collectionItem.kind == .collection, "collection item kind should be collection")
+    try check(collectionItem.source == "Lingobar", "collection item source should default to Lingobar")
+    try check(collectionItem.itemType == "文本", "collection item type should default to text")
+
+    let historyDate = Date(timeIntervalSince1970: 1_710_000_300)
+    let history = try makeHistoryRecord(
+        id: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!,
+        action: .examples,
+        sourceText: "call into question",
+        sourceAppName: "Safari",
+        visibleText: "The report calls the timeline into question.",
+        note: "可迁移例句",
+        itemType: "例句",
+        createdAt: historyDate
+    )
+    let historyItems = LingobarHubLibrary.historyItems(from: [history])
+
+    try check(historyItems.count == 1, "one history record should adapt into one Hub history item")
+    let historyItem = historyItems[0]
+    try check(historyItem.id == history.id, "history item should preserve record id")
+    try check(historyItem.kind == .history, "history item kind should be history")
+    try check(historyItem.action == .examples, "history item should preserve action")
+    try check(historyItem.itemType == "例句", "history item should preserve item type")
+    try check(historyItem.source == "Safari", "history item should preserve source app")
+    try check(historyItem.createdAt == historyDate, "history item should preserve created date")
+    try check(historyItem.sourceText == "call into question", "history item should preserve source text")
+    try check(historyItem.copyText == "The report calls the timeline into question.", "history item should preserve copy text")
+}
+
+func makeHistoryRecord(
+    id: UUID,
+    action: LanguageAction,
+    sourceText: String,
+    sourceAppName: String,
+    visibleText: String,
+    note: String,
+    itemType: String,
+    createdAt: Date
+) throws -> LingobarHistoryRecord {
+    try requireHistoryRecord(
+        LingobarHistoryRecord.make(
+            action: action,
+            sourceText: sourceText,
+            sourceAppName: sourceAppName,
+            result: LingobarResult(
+                title: action.title,
+                shortcut: action.shortcut,
+                summary: "\(visibleText) summary",
+                rows: [],
+                sideTitle: "后续动作",
+                chips: [],
+                defaultCollectionItem: DefaultCollectionItem(
+                    title: visibleText,
+                    note: note,
+                    type: itemType
+                )
+            ),
+            createdAt: createdAt,
+            id: id
+        ),
+        "\(action.rawValue) fixture should produce a history record"
+    )
+}
+
+func requireHistoryRecord(_ record: LingobarHistoryRecord?, _ message: String) throws -> LingobarHistoryRecord {
+    guard let record else {
+        throw CheckFailure.failed(message)
+    }
+    return record
+}
+
 func checkPhraseStore() throws {
     let directory = FileManager.default.temporaryDirectory
         .appending(path: "LingoPeekChecks-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -556,6 +837,10 @@ do {
     try checkGrammarResultFixture()
     try checkGrammarUITestFixtures()
     try checkGrammarAIResponseTolerance()
+    try checkLanguageActionCodable()
+    try checkLingobarHistoryStore()
+    try checkLingobarHistoryRecordBuilderPrivacy()
+    try checkLingobarHubLibraryItems()
     try checkPhraseStore()
     print("LingoPeekCoreChecks passed")
 } catch {

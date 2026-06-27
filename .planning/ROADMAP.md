@@ -21,7 +21,7 @@ This roadmap adds the native Hub as a brownfield vertical slice: real persistenc
 ### Phase 1: Hub Data Foundations
 **Goal:** Give the Hub real local data contracts before building the full visual surface.
 **Mode:** mvp
-**Plan progress:** 1/2 plans complete (Plan 01 complete; Plan 02 pending).
+**Plan progress:** 2/2 plans complete; phase verification pending.
 
 **Requirements:** HIST-01, COLL-01, COLL-05, HIST-02, HIST-06
 
@@ -101,7 +101,7 @@ This roadmap adds the native Hub as a brownfield vertical slice: real persistenc
 
 ## Next Step
 
-Run `$gsd-execute-phase 1` to implement the Hub Data Foundations phase.
+Run `$gsd-verify-work 1` to complete human/goal verification for the Hub Data Foundations phase.
 
 ---
 *Roadmap created: 2026-06-26*

@@ -600,9 +600,24 @@ func checkLingobarHistoryStore() throws {
     let afterMissingDelete = try store.delete(id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!)
     try check(afterMissingDelete.map(\.id) == [third.id], "deleting a missing history UUID should be a no-op")
 
+    try store.save([first, second, third])
+    let saveCapped = try store.load()
+    try check(saveCapped.map(\.id) == [first.id, second.id], "save should enforce the configured history cap")
+
     try store.clear()
     let clearedRecords = try store.load()
     try check(clearedRecords.isEmpty, "clear should persist an empty history list")
+
+    let corruptFileURL = directory.appending(path: "corrupt-history.json")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data("{".utf8).write(to: corruptFileURL, options: [.atomic])
+    let corruptStore = LingobarHistoryStore(fileURL: corruptFileURL, limit: 2)
+    do {
+        _ = try corruptStore.load()
+        throw CheckFailure.failed("corrupt history JSON should throw instead of clearing")
+    } catch is DecodingError {
+        // Expected.
+    }
 }
 
 func checkLingobarHistoryRecordBuilderPrivacy() throws {

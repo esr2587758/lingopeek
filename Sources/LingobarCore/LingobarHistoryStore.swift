@@ -91,11 +91,12 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
     }
 }
 
-public final class LingobarHistoryStore {
+public final class LingobarHistoryStore: @unchecked Sendable {
     private let fileURL: URL
     private let limit: Int
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private let lock = NSLock()
 
     public init(fileURL: URL, limit: Int = LingobarHistoryLimits.defaultRecordLimit) {
         self.fileURL = fileURL
@@ -105,7 +106,56 @@ public final class LingobarHistoryStore {
         decoder.dateDecodingStrategy = .iso8601
     }
 
+    public static func defaultStore() -> LingobarHistoryStore {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let directory = base.appending(path: "LingoPeek", directoryHint: .isDirectory)
+        return LingobarHistoryStore(fileURL: directory.appending(path: "history.json"))
+    }
+
     public func load() throws -> [LingobarHistoryRecord] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        return try loadUnlocked()
+    }
+
+    public func save(_ records: [LingobarHistoryRecord]) throws {
+        lock.lock()
+        defer { lock.unlock() }
+
+        try saveUnlocked(records)
+    }
+
+    @discardableResult
+    public func append(_ record: LingobarHistoryRecord) throws -> [LingobarHistoryRecord] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        var records = try loadUnlocked()
+        records.insert(record, at: 0)
+        let capped = capped(records)
+        try saveUnlocked(capped)
+        return capped
+    }
+
+    @discardableResult
+    public func delete(id: UUID) throws -> [LingobarHistoryRecord] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let records = try loadUnlocked().filter { $0.id != id }
+        try saveUnlocked(records)
+        return records
+    }
+
+    public func clear() throws {
+        lock.lock()
+        defer { lock.unlock() }
+
+        try saveUnlocked([])
+    }
+
+    private func loadUnlocked() throws -> [LingobarHistoryRecord] {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return []
         }
@@ -113,31 +163,15 @@ public final class LingobarHistoryStore {
         return try decoder.decode([LingobarHistoryRecord].self, from: data)
     }
 
-    public func save(_ records: [LingobarHistoryRecord]) throws {
+    private func saveUnlocked(_ records: [LingobarHistoryRecord]) throws {
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let data = try encoder.encode(records)
+        let data = try encoder.encode(capped(records))
         try data.write(to: fileURL, options: [.atomic])
     }
 
-    @discardableResult
-    public func append(_ record: LingobarHistoryRecord) throws -> [LingobarHistoryRecord] {
-        var records = try load()
-        records.insert(record, at: 0)
-        let capped = Array(records.prefix(limit))
-        try save(capped)
-        return capped
-    }
-
-    @discardableResult
-    public func delete(id: UUID) throws -> [LingobarHistoryRecord] {
-        let records = try load().filter { $0.id != id }
-        try save(records)
-        return records
-    }
-
-    public func clear() throws {
-        try save([])
+    private func capped(_ records: [LingobarHistoryRecord]) -> [LingobarHistoryRecord] {
+        Array(records.prefix(limit))
     }
 }
 

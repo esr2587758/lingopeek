@@ -13,11 +13,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let openSettingsOnLaunch = ProcessInfo.processInfo.environment["LINGOPEEK_OPEN_SETTINGS"] == "1"
+        let environment = ProcessInfo.processInfo.environment
+        let openSettingsOnLaunch = environment["LINGOPEEK_OPEN_SETTINGS"] == "1"
+        let openHubOnLaunch = environment["LINGOPEEK_OPEN_HUB"] == "1"
+        let hubLaunchSection = LingobarHubSection(rawValue: environment["LINGOPEEK_OPEN_HUB_SECTION"] ?? "")
         let uiTestMode = ProcessInfo.processInfo.environment["LINGOPEEK_UI_TEST_MODE"] == "1"
-        NSApp.setActivationPolicy(openSettingsOnLaunch || uiTestMode ? .regular : .accessory)
+        let launchHubSection = openSettingsOnLaunch
+            ? LingobarHubSection.settings
+            : (openHubOnLaunch ? (hubLaunchSection ?? .collection) : nil)
+        NSApp.setActivationPolicy(openSettingsOnLaunch || openHubOnLaunch || uiTestMode ? .regular : .accessory)
         controller = LingobarController()
-        controller?.start(openSettingsOnLaunch: openSettingsOnLaunch)
+        controller?.start(openSettingsOnLaunch: openSettingsOnLaunch, openHubOnLaunch: launchHubSection)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

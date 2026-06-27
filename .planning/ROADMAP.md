@@ -39,6 +39,7 @@ This roadmap adds the native Hub as a brownfield vertical slice: real persistenc
 
 **Goal:** Create the native Hub window and main visual structure matching the local HTML reference.
 **Mode:** mvp
+**Plan progress:** complete 2026-06-28.
 
 **Requirements:** HUB-01, HUB-02, HUB-03, HUB-04, FID-01, FID-02
 
@@ -56,6 +57,7 @@ This roadmap adds the native Hub as a brownfield vertical slice: real persistenc
 
 **Goal:** Make collection and history usable with real search, filters, details, and item actions.
 **Mode:** mvp
+**Plan progress:** complete 2026-06-28.
 
 **Requirements:** COLL-02, COLL-03, COLL-04, COLL-06, COLL-07, HIST-03, HIST-04, HIST-05, HIST-07, HIST-08
 
@@ -72,6 +74,7 @@ This roadmap adds the native Hub as a brownfield vertical slice: real persistenc
 
 **Goal:** Move settings behavior into the Hub while preserving existing persistence and notifications.
 **Mode:** mvp
+**Plan progress:** complete 2026-06-28.
 
 **Requirements:** SET-01, SET-02, SET-03, SET-04, SET-05, SET-06, SET-07
 
@@ -89,6 +92,7 @@ This roadmap adds the native Hub as a brownfield vertical slice: real persistenc
 
 **Goal:** Make the Hub the shipped management window and prove it works.
 **Mode:** mvp
+**Plan progress:** complete 2026-06-28.
 
 **Requirements:** HUB-05, FID-03, FID-04, FID-05
 
@@ -111,7 +115,7 @@ This roadmap adds the native Hub as a brownfield vertical slice: real persistenc
 
 ## Next Step
 
-Run `$gsd-plan-phase 2` to plan the Native Hub Shell phase.
+Run `$gsd-complete-milestone` or prepare a review/ship pass for the completed native Hub milestone.
 
 ---
-*Roadmap created: 2026-06-26*
+*Roadmap created: 2026-06-26; updated 2026-06-28 after autonomous Hub implementation*

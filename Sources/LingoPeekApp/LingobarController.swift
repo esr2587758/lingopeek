@@ -17,7 +17,9 @@ final class LingobarController: NSObject, NSWindowDelegate {
 
     private let viewModel: LingobarViewModel
     private let selectionReader = SelectionReader()
-    private let settingsWindowController = SettingsWindowController()
+    private lazy var hubWindowController = LingobarHubWindowController { [weak self] item in
+        self?.presentFromHub(item)
+    }
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
     private var hotKeyManager: HotKeyManager?
@@ -35,7 +37,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
         }
     }
 
-    func start(openSettingsOnLaunch: Bool = false) {
+    func start(openSettingsOnLaunch: Bool = false, openHubOnLaunch: LingobarHubSection? = nil) {
         updateStatusItemVisibility()
         hotKeyManager = HotKeyManager { [weak self] in
             Task { @MainActor in
@@ -66,9 +68,9 @@ final class LingobarController: NSObject, NSWindowDelegate {
                 self.updateStatusItemVisibility()
             }
         }
-        if openSettingsOnLaunch {
-            DispatchQueue.main.async { [settingsWindowController] in
-                settingsWindowController.show()
+        if let openHubOnLaunch = openHubOnLaunch ?? (openSettingsOnLaunch ? .settings : nil) {
+            DispatchQueue.main.async { [weak self] in
+                self?.hubWindowController.show(section: openHubOnLaunch)
             }
         } else {
             present(captureSelectionByCopying: false)
@@ -172,6 +174,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
         menu.addItem(NSMenuItem(title: "Show Lingobar", action: #selector(showFromMenu), keyEquivalent: "l"))
         menu.addItem(NSMenuItem(title: "Hide", action: #selector(hideFromMenu), keyEquivalent: "w"))
         menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Open Lingobar Hub", action: #selector(showHubFromMenu), keyEquivalent: "h"))
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettingsFromMenu), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit LingoPeek", action: #selector(quitFromMenu), keyEquivalent: "q"))
@@ -231,7 +234,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
                     self?.hide()
                 },
                 onOpenSettings: { [weak self] in
-                    self?.settingsWindowController.show()
+                    self?.hubWindowController.show(section: .settings)
                 },
                 onOpenAccessibility: {
                     Self.openAccessibilitySettings()
@@ -370,7 +373,11 @@ final class LingobarController: NSObject, NSWindowDelegate {
     }
 
     @objc private func showSettingsFromMenu() {
-        settingsWindowController.show()
+        hubWindowController.show(section: .settings)
+    }
+
+    @objc private func showHubFromMenu() {
+        hubWindowController.show(section: .collection)
     }
 
     @objc private func quitFromMenu() {
@@ -381,6 +388,26 @@ final class LingobarController: NSObject, NSWindowDelegate {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    private func presentFromHub(_ item: LingobarHubLibraryItem) {
+        let selectedText = [
+            item.sourceText,
+            item.copyText,
+            item.visibleText,
+            item.title
+        ]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
+        guard !selectedText.isEmpty else {
+            return
+        }
+        hide()
+        viewModel.reopenInlineSelection(selectedText)
+        let panel = ensurePanel()
+        panel.setContentSize(contentSize)
+        position(panel)
+        show(panel)
     }
 }
 

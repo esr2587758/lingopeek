@@ -955,6 +955,46 @@ func checkPhraseStore() throws {
     try check(loaded.map(\.note) == phrases.map(\.note), "phrase notes should persist")
 }
 
+func checkLingobarHubShellSourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let windowSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarHubWindowController.swift"),
+        encoding: .utf8
+    )
+    let viewSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarHubView.swift"),
+        encoding: .utf8
+    )
+    let controllerSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarController.swift"),
+        encoding: .utf8
+    )
+    let appDelegateSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/AppDelegate.swift"),
+        encoding: .utf8
+    )
+
+    try check(windowSource.contains("LingobarHubWindowController"), "native Hub should have a window controller")
+    try check(windowSource.contains("static let hubSize = NSSize(width: 920, height: 624)"), "Hub window should match the reference 920x624 frame")
+    try check(windowSource.contains("window.setContentSize(LingobarHubWindow.hubSize)"), "Hub should enforce its reference content size whenever shown")
+    try check(windowSource.contains("static let sidebarWidth: CGFloat = 188"), "Hub shell should preserve the 188px sidebar")
+    try check(windowSource.contains("window.isMovableByWindowBackground = true"), "Hub window should be draggable by background")
+    try check(viewSource.contains("private let detailWidth: CGFloat = 320"), "Hub shell should preserve the 320px detail column")
+    try check(viewSource.contains("case collection") && viewSource.contains("case history") && viewSource.contains("case settings"), "Hub should model the three native sections")
+    try check(viewSource.contains("\"收藏\"") && viewSource.contains("\"历史\"") && viewSource.contains("\"设置\""), "Hub navigation should use the requested Chinese labels")
+    try check(viewSource.contains("\"已就绪\"") && viewSource.contains("\"需完成必填项\""), "Hub footer should reflect setup readiness")
+    try check(viewSource.contains("PhraseStore.defaultStore()"), "Hub collection should use the real phrase store")
+    try check(viewSource.contains("LingobarHistoryStore.defaultStore()"), "Hub history should use the real history store")
+    try check(viewSource.contains("LingobarHubLibrary.collectionItems"), "Hub should map saved phrases through the shared library adapter")
+    try check(viewSource.contains("LingobarHubLibrary.historyItems"), "Hub should map history records through the shared library adapter")
+    try check(controllerSource.contains("hubWindowController.show(section: .settings)"), "settings entry points should open the Hub settings section")
+    try check(controllerSource.contains("hubWindowController.show(section: .collection)"), "menu should expose the Hub collection entry")
+    try check(controllerSource.contains("presentFromHub(_ item: LingobarHubLibraryItem)"), "Hub detail items should be able to relaunch Lingobar")
+    try check(!controllerSource.contains("settingsWindowController.show()"), "old settings window should not remain the active settings route")
+    try check(appDelegateSource.contains("LINGOPEEK_OPEN_HUB"), "app launch should support deterministic Hub UI smoke tests")
+    try check(appDelegateSource.contains("LINGOPEEK_OPEN_HUB_SECTION"), "Hub launch should support deterministic section routing")
+}
+
 do {
     try checkLocalLanguageEngine()
     try checkLanguageActionKeyboardShortcuts()
@@ -974,6 +1014,7 @@ do {
     try checkLingobarHubLibraryItems()
     try checkLingobarViewModelHistoryRecordingSourceGate()
     try checkPhraseStore()
+    try checkLingobarHubShellSourceGate()
     print("LingoPeekCoreChecks passed")
 } catch {
     fputs("LingoPeekCoreChecks failed: \(error)\n", stderr)

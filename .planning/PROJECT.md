@@ -20,13 +20,15 @@ Users can manage saved language material, revisit previous language actions, and
 - ✓ Saved phrases persist locally through `PhraseStore.defaultStore()` under Application Support — existing
 - ✓ The codebase has zero-dependency verification targets with `swift build --product LingoPeek` and `swift run LingoPeekCoreChecks` — existing
 - ✓ Reference Hub design exists locally under `designs/lingobar-hub/` and has been captured as `.omx/state/lingobar-hub/reference-full.png` for visual comparison — existing
+- ✓ Hub data foundations provide bounded local history persistence and collection/history adapters — Phase 1
+- ✓ Successful Lingobar AI completions write compact user-visible history records, while setup/error/copy/collect paths do not write history — Phase 1 UAT
 
 ### Active
 
 - [ ] Add a native `LingobarHub` window matching the HTML reference's 920x624 dark glass shell, 188pt sidebar, two-column content region, typography, colors, dividers, cards, chips, detail drawer, settings subnav, and toast behavior.
 - [ ] Replace existing settings entry points so the menu bar settings item, floating Lingobar gear, and setup-gate AI settings action open the Hub instead of the old standalone settings window.
-- [ ] Wire `收藏` to real saved phrase data from `PhraseStore`, preserving copy, delete, detail, and relaunch affordances in a native SwiftUI surface.
-- [ ] Add real local history persistence for language actions so `历史` shows recent translation, grammar, rewrite, examples, and pronunciation records rather than demo-only data.
+- [ ] Render `收藏` from real saved phrase data in the native Hub, preserving copy, delete, detail, and relaunch affordances in a native SwiftUI surface.
+- [ ] Render `历史` from the real local history store so the Hub shows recent translation, grammar, rewrite, examples, and pronunciation records rather than demo-only data.
 - [ ] Port settings behavior into the Hub with native controls that read and write the existing `AppSettings` contract.
 - [ ] Preserve native macOS behavior: keyboard close, command shortcuts where appropriate, draggable borderless window headers, focus handling, UserDefaults persistence, and no new runtime dependencies.
 - [ ] Add focused verification for Hub data models, persistence, settings wiring, and snapshot/rendering checks where practical.
@@ -70,7 +72,7 @@ The reference page uses a dark glass window over a wallpaper stage for preview. 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Replace settings entry points with the Hub | The user chose `Entry 1`; the Hub is the new main management window and contains settings. | — Pending |
-| Wire both collection and history to real local data | The user chose `Data 3`; demo-only history is insufficient for the native Hub milestone. | — Pending |
+| Wire both collection and history to real local data | The user chose `Data 3`; demo-only history is insufficient for the native Hub milestone. | Phase 1 data contracts complete; native rendering continues in later phases. |
 | Prioritize native behavior over exact web mechanics | The user chose `Fidelity 2`; SwiftUI/AppKit fidelity and real settings/data behavior take precedence over cloning DOM interactions. | — Pending |
 | Keep implementation dependency-free | Existing package has no third-party dependencies and AGENTS.md asks to avoid new dependencies without explicit request. | — Pending |
 | Use local design artifacts as the source of truth | The target is a local prototype, so research and verification should compare against checked-out design files and captured screenshots. | — Pending |
@@ -93,4 +95,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-26 after initialization*
+*Last updated: 2026-06-27 after Phase 1 completion*

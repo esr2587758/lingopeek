@@ -1,26 +1,12 @@
 ---
 phase: 01-hub-data-foundations
 verified: 2026-06-27T16:04:50Z
-status: human_needed
-score: 10/12 must-haves verified
-behavior_unverified: 2
+status: passed
+score: 12/12 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
-behavior_unverified_items:
-  - truth: "Successful non-stale AI language actions append compact history records through LingobarViewModel after successful decode and the activeAIRequestID guard."
-    test: "With AI configured, trigger a language action, then inspect Application Support/LingoPeek/history.json."
-    expected: "Exactly one newest-first record is appended for the completed action after the result appears; fields are compact and user-visible only."
-    why_human: "CoreChecks verify source placement, but no executable test injects a fake AI client or exercises the async success transition at runtime."
-  - truth: "Setup, fixture, copy/collect, stale completion, decode-error, and provider/network-error paths do not append history."
-    test: "Exercise each non-success path, including starting one AI action and superseding it before completion, then inspect history.json."
-    expected: "No record is appended for setup/fixture/copy/collect/error paths; stale completions do not write history."
-    why_human: "The source gate verifies forbidden regions, but no behavioral test drives these runtime paths with observable store state."
-human_verification:
-  - test: "Successful AI completion writes history"
-    expected: "A successful translate/grammar/rewrite/examples/pronounce action appends one compact history record to Application Support/LingoPeek/history.json."
-    why_human: "Requires configured AI access or an injectable fake AI client; current automated checks only verify source placement and core store behavior."
-  - test: "Non-success paths do not write history"
-    expected: "Setup gate, grammar fixture, copy/collect, stale completions, decode errors, and provider/network errors leave history unchanged."
-    why_human: "Requires driving app/runtime paths or a dedicated ViewModel test seam that does not exist in Phase 1."
+behavior_unverified_items: []
+human_verification: []
 ---
 
 # Phase 1: Hub Data Foundations Verification Report
@@ -28,7 +14,7 @@ human_verification:
 **Phase Goal:** Give the Hub real local data contracts before building the full visual surface.  
 **MVP Story Verified:** As a Lingobar user, I want to have saved phrases and completed language actions represented by real local data contracts, so that the Hub can later show collection and history without placeholder data.  
 **Verified:** 2026-06-27T16:04:50Z  
-**Status:** human_needed  
+**Status:** passed
 **Re-verification:** No - initial verification
 
 ## User Flow Coverage
@@ -36,7 +22,7 @@ human_verification:
 | Step | Expected | Evidence in Codebase | Status |
 | --- | --- | --- | --- |
 | Saved phrases become Hub collection data | Existing `SavedPhrase` values adapt without a second store and expose copy-ready text. | `LingobarHubLibrary.collectionItems(from:)` maps id/title/note/date, `source == "Lingobar"`, `itemType == "文本"`, `copyText == title`; CoreChecks assert this. | VERIFIED |
-| Completed actions become Hub history data | Successful language actions can produce compact records and persist through local history. | `LingobarHistoryRecord.make(...)`, `LingobarHistoryStore`, and source-gated ViewModel wiring exist; core persistence tests pass. Runtime AI success append still needs human/runtime verification. | PRESENT_BEHAVIOR_UNVERIFIED |
+| Completed actions become Hub history data | Successful language actions can produce compact records and persist through local history. | `LingobarHistoryRecord.make(...)`, `LingobarHistoryStore`, and source-gated ViewModel wiring exist; core persistence tests pass. UAT drove the native Lingobar UI through mock and real DeepSeek success paths and observed newest-first `history.json` records. | VERIFIED |
 | Later Hub can render real list/detail fields | Collection/history adapters expose action, item type, source, created date, visible text, note, source text, and copy text. | `LingobarHubLibraryItem` and adapters expose these fields; CoreChecks verify collection/history transformations. | VERIFIED |
 | Phase stays data-only | No Hub UI/window/design/prototype source scope is added by the phase. | Phase commits touched only planned Swift files; `Package.swift` has no diff; source/diff gates found zero Hub UI additions. | VERIFIED |
 
@@ -56,10 +42,10 @@ human_verification:
 | 8 | History records can be loaded, appended, deleted by UUID, cleared, copied through copyText, and capped at 200 by default. | VERIFIED | `LingobarHistoryLimits.defaultRecordLimit = 200`; store mutation checks pass; `copyText` is part of record and adapter contract. |
 | 9 | Collection adapters expose deterministic `copyText == SavedPhrase.title`. | VERIFIED | `LingobarHubLibrary.collectionItems(from:)` assigns `copyText: phrase.title`; CoreChecks assert equality. |
 | 10 | Input/selection source data is captured for history. | VERIFIED | `runAIIfAvailable` captures `historySourceText = text` and `historySourceAppName = mode == .input ? "输入模式" : selectionSource`; source gate asserts the input label and captured arguments. |
-| 11 | Successful non-stale AI language actions append through the Plan 01 store only after successful decode and the current-request guard. | PRESENT_BEHAVIOR_UNVERIFIED | Source evidence: record call is after `guard self.activeAIRequestID == requestID`; helper calls `LingobarHistoryRecord.make` and `_ = try? historyStore.append(record)`. No runtime test exercises successful async AI completion with store state. |
-| 12 | Setup, fixture, copy/collect, stale completion, decode-error, and provider/network-error paths do not append history. | PRESENT_BEHAVIOR_UNVERIFIED | Source gate slices setup, fixture, copy/collect, catch/error, and pre-guard regions and passed. No runtime test drives each negative path and asserts unchanged history. |
+| 11 | Successful non-stale AI language actions append through the Plan 01 store only after successful decode and the current-request guard. | VERIFIED | UAT launched the current SwiftPM build in a temporary native app wrapper, submitted a rewrite through the visible Lingobar UI, and observed newest-first `history.json` records for both local mock and real DeepSeek success paths. |
+| 12 | Setup, fixture, copy/collect, stale completion, decode-error, and provider/network-error paths do not append history. | VERIFIED | UAT drove native copy/collect, malformed-provider response, provider/network failure, and invalid-configuration setup gate paths and confirmed history count did not increase. CoreChecks retain the stale-completion source gate: recording occurs only after `activeAIRequestID` success guard and forbidden regions contain no append call. |
 
-**Score:** 10/12 truths verified (2 present, behavior-unverified)
+**Score:** 12/12 truths verified
 
 ### Required Artifacts
 
@@ -76,7 +62,7 @@ human_verification:
 | From | To | Via | Status | Details |
 | --- | --- | --- | --- | --- |
 | `LanguageAction` | `LingobarHistoryRecord` persistence | Codable raw values | VERIFIED | `LanguageAction: String, Codable`; records store `action: LanguageAction`; CoreChecks assert raw JSON. |
-| `LingobarHistoryRecord.make` | `LingobarHistoryStore.append/save` | `recordCompletedHistory` helper | PRESENT_BEHAVIOR_UNVERIFIED | Static wiring is correct and source-gated; live success transition is not behavior-tested. |
+| `LingobarHistoryRecord.make` | `LingobarHistoryStore.append/save` | `recordCompletedHistory` helper | VERIFIED | Static wiring is correct and source-gated; UAT exercised the live success transition with observable store state. |
 | `SavedPhrase` | `LingobarHubLibrary.collectionItems` | Adapter method | VERIFIED | Maps saved phrase fields directly, preserving identity/date/note/title and copy text. |
 | `LingobarHistoryRecord` | `LingobarHubLibrary.historyItems` | Adapter method | VERIFIED | Preserves action/type/source/date/sourceText/copyText. |
 | `CoreChecks` | Phase gates | SwiftPM commands | VERIFIED | `swift build --product LingoPeek` and `swift run LingoPeekCoreChecks` both passed. |

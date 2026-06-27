@@ -536,7 +536,8 @@ func checkLanguageActionCodable() throws {
         let data = try encoder.encode(action)
         let encoded = String(decoding: data, as: UTF8.self)
         try check(encoded == "\"\(action.rawValue)\"", "\(action.rawValue) should encode as its raw value")
-        try check(try decoder.decode(LanguageAction.self, from: data) == action, "\(action.rawValue) should decode from its raw value")
+        let decoded = try decoder.decode(LanguageAction.self, from: data)
+        try check(decoded == action, "\(action.rawValue) should decode from its raw value")
     }
 }
 
@@ -546,7 +547,8 @@ func checkLingobarHistoryStore() throws {
     let fileURL = directory.appending(path: "history.json")
     let store = LingobarHistoryStore(fileURL: fileURL, limit: 2)
 
-    try check(try store.load().isEmpty, "missing history.json should load empty")
+    let missingRecords = try store.load()
+    try check(missingRecords.isEmpty, "missing history.json should load empty")
 
     let firstDate = Date(timeIntervalSince1970: 1_710_000_001)
     let secondDate = Date(timeIntervalSince1970: 1_710_000_002)
@@ -599,7 +601,8 @@ func checkLingobarHistoryStore() throws {
     try check(afterMissingDelete.map(\.id) == [third.id], "deleting a missing history UUID should be a no-op")
 
     try store.clear()
-    try check(try store.load().isEmpty, "clear should persist an empty history list")
+    let clearedRecords = try store.load()
+    try check(clearedRecords.isEmpty, "clear should persist an empty history list")
 }
 
 func checkLingobarHistoryRecordBuilderPrivacy() throws {

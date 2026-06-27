@@ -6,7 +6,7 @@ public enum LingobarMode: String, CaseIterable, Sendable {
     case input
 }
 
-public enum LanguageAction: String, CaseIterable, Identifiable, Sendable {
+public enum LanguageAction: String, CaseIterable, Identifiable, Codable, Sendable {
     case copy
     case translate
     case grammar

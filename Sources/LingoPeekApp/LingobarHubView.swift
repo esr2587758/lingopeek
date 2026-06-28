@@ -91,6 +91,11 @@ final class LingobarHubState: ObservableObject {
         filterOptions(for: historyItems)
     }
 
+    var hotKeyDisplayParts: [String] {
+        let parts = settings.inputHotKeyDisplay.flatMap(Self.hotKeyParts)
+        return parts.isEmpty ? ["未设置"] : parts
+    }
+
     func refresh() {
         refreshLibrary()
         refreshSettings()
@@ -322,6 +327,24 @@ final class LingobarHubState: ObservableObject {
             .sorted()
             .map(LingobarHubItemFilter.type)
         return [.all] + typeOptions
+    }
+
+    private static func hotKeyParts(from value: String) -> [String] {
+        var remaining = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !remaining.isEmpty else {
+            return []
+        }
+
+        var parts: [String] = []
+        for symbol in ["⌃", "⌥", "⇧", "⌘"] where remaining.hasPrefix(symbol) {
+            parts.append(symbol)
+            remaining.removeFirst(symbol.count)
+        }
+        let key = remaining.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty {
+            parts.append(key)
+        }
+        return parts.isEmpty ? [value] : parts
     }
 
     private func flash(_ message: String) {
@@ -881,72 +904,43 @@ private struct HubSettingsPane: View {
     var onOpenAccessibility: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("设置")
-                        .font(.system(size: 23, weight: .bold))
-                        .foregroundStyle(HubColor.primaryText)
-                    Text("把 Lingobar 调到你顺手的位置。")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(HubColor.secondaryText)
-                }
-                .padding(.top, 16)
-                .padding(.horizontal, 18)
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("设置")
+                    .font(.system(size: 23, weight: .bold))
+                    .foregroundStyle(HubColor.primaryText)
 
-                VStack(spacing: 6) {
-                    ForEach(LingobarSettingsSectionDescriptor.all) { section in
-                        Button {
-                            state.selectedSettingsSectionID = section.id
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: section.symbolName)
-                                    .frame(width: 18)
-                                    .foregroundStyle(state.selectedSettingsSectionID == section.id ? HubColor.accentText : HubColor.secondaryText)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(section.title)
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(HubColor.primaryText)
-                                    Text(section.subtitle)
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundStyle(HubColor.tertiaryText)
-                                }
-                                Spacer()
-                                if section.requiresSetupGate,
-                                   state.settings.settingsSetupGate.sectionIDsNeedingAttention.contains(section.id) {
-                                    Circle()
-                                        .fill(HubColor.warn)
-                                        .frame(width: 7, height: 7)
-                                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(LingobarSettingsSectionDescriptor.all) { section in
+                            HubSettingsSubnavButton(
+                                title: section.title,
+                                needsAttention: section.requiresSetupGate && state.settings.settingsSetupGate.sectionIDsNeedingAttention.contains(section.id),
+                                isSelected: state.selectedSettingsSectionID == section.id
+                            ) {
+                                state.selectedSettingsSectionID = section.id
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(state.selectedSettingsSectionID == section.id ? HubColor.selectedFill : Color.clear)
-                            )
                         }
-                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 12)
-
-                Spacer()
             }
-            .frame(width: 210)
-            .frame(maxHeight: .infinity)
-
-            Rectangle()
-                .fill(HubColor.hairline)
-                .frame(width: 1)
-                .padding(.vertical, 12)
+            .padding(.top, 16)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(HubColor.hairline)
+                    .frame(height: 1)
+            }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 22) {
                     settingsContent
                 }
                 .padding(.horizontal, 22)
-                .padding(.vertical, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 26)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -972,15 +966,44 @@ private struct HubSettingsPane: View {
     }
 }
 
+private struct HubSettingsSubnavButton: View {
+    var title: String
+    var needsAttention: Bool
+    var isSelected: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? HubColor.accentText : HubColor.secondaryText)
+                    .lineLimit(1)
+                if needsAttention {
+                    Circle()
+                        .fill(HubColor.warn)
+                        .frame(width: 5, height: 5)
+                }
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? HubColor.selectedFill : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct GeneralSettingsSection: View {
     @ObservedObject var state: LingobarHubState
 
     var body: some View {
-        HubSettingsHeader(title: "通用", subtitle: "启动、菜单栏和窗口外观。")
-        HubSettingsGroup {
+        HubSettingsGroup(title: "启动") {
             HubToggleRow(
-                title: "登录时启动",
-                subtitle: "保持划词工具随系统可用。",
+                title: "开机时启动",
+                subtitle: "登录 macOS 后自动运行 Lingobar。",
                 isOn: Binding(
                     get: { state.settings.launchAtLogin },
                     set: { value in state.saveLaunchAtLogin(value) }
@@ -989,7 +1012,7 @@ private struct GeneralSettingsSection: View {
             HubDivider()
             HubToggleRow(
                 title: "显示菜单栏图标",
-                subtitle: "保留一个快速入口和退出菜单。",
+                subtitle: "常驻入口，打开收藏 / 历史 / 设置。",
                 isOn: Binding(
                     get: { state.settings.showMenuBarIcon },
                     set: { value in state.saveShowMenuBarIcon(value) }
@@ -998,7 +1021,7 @@ private struct GeneralSettingsSection: View {
         }
 
         HubSettingsGroup(title: "外观") {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+            LazyVGrid(columns: Self.schemeGridColumns, spacing: 10) {
                 ForEach(LingobarAppearanceScheme.allCases) { scheme in
                     HubChoiceTile(
                         title: scheme.title,
@@ -1011,15 +1034,18 @@ private struct GeneralSettingsSection: View {
             }
         }
     }
+
+    private static let schemeGridColumns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
+    ]
 }
 
 private struct AISettingsSection: View {
     @ObservedObject var state: LingobarHubState
 
     var body: some View {
-        HubSettingsHeader(title: "AI 服务", subtitle: "选择服务、模型和 API Token。")
-
-        HubSettingsGroup {
+        HubSettingsGroup(title: "模型服务") {
             HubAIProviderPickerRow(
                 title: "服务商",
                 subtitle: "兼容 OpenAI 的服务可自定义 Base URL。",
@@ -1081,8 +1107,7 @@ private struct PermissionsSettingsSection: View {
     var onOpenAccessibility: () -> Void
 
     var body: some View {
-        HubSettingsHeader(title: "权限", subtitle: "辅助功能权限用于读取当前选区。")
-        HubSettingsGroup {
+        HubSettingsGroup(title: "系统权限") {
             HStack(spacing: 12) {
                 Image(systemName: state.settings.accessibilityPermissionGranted ? "checkmark.shield.fill" : "shield.lefthalf.filled")
                     .font(.system(size: 28, weight: .semibold))
@@ -1107,8 +1132,7 @@ private struct TriggerSettingsSection: View {
     @ObservedObject var state: LingobarHubState
 
     var body: some View {
-        HubSettingsHeader(title: "划词与唤起", subtitle: "控制何时出现 Lingobar。")
-        HubSettingsGroup {
+        HubSettingsGroup(title: "划词唤起") {
             HubToggleRow(
                 title: "划词后自动触发",
                 subtitle: "选中文本后自动准备动作面板。",
@@ -1126,17 +1150,20 @@ private struct TriggerSettingsSection: View {
                     set: { value in state.saveShowSelectionFloatButton(value) }
                 )
             )
-            HubDivider()
+        }
+
+        HubSettingsGroup(title: "输入模式") {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("输入快捷键")
+                    Text("呼出快捷键")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(HubColor.primaryText)
-                    Text(state.settings.inputHotKeyDisplay.joined(separator: " "))
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .foregroundStyle(HubColor.accentText)
+                    Text("无选区时唤起输入模式，把想法改写成自然英文。")
+                        .font(.system(size: 12))
+                        .foregroundStyle(HubColor.secondaryText)
                 }
                 Spacer()
+                HubHotKeyView(keys: state.hotKeyDisplayParts)
                 Button("重置") {
                     state.resetHotKey()
                 }
@@ -1150,8 +1177,6 @@ private struct ActionsSettingsSection: View {
     @ObservedObject var state: LingobarHubState
 
     var body: some View {
-        HubSettingsHeader(title: "语言动作", subtitle: "调整动作顺序和默认动作。")
-
         HubSettingsGroup(title: "动作顺序") {
             VStack(spacing: 8) {
                 ForEach(state.settings.actionOrder) { action in
@@ -1206,8 +1231,7 @@ private struct CollectionSettingsSection: View {
     @ObservedObject var state: LingobarHubState
 
     var body: some View {
-        HubSettingsHeader(title: "收藏", subtitle: "设置收藏内容来源。")
-        HubSettingsGroup {
+        HubSettingsGroup(title: "收藏内容") {
             VStack(spacing: 8) {
                 ForEach(LingobarCollectionTarget.allCases) { target in
                     HubChoiceTile(
@@ -1234,8 +1258,7 @@ private struct CollectionSettingsSection: View {
 
 private struct AboutSettingsSection: View {
     var body: some View {
-        HubSettingsHeader(title: "关于", subtitle: "Lingobar 是 LingoPeek 的原生语言处理入口。")
-        HubSettingsGroup {
+        HubSettingsGroup(title: "关于") {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
                     Circle()
@@ -1292,6 +1315,30 @@ private struct HubSegmentedActionRow: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+        }
+    }
+}
+
+private struct HubHotKeyView: View {
+    var keys: [String]
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                Text(key)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(HubColor.primaryText)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(HubColor.chipHover)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(HubColor.strongHairline, lineWidth: 1)
+                    )
             }
         }
     }
@@ -1674,6 +1721,7 @@ private enum HubColor {
     static let chip = Color.white.opacity(0.07)
     static let selectedFill = Color(red: 0.431, green: 0.545, blue: 1.0).opacity(0.16)
     static let hairline = Color.white.opacity(0.09)
+    static let strongHairline = Color.white.opacity(0.15)
     static let accent = Color(red: 0.431, green: 0.545, blue: 1.0)
     static let accentText = Color(red: 0.667, green: 0.714, blue: 1.0)
     static let ok = Color(red: 0.31, green: 0.816, blue: 0.627)
@@ -1681,6 +1729,7 @@ private enum HubColor {
     static let primaryText = Color.white.opacity(0.94)
     static let secondaryText = Color.white.opacity(0.66)
     static let tertiaryText = Color.white.opacity(0.42)
+    static let chipHover = Color.white.opacity(0.11)
 }
 
 private extension Date {

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lingobar — 信息架构 / 导航地图</title>
+<style>
+/* ============================================================
+   Lingobar — 信息架构导航地图
+   两层一桥：浮层(瞬时/划词) ↔ 主窗口(常驻/管理)
+   深色玻璃单配色，与各界面 token 一致。
+   ============================================================ */
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  color: #fff; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  background: #0d0e12; min-height: 100vh; }
+
+:root {
+  --accent: #6e8bff; --accent-2: #8a7dff; --accent-text: #aab6ff; --accent-weak: rgba(110,139,255,.16);
+  --cyan: #4fb8c9; --amber: #e0915c; --green: #5bbf8a; --pink: #d6789f; --violet: #8a7dff;
+  --glass: rgba(28,30,40,.82); --hairline: rgba(255,255,255,.09); --hairline-strong: rgba(255,255,255,.16);
+  --text: rgba(255,255,255,.95); --text-2: rgba(255,255,255,.6); --text-3: rgba(255,255,255,.4);
+  --chip: rgba(255,255,255,.06); --chip-hover: rgba(255,255,255,.11);
+  --shadow: 0 0 0 1px rgba(255,255,255,.06), 0 24px 60px -18px rgba(0,0,0,.7);
+  --radius: 18px; --mono: "Space Grotesk", ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(.22,.61,.36,1);
+}
+
+.bg { position: fixed; inset: 0; z-index: -1;
+  background: radial-gradient(130% 130% at 14% 6%, #2d3a66 0%, #232a4a 34%, #1a1d33 64%, #111322 100%); }
+.bg::after { content: ""; position: absolute; inset: 0; mix-blend-mode: screen;
+  background: radial-gradient(38% 46% at 84% 12%, rgba(255,160,110,.26), transparent 70%),
+    radial-gradient(48% 56% at 90% 94%, rgba(120,90,210,.34), transparent 70%),
+    radial-gradient(30% 40% at 12% 92%, rgba(70,190,200,.18), transparent 70%); }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 40px 28px 64px; }
+
+/* header */
+.hd { text-align: center; margin-bottom: 8px; }
+.hd h1 { font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+.hd p { font-size: 13.5px; color: var(--text-2); margin: 8px 0 0; line-height: 1.6; }
+.legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 16px; margin: 22px 0 34px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-2); }
+.legend i { width: 22px; height: 0; border-top-width: 2px; border-top-style: solid; display: inline-block; }
+.lg-jump { border-color: var(--accent); }
+.lg-data { border-color: var(--cyan); }
+.lg-config { border-color: var(--amber); border-top-style: dashed; }
+.legend .sw { width: 11px; height: 11px; border-radius: 3px; }
+
+/* trigger row */
+.triggers { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 6px; }
+.trigger { display: flex; align-items: center; gap: 12px; justify-content: center; padding: 13px 16px;
+  border-radius: 13px; background: var(--chip); border: 1px dashed var(--hairline-strong); }
+.trigger .ic { width: 34px; height: 34px; border-radius: 9px; background: var(--accent-weak); color: var(--accent-text);
+  display: grid; place-items: center; flex: none; }
+.trigger .tx b { font-size: 13.5px; display: block; }
+.trigger .tx small { font-size: 11px; color: var(--text-3); }
+
+/* connector arrows (trigger -> layer) */
+.downarrows { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.downarrow { display: flex; flex-direction: column; align-items: center; color: var(--accent-text); padding: 6px 0 2px; }
+.downarrow svg { opacity: .8; }
+.downarrow small { font-size: 10.5px; color: var(--text-3); margin-top: 2px; }
+
+/* two layers */
+.layers { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+.layer { border-radius: var(--radius); background: var(--glass); border: 1px solid var(--hairline);
+  box-shadow: var(--shadow); backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%); overflow: hidden; }
+.layer-hd { padding: 15px 18px 13px; border-bottom: 1px solid var(--hairline); }
+.layer-kind { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.layer-main .layer-kind { color: var(--cyan); }
+.layer-float .layer-kind { color: var(--accent-text); }
+.layer-hd h2 { font-size: 16px; margin: 5px 0 3px; }
+.layer-hd p { font-size: 11.5px; color: var(--text-3); margin: 0; line-height: 1.5; }
+.layer-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+/* node card */
+.node { padding: 12px 13px; border-radius: 12px; background: var(--chip); border: 1px solid var(--hairline);
+  border-left-width: 3px; transition: background .15s, transform .15s; }
+.node:hover { background: var(--chip-hover); }
+.node-hd { display: flex; align-items: center; gap: 9px; }
+.node-hd .ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex: none; background: rgba(255,255,255,.05); }
+.node-hd b { font-size: 14px; }
+.node-hd .role { margin-left: auto; font-size: 10px; color: var(--text-3); background: rgba(255,255,255,.05); padding: 2px 7px; border-radius: 5px; }
+.node p { font-size: 11.5px; color: var(--text-3); margin: 7px 0 0; line-height: 1.55; }
+.n-collect { border-left-color: var(--accent); } .n-collect .ic { color: var(--accent-text); }
+.n-history { border-left-color: var(--green); } .n-history .ic { color: var(--green); }
+.n-settings { border-left-color: var(--amber); } .n-settings .ic { color: var(--amber); }
+.n-select { border-left-color: var(--violet); } .n-select .ic { color: #b3aaff; }
+.n-input { border-left-color: var(--cyan); } .n-input .ic { color: #8fdce8; }
+
+/* the ⇄ between select/input */
+.statelink { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; color: var(--text-3);
+  padding: 2px 0; }
+.statelink .ln { height: 1px; flex: 1; background: var(--hairline-strong); }
+
+/* internal edge inside main window (history -> collection) */
+.intra-edge { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--green); padding: 1px 6px; }
+.intra-edge svg { flex: none; }
+
+/* bridges between the two layers */
+.bridges { margin-top: 26px; }
+.bridges h3 { font-size: 12px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .06em; text-align: center; margin: 0 0 16px; }
+.bridge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bridge { display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-radius: 12px; background: var(--chip);
+  border: 1px solid var(--hairline); }
+.bridge .arrowcol { display: flex; flex-direction: column; align-items: center; flex: none; color: var(--text-3); }
+.bridge .label { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 6px; flex: none; }
+.bridge .desc { font-size: 11.5px; color: var(--text-2); line-height: 1.5; }
+.bridge .desc b { color: var(--text); font-weight: 600; }
+.b-jump .label { background: var(--accent-weak); color: var(--accent-text); }
+.b-jump { border-left: 3px solid var(--accent); }
+.b-data .label { background: rgba(79,184,201,.18); color: #8fdce8; }
+.b-data { border-left: 3px solid var(--cyan); }
+.b-config .label { background: rgba(224,145,92,.16); color: var(--amber); }
+.b-config { border-left: 3px solid var(--amber); }
+
+/* principles footer */
+.principles { margin-top: 30px; display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.principle { padding: 14px 15px; border-radius: 12px; background: var(--chip); border: 1px solid var(--hairline); }
+.principle .n { font-family: var(--mono); font-size: 11px; color: var(--accent-text); }
+.principle b { display: block; font-size: 13px; margin: 5px 0 6px; }
+.principle p { font-size: 11.5px; color: var(--text-3); margin: 0; line-height: 1.55; }
+
+@media (max-width: 760px) {
+  .triggers, .downarrows, .layers, .bridge-grid, .principles { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="wrap">
+
+  <div class="hd">
+    <h1>Lingobar 信息架构 · 导航地图</h1>
+    <p>五个视图分两类：<b style="color:var(--accent-text)">瞬时浮层</b>（划词唤起，盖在别的 App 上）与 <b style="color:#8fdce8">常驻主窗口</b>（主动管理，左右两栏）。<br/>两层之间靠几条明确的「桥」连接。</p>
+  </div>
+
+  <div class="legend">
+    <span><i class="lg-jump"></i> 跨层跳转</span>
+    <span><i class="lg-data"></i> 数据流转</span>
+    <span><i class="lg-config"></i> 配置下行 / 影响</span>
+  </div>
+
+  <!-- 触发入口 -->
+  <div class="triggers">
+    <div class="trigger">
+      <div class="ic">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/><circle cx="6" cy="7" r=".5" fill="currentColor"/></svg>
+      </div>
+      <div class="tx"><b>菜单栏图标</b><small>常驻入口 · 打开收藏 / 历史 / 设置</small></div>
+    </div>
+    <div class="trigger">
+      <div class="ic">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l13 7-5.5 1.5L11 18 6 4z" fill="currentColor" stroke="none"/></svg>
+      </div>
+      <div class="tx"><b>划词 / 快捷键</b><small>选区优先 · ⌥Space 唤起输入</small></div>
+    </div>
+  </div>
+
+  <div class="downarrows">
+    <div class="downarrow"><svg width="20" height="26" viewBox="0 0 20 26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v20"/><path d="M4 16l6 6 6-6"/></svg><small>主动打开</small></div>
+    <div class="downarrow"><svg width="20" height="26" viewBox="0 0 20 26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v20"/><path d="M4 16l6 6 6-6"/></svg><small>被内容触发</small></div>
+  </div>
+
+  <!-- 两层 -->
+  <div class="layers">
+    <!-- 主窗口 -->
+    <div class="layer layer-main">
+      <div class="layer-hd">
+        <div class="layer-kind">常驻态 · 主窗口</div>
+        <h2>主窗口（左右两栏）</h2>
+        <p>持久、慢节奏浏览，是「我的数据 / 配置」。三分区共用左导航 + 条目卡 + 详情抽屉。</p>
+      </div>
+      <div class="layer-body">
+        <div class="node n-collect">
+          <div class="node-hd"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5l2.3 4.7 5.2.8-3.75 3.65.9 5.15L12 16.9l-4.65 2.45.9-5.15L4.5 10l5.2-.8L12 4.5z"/></svg></span><b>收藏视图</b><span class="role">主动留存</span></div>
+          <p>我认可、值得复习的语言素材。可分类、可溯源到原文。每条带「重新解析」。</p>
+        </div>
+        <div class="intra-edge">
+          <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3"/><path d="M3 8l5-5 5 5"/></svg>
+          历史里的好内容 →「转存」→ 收藏
+        </div>
+        <div class="node n-history">
+          <div class="node-hd"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><b>历史视图</b><span class="role">自动记录</span></div>
+          <p>查过的每次解析自动入库，时间倒序，可清空。是收藏的「来源池」。</p>
+        </div>
+        <div class="node n-settings">
+          <div class="node-hd"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M5.8 5.8l1.6 1.6M16.6 16.6l1.6 1.6M18.2 5.8l-1.6 1.6M7.4 16.6l-1.6 1.6"/></svg></span><b>设置视图</b><span class="role">gate + 偏好</span></div>
+          <p>AI 接入 + 权限构成 setup gate；动作优先级 / 默认动作等偏好会下行影响浮层。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 浮层 -->
+    <div class="layer layer-float">
+      <div class="layer-hd">
+        <div class="layer-kind">瞬时态 · 浮层</div>
+        <h2>浮层（盖在别的 App 上）</h2>
+        <p>临时、轻、即用即走。同一浮层的两种触发态，共享动作条与结果面板。</p>
+      </div>
+      <div class="layer-body">
+        <div class="node n-select">
+          <div class="node-hd"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h9M4 10h6"/><path d="M14 11l5 9 2-4 4-2-11-3z" transform="translate(-3,-2)"/></svg></span><b>选取视图</b><span class="role">有选区</span></div>
+          <p>选中文字即唤起。动作条：翻译 / 语法 / 改写 / 例句 / 收藏 / 发音。英文默认翻译。</p>
+        </div>
+        <div class="statelink"><span class="ln"></span>
+          <svg width="34" height="14" viewBox="0 0 34 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4H27l-4-3M27 10H7l4 3"/></svg>
+          顶部 pill 互切 <span class="ln"></span></div>
+        <div class="node n-input">
+          <div class="node-hd"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M8 12h8M8 15h5"/></svg></span><b>输入视图</b><span class="role">无选区</span></div>
+          <p>输入模式，服务改写与自然英文表达（非通用问答）。中文 / 混合默认改写。</p>
+        </div>
+        <div style="margin-top:2px;padding:10px 12px;border-radius:10px;background:rgba(110,139,255,.06);border:1px dashed var(--hairline-strong)">
+          <p style="margin:0;font-size:11.5px;color:var(--text-2);line-height:1.55">两态共用：<b style="color:var(--text)">动作条 · 结果面板 · 收藏/复制</b>。即你已实现的 relaunch 面板形态。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 桥 -->
+  <div class="bridges">
+    <h3>连接两层的桥</h3>
+    <div class="bridge-grid">
+      <div class="bridge b-data">
+        <div class="arrowcol"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h16M13 2l5 5-5 5"/></svg></div>
+        <span class="label">收藏</span>
+        <div class="desc">浮层按「收藏」→ 内容落进 <b>收藏库</b>（跟随当前面板：翻译收关键表达、改写收主句…）</div>
+      </div>
+      <div class="bridge b-jump">
+        <div class="arrowcol"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h16M13 2l5 5-5 5"/></svg></div>
+        <span class="label">查看全部</span>
+        <div class="desc">浮层小入口 → 关闭浮层、<b>打开主窗口</b>并定位到收藏 / 历史分区</div>
+      </div>
+      <div class="bridge b-jump">
+        <div class="arrowcol"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4M9 2L4 7l5 5"/></svg></div>
+        <span class="label">重新解析</span>
+        <div class="desc">收藏 / 历史里点某条 → <b>重新唤起浮层</b>并回填该内容（已实现的 relaunch 回路）</div>
+      </div>
+      <div class="bridge b-config">
+        <div class="arrowcol"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h16M13 2l5 5-5 5"/></svg></div>
+        <span class="label">缺配置</span>
+        <div class="desc">浮层未满足 setup gate → 不出结果，引导「去设置」→ <b>跳设置对应分区</b></div>
+      </div>
+      <div class="bridge b-config">
+        <div class="arrowcol"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4M9 2L4 7l5 5"/></svg></div>
+        <span class="label">偏好下行</span>
+        <div class="desc">设置里的动作顺序 / 默认动作 → 浮层每次唤起读当前值，<b>改变动作条呈现</b></div>
+      </div>
+      <div class="bridge b-data">
+        <div class="arrowcol"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h16M13 2l5 5-5 5"/></svg></div>
+        <span class="label">溯源</span>
+        <div class="desc">收藏条目可回看「来自哪次历史 / 原文」，历史条目可一键「转存收藏」</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 取舍原则 -->
+  <div class="principles">
+    <div class="principle">
+      <span class="n">01</span>
+      <b>两种性质别混</b>
+      <p>浮层轻、被触发、即走；主窗口重、被打开、慢浏览。别把设置塞进浮层 tab，也别把收藏塞进划词浮层。</p>
+    </div>
+    <div class="principle">
+      <span class="n">02</span>
+      <b>三分区同构复用</b>
+      <p>收藏 / 历史 / 设置同在主窗口，共用左右两栏 + 条目卡 + 详情抽屉。历史与收藏只是数据源和排序不同。</p>
+    </div>
+    <div class="principle">
+      <span class="n">03</span>
+      <b>relaunch 是关键回路</b>
+      <p>「重新解析」连接两层，已经做出来了。把它确立为正式的跨层机制，串起沉淀 → 再学习的闭环。</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

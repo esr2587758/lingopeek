@@ -1,0 +1,37 @@
+{
+  "title": "Lingobar 我的语言地图（成长/镜子）",
+  "slug": "lingobar-langmap",
+  "summary": "镜子型成长页面，照出真实语言画像与盲区。核心机制：每个语法/语言点有「遇到次数」与「掌握度」，二者差值(暴露vs掌握)映射为警示色阶——高频却没掌握的盲区自动亮起，已掌握的沉下去。结构：一句话画像+朴素库存 → 地图(三形态可切换) → 洞察条(自动句+relaunch行动) → 成长轨迹(障碍变浅曲线)。地图三形态共享同一数据与gap色：星系(力导向气泡,节点大小=遇到次数)、体系板块(按语法分类分区+覆盖率)、卡片墙(盲区/巩固/已掌握三组)。掌握度自动推断,非手动打卡。",
+  "entry": "Lingobar Language Map.html",
+  "scheme": "dark-glass (accent #6e8bff, gap warn #ff6b5e)",
+  "forms": [
+    "星系(力导向气泡)",
+    "体系板块图",
+    "分组卡片墙"
+  ],
+  "mechanics": [
+    "暴露vs掌握差值→警示色",
+    "涌现地图(只长碰过的点)",
+    "常见语法点覆盖率",
+    "障碍变浅轨迹",
+    "洞察→relaunch行动闭环"
+  ],
+  "stack": "React 18.3.1 UMD + Babel standalone, 多文件 JSX, SVG 力导向碰撞布局",
+  "note": "拟作为 lingobar-hub 主窗口第四分区；数据为历史(遇到)+收藏(关注)的升维聚合。三形态留待用户选定其一。",
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Language Map": {
+      "versions": [
+        {
+          "path": "Lingobar Language Map.html",
+          "createdAt": "2026-06-25T15:44:01.220Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-25T15:44:01.220Z",
+  "updatedAt": "2026-06-25T15:44:01.220Z"
+}

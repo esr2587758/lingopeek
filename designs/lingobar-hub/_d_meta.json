@@ -1,0 +1,38 @@
+{
+  "title": "Lingobar 主窗口（收藏 · 历史 · 设置）",
+  "slug": "lingobar-hub",
+  "summary": "把设置外壳扩成三分区主窗口：左导航分组（我的内容：收藏/历史 + 应用：设置），主区为列表+详情两栏。收藏与历史同构，共用条目卡与详情抽屉，仅数据源/排序/动作不同。历史带动作徽章 + 已收藏标记 + 转存收藏回路；收藏可删除。三分区都有重新解析（relaunch 跨层回路）。设置完整移植自 lingobar-settings：通用(含外观主题)/AI/权限/划词与唤起(快捷键)/语言动作(拖拽排序)/收藏行为/关于 七个子分区 + setup gate 状态条。侧边栏 188px。",
+  "entry": "Lingobar Hub.html",
+  "scheme": "dark-glass (accent #6e8bff)",
+  "sections": [
+    "收藏",
+    "历史",
+    "设置"
+  ],
+  "patterns": [
+    "左导航三分区",
+    "列表+详情两栏",
+    "条目卡同构复用",
+    "转存收藏",
+    "重新解析跨层回路",
+    "setup gate 状态条"
+  ],
+  "stack": "React 18.3.1 UMD + Babel standalone, 多文件 JSX",
+  "note": "复用 lingobar-settings 外壳 + lingobar-collection 卡片/详情语言；是导航地图 lingobar-navmap 中「主窗口」一层的落地。",
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Hub": {
+      "versions": [
+        {
+          "path": "Lingobar Hub.html",
+          "createdAt": "2026-06-24T16:12:35.921Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-24T16:12:35.922Z",
+  "updatedAt": "2026-06-25T14:25:46.772Z"
+}

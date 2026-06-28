@@ -1,0 +1,18 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "Lingobar Navigation Map": {
+      "versions": [
+        {
+          "path": "Lingobar Navigation Map.html",
+          "createdAt": "2026-06-24T15:49:47.411Z",
+          "status": "needs-review"
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-06-24T15:49:47.412Z",
+  "updatedAt": "2026-06-24T15:49:47.412Z"
+}

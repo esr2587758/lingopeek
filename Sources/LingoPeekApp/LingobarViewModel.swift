@@ -2,6 +2,49 @@ import AppKit
 import Foundation
 import LingobarCore
 
+private enum LingobarAICompletionResult: Sendable {
+    case grammar(GrammarResult)
+    case structured(StructuredLingobarResult)
+}
+
+private struct GrammarRequestKey: Hashable {
+    var sourceText: String
+    var baseURLString: String
+    var model: String
+}
+
+private enum LingobarAICompletionDecoder {
+    static func decode(
+        action: LanguageAction,
+        aiClient: OpenAICompatibleClient,
+        system: String,
+        user: String
+    ) async throws -> LingobarAICompletionResult {
+        let completion = try await aiClient.complete(system: system, user: user)
+        let json = try StructuredJSONExtractor.extractObject(from: completion)
+        guard let data = json.data(using: .utf8) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "AI response is not UTF-8"))
+        }
+
+        if action == .grammar {
+            return .grammar(try JSONDecoder().decode(GrammarResult.self, from: data))
+        }
+        return .structured(try JSONDecoder().decode(StructuredLingobarResult.self, from: data))
+    }
+
+    static func decodeGrammar(
+        aiClient: OpenAICompatibleClient,
+        system: String,
+        user: String
+    ) async throws -> GrammarResult {
+        let decoded = try await decode(action: .grammar, aiClient: aiClient, system: system, user: user)
+        guard case .grammar(let grammar) = decoded else {
+            throw OpenAICompatibleError.invalidResponse
+        }
+        return grammar
+    }
+}
+
 @MainActor
 final class LingobarViewModel: ObservableObject {
     @Published var mode: LingobarMode = .selection
@@ -24,6 +67,10 @@ final class LingobarViewModel: ObservableObject {
     private let store: PhraseStore
     private let historyStore: LingobarHistoryStore
     private var activeAIRequestID = UUID()
+    private var grammarResultCache: [GrammarRequestKey: GrammarResult] = [:]
+    private var grammarCacheKeys: [GrammarRequestKey] = []
+    private var grammarRequests: [GrammarRequestKey: Task<GrammarResult, Error>] = [:]
+    private let grammarCacheLimit = 6
 
     init(store: PhraseStore = .defaultStore(), historyStore: LingobarHistoryStore = .defaultStore()) {
         self.store = store
@@ -226,66 +273,169 @@ final class LingobarViewModel: ObservableObject {
         let historySourceAppName = mode == .input ? "输入模式" : selectionSource
         let requestID = UUID()
         activeAIRequestID = requestID
+
+        let grammarKey = action == .grammar
+            ? grammarRequestKey(for: text, configuration: aiClient.configuration)
+            : nil
+        if let grammarKey, let cachedGrammar = grammarResultCache[grammarKey] {
+            completeAIRequest(
+                .grammar(cachedGrammar),
+                action: action,
+                requestID: requestID,
+                historySourceText: historySourceText,
+                historySourceAppName: historySourceAppName,
+                grammarCacheKey: grammarKey
+            )
+            return
+        }
+
         isLoading = true
         loadingStartedAt = Date()
         status = "AI 生成中"
         onLayoutChanged?()
-        Task {
-            do {
-                let completion = try await aiClient.complete(
-                    system: systemPrompt(for: action),
+
+        let system = systemPrompt(for: action)
+        if let grammarKey {
+            let grammarTask = grammarRequests[grammarKey] ?? Task.detached(priority: .userInitiated) {
+                try await LingobarAICompletionDecoder.decodeGrammar(
+                    aiClient: aiClient,
+                    system: system,
                     user: text
                 )
-                let json = try StructuredJSONExtractor.extractObject(from: completion)
-                guard let data = json.data(using: .utf8) else {
-                    throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "AI response is not UTF-8"))
+            }
+            grammarRequests[grammarKey] = grammarTask
+            Task {
+                do {
+                    let grammar = try await grammarTask.value
+                    grammarRequests[grammarKey] = nil
+                    rememberGrammarResult(grammar, for: grammarKey)
+                    completeAIRequest(
+                        .grammar(grammar),
+                        action: action,
+                        requestID: requestID,
+                        historySourceText: historySourceText,
+                        historySourceAppName: historySourceAppName,
+                        grammarCacheKey: nil
+                    )
+                } catch {
+                    grammarRequests[grammarKey] = nil
+                    failAIRequest(error, requestID: requestID)
                 }
-                guard self.activeAIRequestID == requestID else {
-                    return
-                }
-                if action == .grammar {
-                    let grammar = try JSONDecoder().decode(GrammarResult.self, from: data)
-                    self.grammarResult = grammar
-                    self.result = grammar.lingobarResult(shortcut: self.shortcut(for: action))
-                } else {
-                    let structured = try JSONDecoder().decode(StructuredLingobarResult.self, from: data)
-                    self.grammarResult = nil
-                    self.result = structured.lingobarResult(shortcut: self.shortcut(for: action))
-                }
-                self.recordCompletedHistory(
+            }
+            return
+        }
+
+        let completionTask = Task.detached(priority: .userInitiated) {
+            try await LingobarAICompletionDecoder.decode(
+                action: action,
+                aiClient: aiClient,
+                system: system,
+                user: text
+            )
+        }
+        Task {
+            do {
+                let decoded = try await completionTask.value
+                self.completeAIRequest(
+                    decoded,
                     action: action,
-                    sourceText: historySourceText,
-                    sourceAppName: historySourceAppName
+                    requestID: requestID,
+                    historySourceText: historySourceText,
+                    historySourceAppName: historySourceAppName,
+                    grammarCacheKey: nil
                 )
-                self.status = "AI 完成"
-            } catch is DecodingError {
-                guard self.activeAIRequestID == requestID else {
-                    return
-                }
-                self.grammarResult = nil
-                self.result = self.errorResult(message: "AI 返回结构不符合语法面板，请重试。")
-                self.status = "格式错误"
             } catch {
-                guard self.activeAIRequestID == requestID else {
-                    return
-                }
-                self.grammarResult = nil
-                self.result = self.errorResult(message: self.userFacingAIErrorMessage(error))
-                self.status = "AI 不可用"
+                self.failAIRequest(error, requestID: requestID)
             }
-            guard self.activeAIRequestID == requestID else {
-                return
+        }
+    }
+
+    private func completeAIRequest(
+        _ decoded: LingobarAICompletionResult,
+        action: LanguageAction,
+        requestID: UUID,
+        historySourceText: String,
+        historySourceAppName: String,
+        grammarCacheKey: GrammarRequestKey?
+    ) {
+        guard activeAIRequestID == requestID else {
+            return
+        }
+
+        switch decoded {
+        case .grammar(let grammar):
+            grammarResult = grammar
+            result = grammar.lingobarResult(shortcut: shortcut(for: action))
+            if let grammarCacheKey {
+                rememberGrammarResult(grammar, for: grammarCacheKey)
             }
-            self.isLoading = false
-            self.loadingStartedAt = nil
-            self.onLayoutChanged?()
+        case .structured(let structured):
+            grammarResult = nil
+            result = structured.lingobarResult(shortcut: shortcut(for: action))
+        }
+
+        status = "AI 完成"
+        isLoading = false
+        loadingStartedAt = nil
+        onLayoutChanged?()
+        recordCompletedHistory(
+            action: action,
+            sourceText: historySourceText,
+            sourceAppName: historySourceAppName,
+            result: result
+        )
+    }
+
+    private func failAIRequest(_ error: Error, requestID: UUID) {
+        guard activeAIRequestID == requestID else {
+            return
+        }
+
+        grammarResult = nil
+        if error is DecodingError {
+            result = errorResult(message: "AI 返回结构不符合语法面板，请重试。")
+            status = "格式错误"
+        } else {
+            result = errorResult(message: userFacingAIErrorMessage(error))
+            status = "AI 不可用"
+        }
+        isLoading = false
+        loadingStartedAt = nil
+        onLayoutChanged?()
+    }
+
+    private func grammarRequestKey(
+        for text: String,
+        configuration: AIProviderConfiguration
+    ) -> GrammarRequestKey? {
+        let sourceText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sourceText.isEmpty,
+              let baseURL = configuration.normalizedBaseURL else {
+            return nil
+        }
+        return GrammarRequestKey(
+            sourceText: sourceText,
+            baseURLString: baseURL.absoluteString,
+            model: configuration.normalizedModel
+        )
+    }
+
+    private func rememberGrammarResult(_ grammar: GrammarResult, for key: GrammarRequestKey) {
+        grammarResultCache[key] = grammar
+        grammarCacheKeys.removeAll { $0 == key }
+        grammarCacheKeys.append(key)
+
+        while grammarCacheKeys.count > grammarCacheLimit {
+            let oldestKey = grammarCacheKeys.removeFirst()
+            grammarResultCache.removeValue(forKey: oldestKey)
         }
     }
 
     private func recordCompletedHistory(
         action: LanguageAction,
         sourceText: String,
-        sourceAppName: String
+        sourceAppName: String,
+        result: LingobarResult
     ) {
         guard let record = LingobarHistoryRecord.make(
             action: action,
@@ -295,7 +445,10 @@ final class LingobarViewModel: ObservableObject {
         ) else {
             return
         }
-        _ = try? historyStore.append(record)
+        let historyStore = historyStore
+        Task.detached(priority: .utility) {
+            _ = try? historyStore.append(record)
+        }
     }
 
     private func systemPrompt(for action: LanguageAction) -> String {

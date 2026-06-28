@@ -888,36 +888,52 @@ func checkLingobarViewModelHistoryRecordingSourceGate() throws {
         "input-mode history should use the input source label"
     )
 
-    let runAI = try sourceRegion(source, from: "private func runAIIfAvailable", to: "private func recordCompletedHistory")
+    let runAI = try sourceRegion(source, from: "private func runAIIfAvailable", to: "private func completeAIRequest")
+    try check(runAI.contains("grammarResultCache[grammarKey]"), "grammar requests should use cached results before starting AI")
+    try check(runAI.contains("grammarRequests[grammarKey]"), "grammar requests should reuse in-flight work for the same text and model")
+    try check(
+        countOccurrences(of: "Task.detached(priority: .userInitiated)", in: runAI) == 2,
+        "AI completion and grammar decoding should run off the main actor"
+    )
+
+    let completionHelper = try sourceRegion(source, from: "private func completeAIRequest", to: "private func failAIRequest")
     let successGuard = try requiredRange(
-        in: runAI,
-        needle: "guard self.activeAIRequestID == requestID else",
-        message: "runAIIfAvailable should keep the successful-decode request guard"
+        in: completionHelper,
+        needle: "guard activeAIRequestID == requestID else",
+        message: "completion helper should keep the successful-decode request guard"
     )
     let recordCall = try requiredRange(
-        in: runAI,
-        needle: "self.recordCompletedHistory(",
-        message: "runAIIfAvailable should record completed history on the success path"
+        in: completionHelper,
+        needle: "recordCompletedHistory(",
+        message: "completion helper should record completed history on the success path"
     )
     try check(recordCall.lowerBound > successGuard.lowerBound, "history recording should occur after the successful-decode request guard")
+    let loadingComplete = try requiredRange(
+        in: completionHelper,
+        needle: "isLoading = false",
+        message: "completion helper should end loading before writing history"
+    )
+    try check(loadingComplete.lowerBound < recordCall.lowerBound, "result display should unblock before history recording starts")
     try check(
-        String(runAI[..<successGuard.lowerBound]).doesNotMentionHistoryRecording,
+        String(completionHelper[..<successGuard.lowerBound]).doesNotMentionHistoryRecording,
         "history recording should not appear before the successful-decode request guard"
     )
     try check(
-        runAI.contains("sourceText: historySourceText") && runAI.contains("sourceAppName: historySourceAppName"),
+        completionHelper.contains("sourceText: historySourceText") && completionHelper.contains("sourceAppName: historySourceAppName"),
         "success-path recording should use captured source text and source label"
     )
     try check(
-        countOccurrences(of: "self.recordCompletedHistory(", in: runAI) == 1,
-        "runAIIfAvailable should call the history recording helper exactly once"
+        countOccurrences(of: "recordCompletedHistory(", in: completionHelper) == 1,
+        "completion helper should call the history recording helper exactly once"
     )
 
-    let catchRegion = String(runAI[try requiredRange(in: runAI, needle: "} catch is DecodingError", message: "runAIIfAvailable should contain the decoding catch branch").lowerBound...])
-    try check(catchRegion.doesNotMentionHistoryRecording, "catch/error paths should not record history")
+    let failureHelper = try sourceRegion(source, from: "private func failAIRequest", to: "private func grammarRequestKey")
+    try check(failureHelper.contains("if error is DecodingError"), "failure helper should preserve the decoding error branch")
+    try check(failureHelper.doesNotMentionHistoryRecording, "catch/error paths should not record history")
 
     let helper = try sourceRegion(source, from: "private func recordCompletedHistory", to: "private func systemPrompt")
     try check(helper.contains("LingobarHistoryRecord.make"), "recording helper should build a compact history record")
+    try check(helper.contains("Task.detached(priority: .utility)"), "recording helper should write history off the main actor")
     try check(helper.contains("_ = try? historyStore.append(record)"), "recording helper should append through the injected history store non-fatally")
     try check(
         helper.doesNotContainAny([

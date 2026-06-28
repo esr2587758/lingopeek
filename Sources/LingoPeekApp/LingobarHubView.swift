@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import LingobarCore
 import SwiftUI
 
@@ -45,9 +46,9 @@ final class LingobarHubState: ObservableObject {
     @Published var historyQuery = ""
     @Published var collectionFilter = LingobarHubItemFilter.all
     @Published var historyFilter = LingobarHubItemFilter.all
-    @Published var selectedSettingsSectionID: LingobarSettingsSectionID = .general
+    @Published var selectedSettingsSectionID: LingobarSettingsSectionID = LingobarHubState.initialSettingsSectionID()
     @Published var settings = AppSettings.makeSettingsSnapshot()
-    @Published var tokenDraft = AppSettings.apiToken
+    @Published var tokenDraft = ""
     @Published var revealToken = false
     @Published var toastMessage: String?
 
@@ -62,6 +63,11 @@ final class LingobarHubState: ObservableObject {
         self.phraseStore = phraseStore
         self.historyStore = historyStore
         refresh()
+    }
+
+    private static func initialSettingsSectionID() -> LingobarSettingsSectionID {
+        let rawValue = ProcessInfo.processInfo.environment["LINGOPEEK_OPEN_HUB_SETTINGS_SECTION"] ?? ""
+        return LingobarSettingsSectionID(rawValue: rawValue) ?? .general
     }
 
     var selectedItem: LingobarHubLibraryItem? {
@@ -91,9 +97,30 @@ final class LingobarHubState: ObservableObject {
         filterOptions(for: historyItems)
     }
 
-    var hotKeyDisplayParts: [String] {
-        let parts = settings.inputHotKeyDisplay.flatMap(Self.hotKeyParts)
-        return parts.isEmpty ? ["未设置"] : parts
+    var trimmedTokenDraft: String {
+        tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var hasPendingTokenDraft: Bool {
+        !trimmedTokenDraft.isEmpty
+    }
+
+    var isSavedTokenConfigured: Bool {
+        !settings.apiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var tokenFieldPlaceholder: String {
+        isSavedTokenConfigured ? "已配置，输入新 API Key 可替换" : "sk-..."
+    }
+
+    var tokenStatusTitle: String {
+        if hasPendingTokenDraft && isSavedTokenConfigured {
+            return "待替换"
+        }
+        if hasPendingTokenDraft {
+            return "待保存"
+        }
+        return isSavedTokenConfigured ? "已配置" : "未配置"
     }
 
     func refresh() {
@@ -122,7 +149,6 @@ final class LingobarHubState: ObservableObject {
 
     func refreshSettings() {
         settings = AppSettings.makeSettingsSnapshot()
-        tokenDraft = settings.apiToken
     }
 
     func select(_ item: LingobarHubLibraryItem) {
@@ -229,15 +255,20 @@ final class LingobarHubState: ObservableObject {
     }
 
     func saveTokenDraft() {
-        AppSettings.saveAPIToken(tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard hasPendingTokenDraft else {
+            return
+        }
+        AppSettings.saveAPIToken(trimmedTokenDraft)
+        tokenDraft = ""
         refreshSettings()
-        flash("Token 已保存")
+        flash("API Key 已保存")
     }
 
     func clearToken() {
         AppSettings.deleteAPIToken()
+        tokenDraft = ""
         refreshSettings()
-        flash("Token 已清除")
+        flash("API Key 已清除")
     }
 
     func saveTriggerOnSelection(_ value: Bool) {
@@ -256,6 +287,12 @@ final class LingobarHubState: ObservableObject {
         AppSettings.resetHotKey()
         refreshSettings()
         flash("快捷键已重置")
+    }
+
+    func saveHotKey(_ hotKey: LingobarHotKey) {
+        AppSettings.saveHotKey(hotKey)
+        refreshSettings()
+        flash("快捷键已保存")
     }
 
     func moveAction(_ action: LanguageAction, offset: Int) {
@@ -327,24 +364,6 @@ final class LingobarHubState: ObservableObject {
             .sorted()
             .map(LingobarHubItemFilter.type)
         return [.all] + typeOptions
-    }
-
-    private static func hotKeyParts(from value: String) -> [String] {
-        var remaining = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !remaining.isEmpty else {
-            return []
-        }
-
-        var parts: [String] = []
-        for symbol in ["⌃", "⌥", "⇧", "⌘"] where remaining.hasPrefix(symbol) {
-            parts.append(symbol)
-            remaining.removeFirst(symbol.count)
-        }
-        let key = remaining.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !key.isEmpty {
-            parts.append(key)
-        }
-        return parts.isEmpty ? [value] : parts
     }
 
     private func flash(_ message: String) {
@@ -1076,29 +1095,91 @@ private struct AISettingsSection: View {
             }
         }
 
-        HubSettingsGroup(title: "API Token") {
-            HStack(spacing: 8) {
-                if state.revealToken {
-                    TextField("sk-...", text: $state.tokenDraft)
-                        .textFieldStyle(HubTextFieldStyle())
-                } else {
-                    SecureField("sk-...", text: $state.tokenDraft)
-                        .textFieldStyle(HubTextFieldStyle())
+        HubSettingsGroup(title: "API Key") {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("API Key")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(HubColor.primaryText)
+                    Text("密钥仅保存在本地，输入新 Key 后点击保存。")
+                        .font(.system(size: 12))
+                        .foregroundStyle(HubColor.secondaryText)
                 }
-                HubIconButton(systemName: state.revealToken ? "eye.slash" : "eye", help: "显示或隐藏 Token") {
-                    state.revealToken.toggle()
+
+                HStack(spacing: 8) {
+                    HubTokenInputField(
+                        placeholder: state.tokenFieldPlaceholder,
+                        text: $state.tokenDraft,
+                        revealToken: state.revealToken,
+                        onSubmit: state.saveTokenDraft
+                    )
+                    .frame(maxWidth: .infinity)
+
+                    Button(state.revealToken ? "隐藏" : "显示") {
+                        state.revealToken.toggle()
+                    }
+                    .buttonStyle(HubSecondaryButtonStyle())
+                    .fixedSize()
+
+                    Button("保存") {
+                        state.saveTokenDraft()
+                    }
+                    .buttonStyle(HubPrimaryButtonStyle())
+                    .disabled(!state.hasPendingTokenDraft)
+                    .fixedSize()
+
+                    Button("清除") {
+                        state.clearToken()
+                    }
+                    .buttonStyle(HubSecondaryButtonStyle())
+                    .disabled(!state.isSavedTokenConfigured)
+                    .fixedSize()
                 }
-                HubIconButton(systemName: "checkmark", help: "保存 Token") {
-                    state.saveTokenDraft()
-                }
-                HubIconButton(systemName: "trash", help: "清除 Token") {
-                    state.clearToken()
+
+                HStack(spacing: 8) {
+                    HubBadge(
+                        title: state.tokenStatusTitle,
+                        tint: state.hasPendingTokenDraft ? HubColor.warn : (state.isSavedTokenConfigured ? HubColor.ok : HubColor.tertiaryText)
+                    )
+                    Text(state.settings.setupGateStatus.aiAccessConfigured ? "AI 服务已配置。" : "需要 API Key、Base URL 和模型才能使用 AI 功能。")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(state.settings.setupGateStatus.aiAccessConfigured ? HubColor.ok : HubColor.warn)
                 }
             }
-            Text(state.settings.setupGateStatus.aiAccessConfigured ? "AI 服务已配置。" : "需要 Token、Base URL 和模型才能使用 AI 功能。")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(state.settings.setupGateStatus.aiAccessConfigured ? HubColor.ok : HubColor.warn)
         }
+    }
+}
+
+private struct HubTokenInputField: View {
+    var placeholder: String
+    @Binding var text: String
+    var revealToken: Bool
+    var onSubmit: () -> Void
+
+    var body: some View {
+        Group {
+            if revealToken {
+                TextField(placeholder, text: $text)
+                    .textFieldStyle(.plain)
+                    .onSubmit(onSubmit)
+            } else {
+                SecureField(placeholder, text: $text)
+                    .textFieldStyle(.plain)
+                    .onSubmit(onSubmit)
+            }
+        }
+        .font(.system(size: 13, design: .monospaced))
+        .foregroundStyle(HubColor.primaryText)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.black.opacity(0.24))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(HubColor.strongHairline, lineWidth: 1)
+        )
     }
 }
 
@@ -1163,7 +1244,13 @@ private struct TriggerSettingsSection: View {
                         .foregroundStyle(HubColor.secondaryText)
                 }
                 Spacer()
-                HubHotKeyView(keys: state.hotKeyDisplayParts)
+                HubHotKeyRecorder(
+                    hotKey: Binding(
+                        get: { AppSettings.hotKey },
+                        set: { hotKey in state.saveHotKey(hotKey) }
+                    )
+                )
+                .frame(width: 168, height: 30)
                 Button("重置") {
                     state.resetHotKey()
                 }
@@ -1320,27 +1407,136 @@ private struct HubSegmentedActionRow: View {
     }
 }
 
-private struct HubHotKeyView: View {
-    var keys: [String]
+private struct HubHotKeyRecorder: NSViewRepresentable {
+    @Binding var hotKey: LingobarHotKey
 
-    var body: some View {
-        HStack(spacing: 5) {
-            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
-                Text(key)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(HubColor.primaryText)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(HubColor.chipHover)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .stroke(HubColor.strongHairline, lineWidth: 1)
-                    )
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> HubHotKeyRecorderButton {
+        let button = HubHotKeyRecorderButton()
+        button.bezelStyle = .rounded
+        button.isBordered = false
+        button.font = .monospacedSystemFont(ofSize: 12, weight: .semibold)
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.startRecording(_:))
+        button.onKeyDown = { [weak coordinator = context.coordinator] event in
+            coordinator?.handleKeyDown(event) ?? false
+        }
+        context.coordinator.updateAppearance(button)
+        return button
+    }
+
+    func updateNSView(_ button: HubHotKeyRecorderButton, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.updateTitle(button)
+        context.coordinator.updateAppearance(button)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var parent: HubHotKeyRecorder
+        private var isRecording = false
+        private weak var activeButton: HubHotKeyRecorderButton?
+        private var keyMonitor: Any?
+
+        init(_ parent: HubHotKeyRecorder) {
+            self.parent = parent
+        }
+
+        @objc func startRecording(_ sender: HubHotKeyRecorderButton) {
+            isRecording = true
+            activeButton = sender
+            installKeyMonitor()
+            updateTitle(sender)
+            updateAppearance(sender)
+            sender.window?.makeFirstResponder(sender)
+        }
+
+        func handleKeyDown(_ event: NSEvent) -> Bool {
+            guard isRecording else {
+                return false
+            }
+
+            if event.keyCode == UInt16(kVK_Escape) {
+                stopRecording()
+                return true
+            }
+
+            guard let nextHotKey = LingobarHotKey(event: event) else {
+                return true
+            }
+
+            parent.hotKey = nextHotKey
+            stopRecording()
+            return true
+        }
+
+        func updateTitle(_ button: HubHotKeyRecorderButton) {
+            button.title = isRecording ? "按下快捷键..." : parent.hotKey.displayString
+        }
+
+        func updateAppearance(_ button: HubHotKeyRecorderButton) {
+            button.wantsLayer = true
+            button.layer?.cornerRadius = 8
+            button.layer?.borderWidth = 1
+            button.layer?.borderColor = NSColor.white.withAlphaComponent(isRecording ? 0.32 : 0.15).cgColor
+            button.layer?.backgroundColor = isRecording
+                ? NSColor(calibratedRed: 0.431, green: 0.545, blue: 1.0, alpha: 0.18).cgColor
+                : NSColor.white.withAlphaComponent(0.11).cgColor
+            button.contentTintColor = NSColor.white.withAlphaComponent(0.92)
+        }
+
+        private func installKeyMonitor() {
+            if let keyMonitor {
+                NSEvent.removeMonitor(keyMonitor)
+            }
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+                let handled: Bool = MainActor.assumeIsolated {
+                    guard let self else {
+                        return false
+                    }
+                    return self.handleKeyDown(event)
+                }
+                return handled ? nil : event
             }
         }
+
+        private func stopRecording() {
+            isRecording = false
+            if let keyMonitor {
+                NSEvent.removeMonitor(keyMonitor)
+                self.keyMonitor = nil
+            }
+            activeButton.map {
+                updateTitle($0)
+                updateAppearance($0)
+            }
+        }
+    }
+}
+
+@MainActor
+private final class HubHotKeyRecorderButton: NSButton {
+    var onKeyDown: (@MainActor (NSEvent) -> Bool)?
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if onKeyDown?(event) == true {
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if onKeyDown?(event) == true {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 }
 
@@ -1470,7 +1666,19 @@ private struct HubTextFieldRow: View {
                 Spacer()
             }
             TextField("", text: $text)
-                .textFieldStyle(HubTextFieldStyle())
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(HubColor.primaryText)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.black.opacity(0.2))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(HubColor.strongHairline, lineWidth: 1)
+                )
         }
     }
 }
@@ -1666,29 +1874,12 @@ private struct HubDivider: View {
     }
 }
 
-private struct HubTextFieldStyle: TextFieldStyle {
-    func _body(configuration: TextField<Self._Label>) -> some View {
-        configuration
-            .font(.system(size: 13))
-            .foregroundStyle(HubColor.primaryText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(HubColor.chip)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(HubColor.hairline, lineWidth: 1)
-            )
-    }
-}
-
 private struct HubPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(.white)
+            .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

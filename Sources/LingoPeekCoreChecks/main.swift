@@ -80,6 +80,48 @@ func checkLocalLanguageEngine() throws {
 }
 
 func checkLanguageActionKeyboardShortcuts() throws {
+    let customOrder: [LanguageAction] = [.rewrite, .translate, .grammar, .examples, .collect, .pronounce]
+
+    try check(
+        LanguageAction.shortcut(for: .rewrite, in: customOrder) == "⌘1",
+        "first action slot should display ⌘1"
+    )
+    try check(
+        LanguageAction.shortcut(for: .translate, in: customOrder) == "⌘2",
+        "second action slot should display ⌘2"
+    )
+    try check(
+        LanguageAction.shortcut(for: .collect, in: customOrder) == "⌘5",
+        "fifth action slot should display ⌘5"
+    )
+    try check(
+        LanguageAction.shortcut(for: .pronounce, in: customOrder) == "⌘P",
+        "sixth action slot should display ⌘P"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(
+            keyEquivalent: "1",
+            command: true,
+            actionOrder: customOrder
+        ) == .rewrite,
+        "⌘1 should trigger the first ordered action"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(
+            keyEquivalent: "2",
+            command: true,
+            actionOrder: customOrder
+        ) == .translate,
+        "⌘2 should trigger the second ordered action"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(
+            keyEquivalent: "P",
+            command: true,
+            actionOrder: [.pronounce, .translate, .grammar, .rewrite, .examples, .collect]
+        ) == .collect,
+        "⌘P should trigger the sixth ordered action"
+    )
     try check(
         LanguageAction.matchingKeyboardShortcut(keyEquivalent: "1", command: true) == .translate,
         "⌘1 should trigger translate"
@@ -97,12 +139,16 @@ func checkLanguageActionKeyboardShortcuts() throws {
         "⌘4 should trigger examples"
     )
     try check(
-        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "S", command: true) == .collect,
-        "⌘S should trigger collect"
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "5", command: true) == .collect,
+        "⌘5 should trigger collect"
     )
     try check(
         LanguageAction.matchingKeyboardShortcut(keyEquivalent: "P", command: true) == .pronounce,
         "⌘P should trigger pronounce"
+    )
+    try check(
+        LanguageAction.matchingKeyboardShortcut(keyEquivalent: "S", command: true) == nil,
+        "⌘S should not be a fixed collect shortcut"
     )
     try check(
         LanguageAction.matchingKeyboardShortcut(keyEquivalent: "1", command: false) == nil,

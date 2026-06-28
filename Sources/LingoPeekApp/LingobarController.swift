@@ -450,7 +450,8 @@ private final class LingobarPanel: NSPanel {
                 command: event.modifierFlags.contains(.command),
                 option: event.modifierFlags.contains(.option),
                 control: event.modifierFlags.contains(.control),
-                shift: event.modifierFlags.contains(.shift)
+                shift: event.modifierFlags.contains(.shift),
+                actionOrder: AppSettings.actionOrder
               ),
               action != .copy else {
             return false

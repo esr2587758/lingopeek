@@ -1275,7 +1275,7 @@ private struct ActionsSettingsSection: View {
                             Text(action.title)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(HubColor.primaryText)
-                            Text(action.shortcut)
+                            Text(LanguageAction.shortcut(for: action, in: state.settings.actionOrder))
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(HubColor.tertiaryText)
                         }

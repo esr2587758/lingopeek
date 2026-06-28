@@ -24,6 +24,8 @@ public enum LanguageAction: String, CaseIterable, Identifiable, Codable, Sendabl
         .pronounce
     ]
 
+    private static let selectionShortcutKeySlots = ["1", "2", "3", "4", "5", "p"]
+
     public static func defaultSelectionAction(for text: String) -> LanguageAction {
         containsChinese(in: text) ? .rewrite : .translate
     }
@@ -64,27 +66,35 @@ public enum LanguageAction: String, CaseIterable, Identifiable, Codable, Sendabl
     }
 
     public var shortcut: String {
-        switch self {
-        case .copy: "⌘C"
-        case .translate: "⌘1"
-        case .grammar: "⌘2"
-        case .rewrite: "⌘3"
-        case .examples: "⌘4"
-        case .collect: "⌘S"
-        case .pronounce: "⌘P"
-        }
+        Self.shortcut(for: self)
     }
 
     public var keyEquivalent: String {
-        switch self {
-        case .copy: "c"
-        case .translate: "1"
-        case .grammar: "2"
-        case .rewrite: "3"
-        case .examples: "4"
-        case .collect: "s"
-        case .pronounce: "p"
+        Self.keyEquivalent(for: self)
+    }
+
+    public static func shortcut(
+        for action: LanguageAction,
+        in actionOrder: [LanguageAction] = selectionActions
+    ) -> String {
+        let keyEquivalent = keyEquivalent(for: action, in: actionOrder)
+        return keyEquivalent.isEmpty ? "" : "⌘\(keyEquivalent.uppercased())"
+    }
+
+    public static func keyEquivalent(
+        for action: LanguageAction,
+        in actionOrder: [LanguageAction] = selectionActions
+    ) -> String {
+        if action == .copy {
+            return "c"
         }
+
+        let normalizedOrder = normalizedSelectionActionOrder(actionOrder)
+        guard let index = normalizedOrder.firstIndex(of: action),
+              selectionShortcutKeySlots.indices.contains(index) else {
+            return ""
+        }
+        return selectionShortcutKeySlots[index]
     }
 
     public static func matchingKeyboardShortcut(
@@ -92,7 +102,8 @@ public enum LanguageAction: String, CaseIterable, Identifiable, Codable, Sendabl
         command: Bool,
         option: Bool = false,
         control: Bool = false,
-        shift: Bool = false
+        shift: Bool = false,
+        actionOrder: [LanguageAction] = selectionActions
     ) -> LanguageAction? {
         guard command, !option, !control, !shift else {
             return nil
@@ -101,7 +112,28 @@ public enum LanguageAction: String, CaseIterable, Identifiable, Codable, Sendabl
         let normalizedKey = keyEquivalent
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-        return allCases.first { $0.keyEquivalent == normalizedKey }
+
+        if normalizedKey == Self.keyEquivalent(for: .copy) {
+            return .copy
+        }
+
+        guard let slotIndex = selectionShortcutKeySlots.firstIndex(of: normalizedKey) else {
+            return nil
+        }
+
+        let normalizedOrder = normalizedSelectionActionOrder(actionOrder)
+        guard normalizedOrder.indices.contains(slotIndex) else {
+            return nil
+        }
+        return normalizedOrder[slotIndex]
+    }
+
+    public static func normalizedSelectionActionOrder(_ actionOrder: [LanguageAction]) -> [LanguageAction] {
+        var normalized: [LanguageAction] = []
+        for action in actionOrder where selectionActions.contains(action) && !normalized.contains(action) {
+            normalized.append(action)
+        }
+        return normalized + selectionActions.filter { !normalized.contains($0) }
     }
 
     public var moreActionTitle: String {

@@ -32,7 +32,7 @@ final class LingobarViewModel: ObservableObject {
             SavedPhrase(title: "selection-first", note: "以选区为入口，而不是先打开 App。")
         ]
 
-        self.result = LingobarViewModel.pendingResult(for: .translate)
+        self.result = LingobarViewModel.pendingResult(for: .translate, actionOrder: AppSettings.actionOrder)
     }
 
     func present(selection: String?, sourceAppName: String = "当前 App") {
@@ -43,7 +43,7 @@ final class LingobarViewModel: ObservableObject {
             selectionSource = sourceAppName
             selectedText = selection
             action = configuredDefaultSelectionAction(for: selection)
-            result = Self.pendingResult(for: action)
+            result = pendingResult(for: action)
             grammarResult = nil
             showsResult = true
             loadingStartedAt = nil
@@ -53,7 +53,7 @@ final class LingobarViewModel: ObservableObject {
             mode = .input
             action = .rewrite
             inputText = AppSettings.autoReadClipboard ? clipboardText() : ""
-            result = Self.pendingResult(for: action)
+            result = pendingResult(for: action)
             grammarResult = nil
             showsResult = false
             status = "AI 就绪"
@@ -70,7 +70,7 @@ final class LingobarViewModel: ObservableObject {
         selectedText = grammar.sourceSentence
         action = .grammar
         grammarResult = grammar
-        result = grammar.lingobarResult(shortcut: LanguageAction.grammar.shortcut)
+        result = grammar.lingobarResult(shortcut: shortcut(for: .grammar))
         showsResult = true
         isLoading = false
         loadingStartedAt = nil
@@ -108,7 +108,7 @@ final class LingobarViewModel: ObservableObject {
         case .copy:
             copyResult()
         case .translate, .grammar, .rewrite, .examples, .pronounce:
-            result = Self.pendingResult(for: newAction)
+            result = pendingResult(for: newAction)
             showsResult = true
             onLayoutChanged?()
             runAIIfAvailable(for: newAction, text: activeText)
@@ -246,11 +246,11 @@ final class LingobarViewModel: ObservableObject {
                 if action == .grammar {
                     let grammar = try JSONDecoder().decode(GrammarResult.self, from: data)
                     self.grammarResult = grammar
-                    self.result = grammar.lingobarResult(shortcut: action.shortcut)
+                    self.result = grammar.lingobarResult(shortcut: self.shortcut(for: action))
                 } else {
                     let structured = try JSONDecoder().decode(StructuredLingobarResult.self, from: data)
                     self.grammarResult = nil
-                    self.result = structured.lingobarResult(shortcut: action.shortcut)
+                    self.result = structured.lingobarResult(shortcut: self.shortcut(for: action))
                 }
                 self.recordCompletedHistory(
                     action: action,
@@ -439,7 +439,7 @@ final class LingobarViewModel: ObservableObject {
     private func errorResult(message: String) -> LingobarResult {
         LingobarResult(
             title: "出错",
-            shortcut: action.shortcut,
+            shortcut: shortcut(for: action),
             summary: message,
             rows: [
                 LingobarRow("重试", "再次触发当前动作"),
@@ -472,10 +472,21 @@ final class LingobarViewModel: ObservableObject {
         return "AI 请求失败，请重试或检查 AI 设置。"
     }
 
-    private static func pendingResult(for action: LanguageAction) -> LingobarResult {
+    func shortcut(for action: LanguageAction) -> String {
+        LanguageAction.shortcut(for: action, in: actions)
+    }
+
+    private func pendingResult(for action: LanguageAction) -> LingobarResult {
+        Self.pendingResult(for: action, actionOrder: actions)
+    }
+
+    private static func pendingResult(
+        for action: LanguageAction,
+        actionOrder: [LanguageAction]
+    ) -> LingobarResult {
         LingobarResult(
             title: action.title,
-            shortcut: action.shortcut,
+            shortcut: LanguageAction.shortcut(for: action, in: actionOrder),
             summary: "正在请求 AI…",
             rows: [],
             sideTitle: "后续动作",

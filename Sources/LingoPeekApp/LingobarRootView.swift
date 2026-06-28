@@ -243,7 +243,7 @@ struct LingobarRootView: View {
 
     private var inputResultPanel: some View {
         VStack(spacing: 0) {
-            panelTitle("改写 · 自然英文", shortcut: viewModel.action.shortcut)
+            panelTitle("改写 · 自然英文", shortcut: viewModel.shortcut(for: viewModel.action))
             panelBody(height: 176)
 
             if !viewModel.isLoading {
@@ -291,7 +291,7 @@ struct LingobarRootView: View {
                 actionBar
             }
 
-            panelTitle(viewModel.result.title, shortcut: viewModel.action.shortcut)
+            panelTitle(viewModel.result.title, shortcut: viewModel.shortcut(for: viewModel.action))
             panelBody(height: viewModel.mode == .selection ? 300 : 176)
 
             if !viewModel.isLoading {

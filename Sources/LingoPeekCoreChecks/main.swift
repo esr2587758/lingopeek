@@ -1035,6 +1035,10 @@ func checkLingobarHubShellSourceGate() throws {
         contentsOf: root.appending(path: "Sources/LingoPeekApp/AppDelegate.swift"),
         encoding: .utf8
     )
+    let settingsViewSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/SettingsView.swift"),
+        encoding: .utf8
+    )
 
     try check(windowSource.contains("LingobarHubWindowController"), "native Hub should have a window controller")
     try check(windowSource.contains("static let hubSize = NSSize(width: 920, height: 624)"), "Hub window should match the reference 920x624 frame")
@@ -1048,6 +1052,14 @@ func checkLingobarHubShellSourceGate() throws {
     try check(viewSource.contains("HubSettingsSubnavButton"), "Hub settings should use the reference-style horizontal subnav")
     try check(viewSource.contains("ScrollView(.horizontal, showsIndicators: false)"), "Hub settings subnav should remain horizontal")
     try check(viewSource.contains("LINGOPEEK_OPEN_HUB_SETTINGS_SECTION"), "Hub settings should support deterministic subsection launch")
+    try check(
+        viewSource.contains("NSApplication.didBecomeActiveNotification") && viewSource.contains("state.refreshSettings()"),
+        "Hub settings should refresh external permission state when the app becomes active"
+    )
+    try check(
+        settingsViewSource.contains("NSApplication.didBecomeActiveNotification") && settingsViewSource.contains("refreshSettings()"),
+        "legacy Settings scene should refresh external permission state when the app becomes active"
+    )
     try check(viewSource.contains("private static let schemeGridColumns"), "Hub settings appearance schemes should use the reference two-column grid")
     try check(viewSource.contains("Button(\"保存\")"), "Hub API key editing should expose a visible save button")
     try check(viewSource.contains("state.hasPendingTokenDraft"), "Hub API key save button should track pending token input")
@@ -1060,6 +1072,12 @@ func checkLingobarHubShellSourceGate() throws {
     try check(viewSource.contains("LingobarHubLibrary.collectionItems"), "Hub should map saved phrases through the shared library adapter")
     try check(viewSource.contains("LingobarHubLibrary.historyItems"), "Hub should map history records through the shared library adapter")
     try check(controllerSource.contains("hubWindowController.show(section: .settings)"), "settings entry points should open the Hub settings section")
+    try check(controllerSource.contains("appActivationObserver"), "controller should observe app activation for external setup state changes")
+    try check(controllerSource.contains("private func refreshRuntimeSettings()"), "controller should centralize runtime settings refresh")
+    try check(
+        controllerSource.contains("viewModel.setupGateStatus = AppSettings.setupGateStatus"),
+        "controller activation refresh should update the setup gate status"
+    )
     try check(controllerSource.contains("hubWindowController.show(section: .collection)"), "menu should expose the Hub collection entry")
     try check(controllerSource.contains("presentFromHub(_ item: LingobarHubLibraryItem)"), "Hub detail items should be able to relaunch Lingobar")
     try check(!controllerSource.contains("settingsWindowController.show()"), "old settings window should not remain the active settings route")

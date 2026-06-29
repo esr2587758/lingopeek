@@ -56,6 +56,9 @@ struct SettingsView: View {
         .frame(width: 760, height: 680)
         .background(Color.clear)
         .onAppear(perform: refreshSettings)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshSettings()
+        }
     }
 
     private var sidebar: some View {

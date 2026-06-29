@@ -463,6 +463,12 @@ struct LingobarHubView: View {
         }
         .frame(width: 920, height: 624)
         .background(Color.clear)
+        .onAppear {
+            state.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            state.refreshSettings()
+        }
     }
 
     @ViewBuilder

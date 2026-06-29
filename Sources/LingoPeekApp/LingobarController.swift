@@ -25,6 +25,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
     private var hotKeyManager: HotKeyManager?
     private var hotKeyObserver: NSObjectProtocol?
     private var settingsObserver: NSObjectProtocol?
+    private var appActivationObserver: NSObjectProtocol?
     private var registeredHotKey: LingobarHotKey?
     private var isPositioningProgrammatically = false
 
@@ -60,12 +61,16 @@ final class LingobarController: NSObject, NSWindowDelegate {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self else {
-                    return
-                }
-                self.viewModel.actions = AppSettings.actionOrder
-                self.viewModel.setupGateStatus = AppSettings.setupGateStatus
-                self.updateStatusItemVisibility()
+                self?.refreshRuntimeSettings()
+            }
+        }
+        appActivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshRuntimeSettings()
             }
         }
         if let openHubOnLaunch = openHubOnLaunch ?? (openSettingsOnLaunch ? .settings : nil) {
@@ -88,7 +93,17 @@ final class LingobarController: NSObject, NSWindowDelegate {
             NotificationCenter.default.removeObserver(settingsObserver)
             self.settingsObserver = nil
         }
+        if let appActivationObserver {
+            NotificationCenter.default.removeObserver(appActivationObserver)
+            self.appActivationObserver = nil
+        }
         removeStatusItem()
+    }
+
+    private func refreshRuntimeSettings() {
+        viewModel.actions = AppSettings.actionOrder
+        viewModel.setupGateStatus = AppSettings.setupGateStatus
+        updateStatusItemVisibility()
     }
 
     func toggle() {

@@ -55,8 +55,9 @@ final class LingobarHubWindowController {
                 onClose: { [weak self] in
                     self?.close()
                 },
-                onOpenAccessibility: {
+                onOpenAccessibility: { [weak self] in
                     Self.openAccessibilitySettings()
+                    self?.state.refreshSettings()
                 },
                 onRelaunch: { [weak self] item in
                     self?.close()

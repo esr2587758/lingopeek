@@ -29,11 +29,12 @@ public struct OpenAICompatibleClient: Sendable {
         self.urlSession = urlSession
     }
 
-    public func complete(system: String, user: String) async throws -> String {
+    public func complete(system: String, user: String, maxTokens: Int = 4096) async throws -> String {
         let request = try OpenAICompatibleRequestFactory.request(
             configuration: configuration,
             system: system,
-            user: user
+            user: user,
+            maxTokens: maxTokens
         )
         let (data, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -76,7 +77,8 @@ public enum OpenAICompatibleRequestFactory {
     public static func request(
         configuration: AIProviderConfiguration,
         system: String,
-        user: String
+        user: String,
+        maxTokens: Int = 4096
     ) throws -> URLRequest {
         guard configuration.isUsable,
               let baseURL = configuration.normalizedBaseURL else {
@@ -97,8 +99,9 @@ public enum OpenAICompatibleRequestFactory {
                 OpenAIMessage(role: "user", content: user)
             ],
             temperature: 0.2,
-            maxTokens: 4096,
+            maxTokens: maxTokens,
             responseFormat: OpenAIResponseFormat(type: "json_object"),
+            thinking: thinkingConfiguration(for: configuration),
             stream: false
         )
         request.httpBody = try JSONEncoder().encode(body)
@@ -129,10 +132,19 @@ public enum OpenAICompatibleRequestFactory {
             temperature: 0,
             maxTokens: 8,
             responseFormat: nil,
+            thinking: nil,
             stream: false
         )
         request.httpBody = try JSONEncoder().encode(body)
         return request
+    }
+
+    private static func thinkingConfiguration(for configuration: AIProviderConfiguration) -> OpenAIThinkingConfig? {
+        let model = configuration.normalizedModel.lowercased()
+        guard model.hasPrefix("deepseek-v4") else {
+            return nil
+        }
+        return OpenAIThinkingConfig(type: "disabled")
     }
 }
 
@@ -142,6 +154,7 @@ public struct OpenAIChatRequest: Codable, Equatable, Sendable {
     public var temperature: Double
     public var maxTokens: Int?
     public var responseFormat: OpenAIResponseFormat?
+    public var thinking: OpenAIThinkingConfig?
     public var stream: Bool
 
     public init(
@@ -150,6 +163,7 @@ public struct OpenAIChatRequest: Codable, Equatable, Sendable {
         temperature: Double,
         maxTokens: Int? = nil,
         responseFormat: OpenAIResponseFormat? = nil,
+        thinking: OpenAIThinkingConfig? = nil,
         stream: Bool
     ) {
         self.model = model
@@ -157,6 +171,7 @@ public struct OpenAIChatRequest: Codable, Equatable, Sendable {
         self.temperature = temperature
         self.maxTokens = maxTokens
         self.responseFormat = responseFormat
+        self.thinking = thinking
         self.stream = stream
     }
 
@@ -166,11 +181,20 @@ public struct OpenAIChatRequest: Codable, Equatable, Sendable {
         case temperature
         case maxTokens = "max_tokens"
         case responseFormat = "response_format"
+        case thinking
         case stream
     }
 }
 
 public struct OpenAIResponseFormat: Codable, Equatable, Sendable {
+    public var type: String
+
+    public init(type: String) {
+        self.type = type
+    }
+}
+
+public struct OpenAIThinkingConfig: Codable, Equatable, Sendable {
     public var type: String
 
     public init(type: String) {

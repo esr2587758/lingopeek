@@ -1,5 +1,207 @@
 import Foundation
 
+fileprivate extension KeyedDecodingContainer {
+    func decodeLossyStringIfPresent(forKey key: Key) throws -> String? {
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return String(value)
+        }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return String(value)
+        }
+        return nil
+    }
+
+    func decodeLossyIntIfPresent(forKey key: Key) throws -> Int? {
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return Int(value)
+        }
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
+
+    func decodeLossyBoolIfPresent(forKey key: Key) throws -> Bool? {
+        if let value = try? decodeIfPresent(Bool.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "yes", "1":
+                return true
+            case "false", "no", "0":
+                return false
+            default:
+                return nil
+            }
+        }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return value != 0
+        }
+        return nil
+    }
+
+    func decodeLossyStringArrayIfPresent(forKey key: Key) throws -> [String]? {
+        if let values = try? decodeIfPresent([String].self, forKey: key) {
+            return values
+        }
+        if let values = try? decodeIfPresent([GrammarLooseValue].self, forKey: key) {
+            return values.compactMap(\.stringValue)
+        }
+        if let value = try? decodeIfPresent(GrammarLooseValue.self, forKey: key),
+           let string = value.stringValue {
+            return [string]
+        }
+        return nil
+    }
+
+    func decodeLossyIntArrayIfPresent(forKey key: Key) throws -> [Int]? {
+        if let values = try? decodeIfPresent([Int].self, forKey: key) {
+            return values
+        }
+        if let values = try? decodeIfPresent([GrammarLooseValue].self, forKey: key) {
+            let ints = values.compactMap(\.intValue)
+            return ints.isEmpty ? nil : ints
+        }
+        if let value = try? decodeIfPresent(GrammarLooseValue.self, forKey: key) {
+            if let ints = value.intArrayValue, !ints.isEmpty {
+                return ints
+            }
+            if let int = value.intValue {
+                return [int]
+            }
+        }
+        return nil
+    }
+}
+
+fileprivate struct GrammarLooseCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = String(intValue)
+        self.intValue = intValue
+    }
+}
+
+fileprivate enum GrammarLooseValue: Decodable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case array([GrammarLooseValue])
+    case object([String: GrammarLooseValue])
+    case null
+
+    init(from decoder: Decoder) throws {
+        if let container = try? decoder.singleValueContainer() {
+            if container.decodeNil() {
+                self = .null
+                return
+            }
+            if let value = try? container.decode(String.self) {
+                self = .string(value)
+                return
+            }
+            if let value = try? container.decode(Int.self) {
+                self = .int(value)
+                return
+            }
+            if let value = try? container.decode(Double.self) {
+                self = .double(value)
+                return
+            }
+            if let value = try? container.decode(Bool.self) {
+                self = .bool(value)
+                return
+            }
+        }
+
+        if var container = try? decoder.unkeyedContainer() {
+            var values: [GrammarLooseValue] = []
+            while !container.isAtEnd {
+                values.append(try container.decode(GrammarLooseValue.self))
+            }
+            self = .array(values)
+            return
+        }
+
+        let container = try decoder.container(keyedBy: GrammarLooseCodingKey.self)
+        var values: [String: GrammarLooseValue] = [:]
+        for key in container.allKeys {
+            values[key.stringValue] = try container.decode(GrammarLooseValue.self, forKey: key)
+        }
+        self = .object(values)
+    }
+
+    var stringValue: String? {
+        switch self {
+        case .string(let value):
+            return value
+        case .int(let value):
+            return String(value)
+        case .double(let value):
+            return String(value)
+        case .bool(let value):
+            return String(value)
+        case .array(let values):
+            let text = values.compactMap(\.stringValue).joined(separator: " ")
+            return text.isEmpty ? nil : text
+        case .object(let values):
+            for key in ["text", "w", "phrase", "title", "label", "note", "id", "from", "to", "role"] {
+                if let value = values[key]?.stringValue, !value.isEmpty {
+                    return value
+                }
+            }
+            return nil
+        case .null:
+            return nil
+        }
+    }
+
+    var intValue: Int? {
+        switch self {
+        case .int(let value):
+            return value
+        case .double(let value):
+            return Int(value)
+        case .string(let value):
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        case .bool(let value):
+            return value ? 1 : 0
+        default:
+            return nil
+        }
+    }
+
+    var intArrayValue: [Int]? {
+        switch self {
+        case .array(let values):
+            let ints = values.compactMap(\.intValue)
+            return ints.isEmpty ? nil : ints
+        case .string(let value):
+            let ints = value
+                .split { !$0.isNumber && $0 != "-" }
+                .compactMap { Int($0) }
+            return ints.isEmpty ? nil : ints
+        default:
+            return nil
+        }
+    }
+}
+
 public enum GrammarRole: String, Codable, CaseIterable, Identifiable, Sendable {
     case subject
     case predicate
@@ -10,6 +212,33 @@ public enum GrammarRole: String, Codable, CaseIterable, Identifiable, Sendable {
     case conj
 
     public var id: String { rawValue }
+
+    public init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case "subject", "主语":
+            self = .subject
+        case "predicate", "谓语":
+            self = .predicate
+        case "object", "宾语":
+            self = .object
+        case "attr", "定语":
+            self = .attr
+        case "appos", "同位语":
+            self = .appos
+        case "adv", "状语":
+            self = .adv
+        case "conj", "连接词":
+            self = .conj
+        default:
+            self = .attr
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 
     public var zh: String {
         switch self {
@@ -160,9 +389,9 @@ public struct GrammarChunk: Codable, Equatable, Identifiable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try container.decode(String.self, forKey: .id)
-        self.role = try container.decode(GrammarRole.self, forKey: .role)
-        self.text = try container.decode(String.self, forKey: .text)
+        self.role = try container.decodeIfPresent(GrammarRole.self, forKey: .role) ?? .attr
+        self.text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
+        self.id = try container.decodeLossyStringIfPresent(forKey: .id) ?? (text.isEmpty ? role.rawValue : text)
         self.label = try container.decodeIfPresent(String.self, forKey: .label) ?? role.zh
         self.note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         self.tokens = try container.decodeIfPresent([GrammarToken].self, forKey: .tokens) ?? []
@@ -179,6 +408,25 @@ public struct GrammarToken: Codable, Equatable, Sendable {
         self.pos = pos
         self.infl = infl
     }
+
+    enum CodingKeys: String, CodingKey {
+        case w
+        case pos
+        case infl
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.w = value
+            self.pos = ""
+            self.infl = ""
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.w = try container.decodeIfPresent(String.self, forKey: .w) ?? ""
+        self.pos = try container.decodeIfPresent(String.self, forKey: .pos) ?? ""
+        self.infl = try container.decodeIfPresent(String.self, forKey: .infl) ?? ""
+    }
 }
 
 public struct GrammarDependency: Codable, Equatable, Identifiable, Sendable {
@@ -191,6 +439,25 @@ public struct GrammarDependency: Codable, Equatable, Identifiable, Sendable {
         self.from = from
         self.to = to
         self.label = label
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case from
+        case to
+        case label
+    }
+
+    public init(from decoder: Decoder) throws {
+        if var values = try? decoder.unkeyedContainer() {
+            self.from = (try? values.decode(GrammarLooseValue.self).stringValue) ?? ""
+            self.to = (try? values.decode(GrammarLooseValue.self).stringValue) ?? ""
+            self.label = (try? values.decode(GrammarLooseValue.self).stringValue) ?? "关系"
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.from = try container.decodeLossyStringIfPresent(forKey: .from) ?? ""
+        self.to = try container.decodeLossyStringIfPresent(forKey: .to) ?? ""
+        self.label = try container.decodeIfPresent(String.self, forKey: .label) ?? "关系"
     }
 }
 
@@ -222,9 +489,9 @@ public struct GrammarTreeNode: Codable, Equatable, Identifiable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.label = try container.decode(String.self, forKey: .label)
-        self.role = try container.decode(GrammarRole.self, forKey: .role)
-        self.text = try container.decode(String.self, forKey: .text)
+        self.label = try container.decodeIfPresent(String.self, forKey: .label) ?? "主句"
+        self.role = try container.decodeIfPresent(GrammarRole.self, forKey: .role) ?? .predicate
+        self.text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
         self.children = try container.decodeIfPresent([GrammarTreeNode].self, forKey: .children) ?? []
     }
 }
@@ -239,6 +506,19 @@ public struct GrammarTrunk: Codable, Equatable, Sendable {
         self.dropped = dropped
         self.coreZh = coreZh
     }
+
+    enum CodingKeys: String, CodingKey {
+        case core
+        case dropped
+        case coreZh
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.core = try container.decodeIfPresent([GrammarTrunkItem].self, forKey: .core) ?? []
+        self.dropped = try container.decodeLossyStringArrayIfPresent(forKey: .dropped) ?? []
+        self.coreZh = try container.decodeIfPresent(String.self, forKey: .coreZh) ?? ""
+    }
 }
 
 public struct GrammarTrunkItem: Codable, Equatable, Identifiable, Sendable {
@@ -249,6 +529,22 @@ public struct GrammarTrunkItem: Codable, Equatable, Identifiable, Sendable {
     public init(w: String, role: GrammarRole) {
         self.w = w
         self.role = role
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case w
+        case role
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.w = value
+            self.role = .predicate
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.w = try container.decodeIfPresent(String.self, forKey: .w) ?? ""
+        self.role = try container.decodeIfPresent(GrammarRole.self, forKey: .role) ?? .predicate
     }
 }
 
@@ -282,6 +578,30 @@ public struct GrammarTenseClause: Codable, Equatable, Identifiable, Sendable {
         self.why = why
         self.svo = svo
     }
+
+    enum CodingKeys: String, CodingKey {
+        case scope
+        case verb
+        case tense
+        case aspect
+        case voice
+        case mood
+        case why
+        case svo
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.scope = try container.decodeIfPresent(String.self, forKey: .scope) ?? "句子"
+        self.verb = try container.decodeIfPresent(String.self, forKey: .verb) ?? ""
+        self.tense = try container.decodeIfPresent(String.self, forKey: .tense) ?? "一般时"
+        self.aspect = try container.decodeIfPresent(String.self, forKey: .aspect) ?? "一般体"
+        self.voice = try container.decodeIfPresent(String.self, forKey: .voice) ?? "主动"
+        self.mood = try container.decodeIfPresent(String.self, forKey: .mood) ?? "陈述"
+        self.why = try container.decodeIfPresent(String.self, forKey: .why) ?? ""
+        self.svo = try container.decodeIfPresent(GrammarSVO.self, forKey: .svo)
+            ?? GrammarSVO(agent: "", action: self.verb, receiver: nil)
+    }
 }
 
 public struct GrammarSVO: Codable, Equatable, Sendable {
@@ -293,6 +613,19 @@ public struct GrammarSVO: Codable, Equatable, Sendable {
         self.agent = agent
         self.action = action
         self.receiver = receiver
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case action
+        case receiver
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.agent = try container.decodeIfPresent(String.self, forKey: .agent) ?? ""
+        self.action = try container.decodeIfPresent(String.self, forKey: .action) ?? ""
+        self.receiver = try container.decodeIfPresent(String.self, forKey: .receiver)
     }
 }
 
@@ -307,6 +640,21 @@ public struct GrammarWordOrder: Codable, Equatable, Sendable {
         self.zhOrder = zhOrder
         self.zhText = zhText
         self.note = note
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case en
+        case zhOrder
+        case zhText
+        case note
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.en = try container.decodeIfPresent([GrammarOrderSegment].self, forKey: .en) ?? []
+        self.zhOrder = try container.decodeLossyIntArrayIfPresent(forKey: .zhOrder) ?? self.en.map(\.id)
+        self.zhText = try container.decodeLossyStringArrayIfPresent(forKey: .zhText) ?? self.en.map(\.text)
+        self.note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
 }
 
@@ -335,11 +683,11 @@ public struct GrammarOrderSegment: Codable, Equatable, Identifiable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try container.decode(Int.self, forKey: .id)
-        self.text = try container.decode(String.self, forKey: .text)
-        self.role = try container.decode(GrammarRole.self, forKey: .role)
-        self.zhPos = try container.decodeIfPresent(Int.self, forKey: .zhPos) ?? id
-        self.moved = try container.decodeIfPresent(Bool.self, forKey: .moved) ?? false
+        self.id = try container.decodeLossyIntIfPresent(forKey: .id) ?? 0
+        self.text = try container.decodeLossyStringIfPresent(forKey: .text) ?? ""
+        self.role = try container.decodeIfPresent(GrammarRole.self, forKey: .role) ?? .attr
+        self.zhPos = try container.decodeLossyIntIfPresent(forKey: .zhPos) ?? id
+        self.moved = try container.decodeLossyBoolIfPresent(forKey: .moved) ?? false
     }
 }
 
@@ -350,6 +698,22 @@ public struct GrammarPattern: Codable, Equatable, Sendable {
     public init(en: String, zh: String) {
         self.en = en
         self.zh = zh
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case en
+        case zh
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.en = value
+            self.zh = ""
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.en = try container.decodeIfPresent(String.self, forKey: .en) ?? ""
+        self.zh = try container.decodeIfPresent(String.self, forKey: .zh) ?? ""
     }
 }
 
@@ -368,6 +732,31 @@ public struct GrammarCollocation: Codable, Equatable, Identifiable, Sendable {
         self.note = note
         self.example = example
     }
+
+    enum CodingKeys: String, CodingKey {
+        case phrase
+        case pos
+        case zh
+        case note
+        case example
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.phrase = value
+            self.pos = ""
+            self.zh = ""
+            self.note = ""
+            self.example = ""
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.phrase = try container.decodeIfPresent(String.self, forKey: .phrase) ?? ""
+        self.pos = try container.decodeIfPresent(String.self, forKey: .pos) ?? ""
+        self.zh = try container.decodeIfPresent(String.self, forKey: .zh) ?? ""
+        self.note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        self.example = try container.decodeIfPresent(String.self, forKey: .example) ?? ""
+    }
 }
 
 public struct GrammarPhrase: Codable, Equatable, Identifiable, Sendable {
@@ -378,6 +767,22 @@ public struct GrammarPhrase: Codable, Equatable, Identifiable, Sendable {
     public init(en: String, zh: String) {
         self.en = en
         self.zh = zh
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case en
+        case zh
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.en = value
+            self.zh = ""
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.en = try container.decodeIfPresent(String.self, forKey: .en) ?? ""
+        self.zh = try container.decodeIfPresent(String.self, forKey: .zh) ?? ""
     }
 }
 
@@ -391,6 +796,25 @@ public struct GrammarPoint: Codable, Equatable, Identifiable, Sendable {
         self.tag = tag
         self.title = title
         self.body = body
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case tag
+        case title
+        case body
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.tag = "语法"
+            self.title = value
+            self.body = ""
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.tag = try container.decodeIfPresent(String.self, forKey: .tag) ?? "语法"
+        self.title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        self.body = try container.decodeIfPresent(String.self, forKey: .body) ?? ""
     }
 }
 

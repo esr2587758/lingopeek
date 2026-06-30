@@ -5,6 +5,9 @@ import Foundation
 
 struct SelectionReader {
     func selectedTextIncludingClipboardFallback() -> String? {
+        guard Self.canReadSelection else {
+            return nil
+        }
         if let selectedText = selectedText() {
             return selectedText
         }
@@ -15,6 +18,9 @@ struct SelectionReader {
     }
 
     func selectedText() -> String? {
+        guard Self.canReadSelection else {
+            return nil
+        }
         let system = AXUIElementCreateSystemWide()
         var focusedValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
@@ -33,7 +39,14 @@ struct SelectionReader {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private static var canReadSelection: Bool {
+        AXIsProcessTrusted()
+    }
+
     private func selectedTextRangeLength() -> Int? {
+        guard Self.canReadSelection else {
+            return nil
+        }
         let system = AXUIElementCreateSystemWide()
         var focusedValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
@@ -57,6 +70,9 @@ struct SelectionReader {
     }
 
     private func selectedTextByCopyingSelection() -> String? {
+        guard Self.canReadSelection else {
+            return nil
+        }
         let pasteboard = NSPasteboard.general
         let snapshot = PasteboardSnapshot(pasteboard: pasteboard)
         let oldChangeCount = pasteboard.changeCount

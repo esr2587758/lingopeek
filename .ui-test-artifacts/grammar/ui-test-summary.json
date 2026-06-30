@@ -1,0 +1,112 @@
+[
+  {
+    "case": 1,
+    "sentence": "Although the proposal that the council approved in principle was designed to reduce costs, the incentives it created made agencies postpone maintenance until small issues became expensive failures.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 4.5462470054626465,
+    "complete_seconds": 9.666427969932556,
+    "wall_seconds": 11.523923917207867,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-01.png",
+    "error": null
+  },
+  {
+    "case": 2,
+    "sentence": "By the time the report was released, the engineers who had warned that the authentication service might fail under heavy load had already redesigned the module that controlled session renewal.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 3.6491090059280396,
+    "complete_seconds": 9.477745056152344,
+    "wall_seconds": 10.806218083947897,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-02.png",
+    "error": null
+  },
+  {
+    "case": 3,
+    "sentence": "The findings published last year call into question long-held assumptions that memory is consolidated while we sleep.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 3.187841057777405,
+    "complete_seconds": 7.275107026100159,
+    "wall_seconds": 8.75138358399272,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-03.png",
+    "error": null
+  },
+  {
+    "case": 4,
+    "sentence": "Because the researchers who collected the survey data excluded participants whose answers were incomplete, the final model underestimated how strongly commuting time affected retention.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 4.669189929962158,
+    "complete_seconds": 9.324423909187317,
+    "wall_seconds": 10.794211040716618,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-04.png",
+    "error": null
+  },
+  {
+    "case": 5,
+    "sentence": "What surprised the committee was not that the budget had increased, but that the teams responsible for forecasting demand had ignored the warnings they themselves had documented.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 3.9009950160980225,
+    "complete_seconds": 7.997113943099976,
+    "wall_seconds": 9.495132916606963,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-05.png",
+    "error": null
+  },
+  {
+    "case": 6,
+    "sentence": "If the platform continues to prioritize features that attract new users while neglecting the workflows that retain existing customers, revenue may grow briefly before support costs erase the gains.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 4.357096076011658,
+    "complete_seconds": 9.605923056602478,
+    "wall_seconds": 11.07518516620621,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-06.png",
+    "error": null
+  },
+  {
+    "case": 7,
+    "sentence": "The contract, which had been negotiated before the supplier changed ownership, required the manufacturer to absorb delays that neither side could reasonably have predicted.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 4.0152260065078735,
+    "complete_seconds": 9.21890103816986,
+    "wall_seconds": 10.566488457843661,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-07.png",
+    "error": null
+  },
+  {
+    "case": 8,
+    "sentence": "Rather than simplifying the onboarding process, the checklist that managers introduced after the audit forced new employees to repeat information that had already been captured elsewhere.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 3.979442000389099,
+    "complete_seconds": 8.3768630027771,
+    "wall_seconds": 9.776060791220516,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-08.png",
+    "error": null
+  },
+  {
+    "case": 9,
+    "sentence": "No sooner had the city announced the transit subsidy than several landlords raised rents near the stations where lower-income workers were expected to benefit most.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 4.6296080350875854,
+    "complete_seconds": 9.401300072669983,
+    "wall_seconds": 10.911820209119469,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-09.png",
+    "error": null
+  },
+  {
+    "case": 10,
+    "sentence": "The assumption that students learn more effectively when feedback is immediate becomes harder to defend when the task requires reflection rather than rapid correction.",
+    "model": "deepseek-v4-flash",
+    "status": "complete",
+    "spine_seconds": 3.2346030473709106,
+    "complete_seconds": 8.80707597732544,
+    "wall_seconds": 10.095874750055373,
+    "screenshot": "/Users/lancer/.codex/worktrees/bffc/LingoPeek/.ui-test-artifacts/grammar/screenshots/case-10.png",
+    "error": null
+  }
+]

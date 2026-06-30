@@ -1,0 +1,4 @@
+{"event":"start","status":"AI 生成中","requestID":"C3842178-41E7-420F-844D-CCBF0511D139","recordedAt":804446947.202469,"action":"translate","elapsed":3.910064697265625e-05}
+{"recordedAt":804446947.20302,"event":"start","action":"grammar","elapsed":2.09808349609375e-05,"status":"AI 生成中","requestID":"A67ABF79-C13A-49F3-8066-57AE2E310D2A"}
+{"event":"spine","action":"grammar","recordedAt":804446951.182443,"status":"语法骨架完成","elapsed":3.979442000389099,"requestID":"A67ABF79-C13A-49F3-8066-57AE2E310D2A"}
+{"action":"grammar","recordedAt":804446955.579867,"elapsed":8.3768630027771,"status":"AI 完成","requestID":"A67ABF79-C13A-49F3-8066-57AE2E310D2A","event":"complete"}

@@ -60,14 +60,60 @@ enum AppSettings {
     }
 
     static var setupGateStatus: SetupGateStatus {
-        SetupGateStatus(
+        if uiTestBypassesSetupGate {
+            return SetupGateStatus(
+                aiAccessConfigured: aiConfiguration.isUsable,
+                accessibilityPermissionGranted: true
+            )
+        }
+        return SetupGateStatus(
             aiAccessConfigured: aiConfiguration.isUsable,
             accessibilityPermissionGranted: isAccessibilityPermissionGranted
         )
     }
 
+    static var uiTestBypassesSetupGate: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        if firstNonEmpty(environment["LINGOPEEK_UI_TEST_BYPASS_SETUP"]) == "1" {
+            return true
+        }
+        guard isUITestRuntime else {
+            return false
+        }
+        return UserDefaults.standard.bool(forKey: "LINGOPEEK_UI_TEST_BYPASS_SETUP")
+    }
+
+    private static var isUITestRuntime: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        if firstNonEmpty(environment["LINGOPEEK_UI_TEST_MODE"]) == "1" {
+            return true
+        }
+        return Bundle.main.bundleIdentifier?.localizedCaseInsensitiveContains("UITest") == true
+    }
+
+    static var uiTestMetricsPath: String {
+        firstNonEmpty(
+            ProcessInfo.processInfo.environment["LINGOPEEK_UI_TEST_METRICS_PATH"],
+            UserDefaults.standard.string(forKey: "LINGOPEEK_UI_TEST_METRICS_PATH")
+        )
+    }
+
     static var usesGrammarFixture: Bool {
         firstNonEmpty(ProcessInfo.processInfo.environment["LINGOPEEK_GRAMMAR_FIXTURE"]) == "1"
+    }
+
+    static var accessibilityRuntimeIdentityNote: String {
+        guard isSwiftPMRuntime else {
+            return ""
+        }
+        let executablePath = Bundle.main.executableURL?.path ?? CommandLine.arguments.first ?? "unknown"
+        let bundleID = Bundle.main.bundleIdentifier ?? "无 bundle id"
+        return "当前通过 SwiftPM/debug 可执行文件运行。macOS 辅助功能权限可能归属于 Terminal、Codex 或 .build 里的调试程序，不等同于系统设置中的 LingoPeek.app。当前 bundle：\(bundleID)，可执行文件：\(executablePath)"
+    }
+
+    private static var isSwiftPMRuntime: Bool {
+        let executablePath = Bundle.main.executableURL?.path ?? CommandLine.arguments.first ?? ""
+        return executablePath.contains("/.build/") || !Bundle.main.bundleURL.path.hasSuffix(".app")
     }
 
     static var grammarFixtureID: String {

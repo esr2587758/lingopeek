@@ -42,6 +42,40 @@ public struct LingobarRow: Codable, Equatable, Sendable {
         self.label = label
         self.value = value
     }
+
+    enum CodingKeys: String, CodingKey {
+        case label
+        case value
+        case title
+        case name
+        case text
+        case content
+        case result
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.label = "结果"
+            self.value = value
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.label = try container.decodeIfPresent(String.self, forKey: .label)
+            ?? container.decodeIfPresent(String.self, forKey: .title)
+            ?? container.decodeIfPresent(String.self, forKey: .name)
+            ?? "结果"
+        self.value = try container.decodeIfPresent(String.self, forKey: .value)
+            ?? container.decodeIfPresent(String.self, forKey: .text)
+            ?? container.decodeIfPresent(String.self, forKey: .content)
+            ?? container.decodeIfPresent(String.self, forKey: .result)
+            ?? ""
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(label, forKey: .label)
+        try container.encode(value, forKey: .value)
+    }
 }
 
 public struct DefaultCollectionItem: Codable, Equatable, Sendable {
@@ -53,6 +87,25 @@ public struct DefaultCollectionItem: Codable, Equatable, Sendable {
         self.title = title
         self.note = note
         self.type = type
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case note
+        case type
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.title = value
+            self.note = ""
+            self.type = "文本"
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        self.note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        self.type = try container.decodeIfPresent(String.self, forKey: .type) ?? "文本"
     }
 }
 

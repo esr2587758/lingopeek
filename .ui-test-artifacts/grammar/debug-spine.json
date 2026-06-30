@@ -1,0 +1,59 @@
+{
+  "title": "让步状语从句 + 主句",
+  "sourceSentence": "Although the proposal that the council approved in principle was designed to reduce costs, the incentives it created made agencies postpone maintenance until small issues became expensive failures.",
+  "chineseMeaning": "尽管委员会原则上批准的提案旨在降低成本，但它产生的激励措施导致机构推迟维护，直到小问题变成代价高昂的故障。",
+  "analysisScopeNote": "分析整个复合句，包含让步状语从句和主句。",
+  "chunks": [
+    {
+      "id": 1,
+      "role": "conj",
+      "text": "Although",
+      "label": "让步连词",
+      "note": "引导让步状语从句"
+    },
+    {
+      "id": 2,
+      "role": "subject",
+      "text": "the proposal that the council approved in principle",
+      "label": "主语（含定语从句）",
+      "note": "核心词proposal，后接that引导的定语从句修饰"
+    },
+    {
+      "id": 3,
+      "role": "predicate",
+      "text": "was designed to reduce costs",
+      "label": "谓语",
+      "note": "被动语态，不定式表目的"
+    },
+    {
+      "id": 4,
+      "role": "subject",
+      "text": "the incentives it created",
+      "label": "主语（含定语从句）",
+      "note": "核心词incentives，后接省略that的定语从句"
+    },
+    {
+      "id": 5,
+      "role": "predicate",
+      "text": "made agencies postpone maintenance",
+      "label": "谓语",
+      "note": "make + 宾语 + 省略to的不定式"
+    },
+    {
+      "id": 6,
+      "role": "adv",
+      "text": "until small issues became expensive failures",
+      "label": "时间状语从句",
+      "note": "until引导，表示直到...才"
+    }
+  ],
+  "pattern": {
+    "en": "Although + clause1, clause2",
+    "zh": "虽然从句1，主句2"
+  },
+  "defaultCollectionItem": {
+    "title": "让步状语从句",
+    "note": "Although引导的让步状语从句，主句表示结果",
+    "type": "句型"
+  }
+}

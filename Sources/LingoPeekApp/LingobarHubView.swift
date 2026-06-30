@@ -415,6 +415,7 @@ struct LingobarHubView: View {
 
     private let sidebarWidth: CGFloat = 188
     private let detailWidth: CGFloat = 320
+    private let permissionRefreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -467,6 +468,13 @@ struct LingobarHubView: View {
             state.refresh()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            state.refreshSettings()
+        }
+        .onReceive(permissionRefreshTimer) { _ in
+            guard state.selectedSection == .settings,
+                  state.selectedSettingsSectionID == .permissions else {
+                return
+            }
             state.refreshSettings()
         }
     }
@@ -1195,21 +1203,30 @@ private struct PermissionsSettingsSection: View {
 
     var body: some View {
         HubSettingsGroup(title: "系统权限") {
-            HStack(spacing: 12) {
-                Image(systemName: state.settings.accessibilityPermissionGranted ? "checkmark.shield.fill" : "shield.lefthalf.filled")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(state.settings.accessibilityPermissionGranted ? HubColor.ok : HubColor.warn)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(state.settings.accessibilityPermissionGranted ? "辅助功能已授权" : "需要辅助功能授权")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(HubColor.primaryText)
-                    Text("授权后，Lingobar 才能从前台 App 读取选中文本。")
-                        .font(.system(size: 12))
-                        .foregroundStyle(HubColor.secondaryText)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: state.settings.accessibilityPermissionGranted ? "checkmark.shield.fill" : "shield.lefthalf.filled")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(state.settings.accessibilityPermissionGranted ? HubColor.ok : HubColor.warn)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(state.settings.accessibilityPermissionGranted ? "辅助功能已授权" : "需要辅助功能授权")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(HubColor.primaryText)
+                        Text("授权后，Lingobar 才能从前台 App 读取选中文本。")
+                            .font(.system(size: 12))
+                            .foregroundStyle(HubColor.secondaryText)
+                    }
+                    Spacer()
+                    Button("打开系统设置", action: onOpenAccessibility)
+                        .buttonStyle(HubSecondaryButtonStyle())
                 }
-                Spacer()
-                Button("打开系统设置", action: onOpenAccessibility)
-                    .buttonStyle(HubSecondaryButtonStyle())
+
+                if !AppSettings.accessibilityRuntimeIdentityNote.isEmpty {
+                    Text(AppSettings.accessibilityRuntimeIdentityNote)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(HubColor.warn)
+                        .lineSpacing(3)
+                }
             }
         }
     }

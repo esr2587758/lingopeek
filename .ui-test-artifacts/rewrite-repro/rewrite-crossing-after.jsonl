@@ -1,0 +1,6 @@
+{"status":"AI 生成中","requestID":"43D8BABC-0046-4A5F-BB91-E00FFC14B8DC","elapsed":4.792213439941406e-05,"event":"start","action":"translate","recordedAt":804447141.501619}
+{"status":"AI 生成中","requestID":"377442B7-D5B3-40CD-9FC0-62D2070D060D","elapsed":2.4080276489257812e-05,"event":"start","action":"grammar","recordedAt":804447141.502401}
+{"action":"grammar","requestID":"377442B7-D5B3-40CD-9FC0-62D2070D060D","status":"语法骨架完成","elapsed":2.5334250926971436,"recordedAt":804447144.035804,"event":"spine"}
+{"status":"AI 完成","recordedAt":804447147.851606,"event":"complete","requestID":"377442B7-D5B3-40CD-9FC0-62D2070D060D","action":"grammar","elapsed":6.349227070808411}
+{"recordedAt":804447148.50259,"elapsed":3.707408905029297e-05,"action":"rewrite","event":"start","requestID":"AE67F59B-013F-4D44-8BFD-54757BB08FEE","status":"AI 生成中"}
+{"event":"complete","action":"rewrite","elapsed":2.1357229948043823,"requestID":"AE67F59B-013F-4D44-8BFD-54757BB08FEE","recordedAt":804447150.638278,"status":"AI 完成"}

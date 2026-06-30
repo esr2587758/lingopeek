@@ -257,7 +257,7 @@ struct LingobarRootView: View {
         .frame(maxWidth: .infinity)
     }
     private func resultPanel(showActionBar: Bool) -> some View {
-        if viewModel.action == .grammar, let grammarResult = viewModel.grammarResult, !viewModel.isLoading {
+        if viewModel.action == .grammar, let grammarResult = viewModel.grammarResult {
             return AnyView(grammarResultPanel(grammarResult))
         }
 
@@ -437,7 +437,7 @@ struct LingobarRootView: View {
         case .setup:
             360
         case .selection:
-            if viewModel.action == .grammar, viewModel.grammarResult != nil, !viewModel.isLoading {
+            if viewModel.action == .grammar, viewModel.grammarResult != nil {
                 812
             } else {
                 viewModel.isLoading ? 441 : 480

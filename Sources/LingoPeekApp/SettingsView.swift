@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var actionDropTarget: LanguageAction?
     @State private var aiConnectionTestState = AIConnectionTestState.idle
     @State private var aiConnectionTestID = UUID()
+    private let permissionRefreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private static var initialSection: LingobarSettingsSectionID {
         let rawValue = ProcessInfo.processInfo.environment["LINGOPEEK_RENDER_SETTINGS_SECTION"] ?? ""
@@ -57,6 +58,12 @@ struct SettingsView: View {
         .background(Color.clear)
         .onAppear(perform: refreshSettings)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshSettings()
+        }
+        .onReceive(permissionRefreshTimer) { _ in
+            guard selectedSection == .permissions else {
+                return
+            }
             refreshSettings()
         }
     }
@@ -434,6 +441,7 @@ struct SettingsView: View {
                     } else {
                         Button("去授权") {
                             openAccessibilitySettings()
+                            refreshSettings()
                             flash("已打开系统设置")
                         }
                         .buttonStyle(SettingsPrimaryButtonStyle())
@@ -450,6 +458,15 @@ struct SettingsView: View {
                 .lineSpacing(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 2)
+
+            if !AppSettings.accessibilityRuntimeIdentityNote.isEmpty {
+                Text(AppSettings.accessibilityRuntimeIdentityNote)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(SettingsColor.warn)
+                    .lineSpacing(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 2)
+            }
         }
     }
 

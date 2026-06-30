@@ -1,0 +1,4 @@
+{"requestID":"E5B43972-BB20-4F5E-8B42-EAEB9DAAE423","recordedAt":804446968.884971,"elapsed":3.910064697265625e-05,"event":"start","action":"translate","status":"AI 生成中"}
+{"elapsed":2.300739288330078e-05,"event":"start","action":"grammar","requestID":"A7FF6CC0-980D-4BD7-B422-411220DDD879","status":"AI 生成中","recordedAt":804446968.885498}
+{"requestID":"A7FF6CC0-980D-4BD7-B422-411220DDD879","elapsed":3.2346030473709106,"recordedAt":804446972.120082,"status":"语法骨架完成","action":"grammar","event":"spine"}
+{"action":"grammar","recordedAt":804446977.692555,"event":"complete","status":"AI 完成","elapsed":8.80707597732544,"requestID":"A7FF6CC0-980D-4BD7-B422-411220DDD879"}

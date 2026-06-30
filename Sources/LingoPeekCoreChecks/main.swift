@@ -183,6 +183,7 @@ func checkDeepSeekRequestFactory() throws {
     try check(decoded.messages.last?.content == "hello", "request should keep user content")
     try check(decoded.responseFormat?.type == "json_object", "request should ask provider for JSON object output")
     try check(decoded.maxTokens == 4096, "request should reserve enough tokens for structured JSON")
+    try check(decoded.thinking?.type == "disabled", "DeepSeek v4 requests should disable thinking for JSON completions")
     try check(!decoded.stream, "request should be non-streaming")
 }
 
@@ -213,7 +214,26 @@ func checkOpenAICompatibleRequestFactory() throws {
     try check(decoded.messages.last?.content == "hello", "OpenAI-compatible request should keep user content")
     try check(decoded.responseFormat?.type == "json_object", "OpenAI-compatible request should ask for JSON object output")
     try check(decoded.maxTokens == 4096, "OpenAI-compatible request should reserve enough tokens for structured JSON")
+    try check(decoded.thinking == nil, "OpenAI-compatible request should not add provider-specific thinking options for normal models")
     try check(!decoded.stream, "OpenAI-compatible request should be non-streaming")
+
+    let deepSeekV4Configuration = AIProviderConfiguration(
+        apiToken: "test-token",
+        baseURLString: "https://api.deepseek.com",
+        model: "deepseek-v4-flash"
+    )
+    let deepSeekV4Request = try OpenAICompatibleRequestFactory.request(
+        configuration: deepSeekV4Configuration,
+        system: "system prompt",
+        user: "hello",
+        maxTokens: 1000
+    )
+    guard let deepSeekV4Body = deepSeekV4Request.httpBody else {
+        throw CheckFailure.failed("DeepSeek v4 request should have an HTTP body")
+    }
+    let deepSeekV4Decoded = try JSONDecoder().decode(OpenAIChatRequest.self, from: deepSeekV4Body)
+    try check(deepSeekV4Decoded.maxTokens == 1000, "OpenAI-compatible request should allow per-request token budgets")
+    try check(deepSeekV4Decoded.thinking?.type == "disabled", "DeepSeek v4 OpenAI-compatible requests should disable thinking")
 
     let connectivityRequest = try OpenAICompatibleRequestFactory.connectivityTestRequest(configuration: configuration)
     try check(connectivityRequest.url?.absoluteString == "https://api.deepseek.com/chat/completions", "connectivity test should use chat completions endpoint")
@@ -228,6 +248,7 @@ func checkOpenAICompatibleRequestFactory() throws {
     try check(connectivityDecoded.messages.last?.content == "ping", "connectivity test should use a tiny ping prompt")
     try check(connectivityDecoded.responseFormat == nil, "connectivity test should not require JSON mode")
     try check(connectivityDecoded.maxTokens == 8, "connectivity test should use a small token budget")
+    try check(connectivityDecoded.thinking == nil, "connectivity test should not include provider-specific thinking options")
     try check(!connectivityDecoded.stream, "connectivity test should be non-streaming")
 }
 
@@ -398,13 +419,26 @@ func checkStructuredAIResultParsing() throws {
     try check(result.defaultCollectionItem?.title == "call into question", "structured AI result should keep default collection item")
     try check(result.defaultCollectionTitle == "call into question", "structured AI result should bridge default collection title")
 
-    let invalid = #"{"title":"翻译"}"#.data(using: .utf8)!
-    do {
-        _ = try JSONDecoder().decode(StructuredLingobarResult.self, from: invalid)
-        throw CheckFailure.failed("structured AI result should reject missing required fields")
-    } catch is DecodingError {
-        // Expected.
+    let sparse = #"{"title":"翻译"}"#.data(using: .utf8)!
+    let sparseStructured = try JSONDecoder().decode(StructuredLingobarResult.self, from: sparse)
+    try check(sparseStructured.summary == "", "sparse structured AI result should default missing summary")
+    try check(sparseStructured.rows == [LingobarRow("结果", "")], "sparse structured AI result should default missing rows")
+
+    let rewrite = """
+    {
+      "title": "改写",
+      "variants": {
+        "natural": "Traveling across China, one cigarette at a time.",
+        "concise": "Crossing China, cigarette by cigarette."
+      },
+      "chips": "one cigarette at a time"
     }
+    """.data(using: .utf8)!
+    let rewriteStructured = try JSONDecoder().decode(StructuredLingobarResult.self, from: rewrite)
+    try check(rewriteStructured.summary.contains("cigarette"), "rewrite variants should provide a summary")
+    try check(rewriteStructured.rows.count == 2, "rewrite variants object should become rows")
+    try check(rewriteStructured.chips == ["one cigarette at a time"], "single chip string should become a chip array")
+    try check(!rewriteStructured.defaultCollectionItem.title.isEmpty, "rewrite variants should default a collection item")
 }
 
 func checkGrammarResultFixture() throws {
@@ -1057,8 +1091,28 @@ func checkLingobarHubShellSourceGate() throws {
         "Hub settings should refresh external permission state when the app becomes active"
     )
     try check(
+        viewSource.contains("permissionRefreshTimer") &&
+            viewSource.contains("state.selectedSettingsSectionID == .permissions") &&
+            viewSource.contains("state.refreshSettings()"),
+        "Hub permissions section should poll system Accessibility status while visible"
+    )
+    try check(
         settingsViewSource.contains("NSApplication.didBecomeActiveNotification") && settingsViewSource.contains("refreshSettings()"),
         "legacy Settings scene should refresh external permission state when the app becomes active"
+    )
+    try check(
+        settingsViewSource.contains("permissionRefreshTimer") &&
+            settingsViewSource.contains("selectedSection == .permissions") &&
+            settingsViewSource.contains("refreshSettings()"),
+        "legacy permissions section should poll system Accessibility status while visible"
+    )
+    try check(
+        windowSource.contains("Self.openAccessibilitySettings()") && windowSource.contains("state.refreshSettings()"),
+        "opening Accessibility settings from the Hub should immediately refresh the local permission snapshot"
+    )
+    try check(
+        controllerSource.contains("Self.openAccessibilitySettings()") && controllerSource.contains("refreshRuntimeSettings()"),
+        "opening Accessibility settings from the setup gate should immediately refresh runtime permission state"
     )
     try check(viewSource.contains("private static let schemeGridColumns"), "Hub settings appearance schemes should use the reference two-column grid")
     try check(viewSource.contains("Button(\"保存\")"), "Hub API key editing should expose a visible save button")
@@ -1085,6 +1139,34 @@ func checkLingobarHubShellSourceGate() throws {
     try check(appDelegateSource.contains("LINGOPEEK_OPEN_HUB_SECTION"), "Hub launch should support deterministic section routing")
 }
 
+func checkSelectionPermissionSourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let selectionReaderSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/SelectionReader.swift"),
+        encoding: .utf8
+    )
+    let appSettingsSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/AppSettings.swift"),
+        encoding: .utf8
+    )
+
+    try check(selectionReaderSource.contains("private static var canReadSelection"), "selection reader should centralize its permission gate")
+    try check(selectionReaderSource.contains("AXIsProcessTrusted()"), "selection reader should ask the system Accessibility trust API")
+    try check(
+        selectionReaderSource.contains("guard Self.canReadSelection else") &&
+            selectionReaderSource.contains("selectedTextByCopyingSelection"),
+        "selection reader should refuse AX and copy fallback reads when Accessibility is disabled"
+    )
+    try check(appSettingsSource.contains("private static var isUITestRuntime"), "UI test runtime detection should be explicit")
+    try check(
+        appSettingsSource.contains("guard isUITestRuntime else") &&
+            appSettingsSource.contains("UserDefaults.standard.bool(forKey: \"LINGOPEEK_UI_TEST_BYPASS_SETUP\")"),
+        "persisted setup bypass should only apply in UI test runtimes"
+    )
+    try check(appSettingsSource.contains("accessibilityRuntimeIdentityNote"), "settings should expose the current Accessibility runtime identity")
+    try check(appSettingsSource.contains("/.build/"), "runtime identity note should detect SwiftPM debug executables")
+}
+
 do {
     try checkLocalLanguageEngine()
     try checkLanguageActionKeyboardShortcuts()
@@ -1103,6 +1185,7 @@ do {
     try checkLingobarHistoryRecordBuilderPrivacy()
     try checkLingobarHubLibraryItems()
     try checkLingobarViewModelHistoryRecordingSourceGate()
+    try checkSelectionPermissionSourceGate()
     try checkPhraseStore()
     try checkLingobarHubShellSourceGate()
     print("LingoPeekCoreChecks passed")

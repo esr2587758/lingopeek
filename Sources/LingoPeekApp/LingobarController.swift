@@ -77,6 +77,11 @@ final class LingobarController: NSObject, NSWindowDelegate {
             DispatchQueue.main.async { [weak self] in
                 self?.hubWindowController.show(section: openHubOnLaunch)
             }
+        } else if let uiTestSelection = uiTestSelection,
+                  !uiTestSelection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            DispatchQueue.main.async { [weak self] in
+                self?.presentUITestSelection(uiTestSelection)
+            }
         } else {
             present(captureSelectionByCopying: false)
         }
@@ -120,6 +125,22 @@ final class LingobarController: NSObject, NSWindowDelegate {
 
     private func presentFromHotKey() {
         present(captureSelectionByCopying: true)
+    }
+
+    private var uiTestSelection: String? {
+        ProcessInfo.processInfo.environment["LINGOPEEK_UI_TEST_SELECTION"]
+            ?? UserDefaults.standard.string(forKey: "LINGOPEEK_UI_TEST_SELECTION")
+    }
+
+    private func presentUITestSelection(_ selection: String) {
+        viewModel.present(selection: selection, sourceAppName: "UI Test")
+        if LanguageAction.grammar.isAvailable(for: selection) {
+            viewModel.perform(.grammar)
+        }
+        let panel = ensurePanel()
+        panel.setContentSize(contentSize)
+        position(panel)
+        show(panel)
     }
 
     private func registerConfiguredHotKey() {
@@ -251,8 +272,9 @@ final class LingobarController: NSObject, NSWindowDelegate {
                 onOpenSettings: { [weak self] in
                     self?.hubWindowController.show(section: .settings)
                 },
-                onOpenAccessibility: {
+                onOpenAccessibility: { [weak self] in
                     Self.openAccessibilitySettings()
+                    self?.refreshRuntimeSettings()
                 }
             )
         )
@@ -266,10 +288,10 @@ final class LingobarController: NSObject, NSWindowDelegate {
         case .setup:
             Self.setupPanelSize
         case .selection:
-            if viewModel.isLoading {
-                Self.selectionLoadingPanelSize
-            } else if viewModel.action == .grammar, viewModel.grammarResult != nil {
+            if viewModel.action == .grammar, viewModel.grammarResult != nil {
                 Self.grammarPanelSize
+            } else if viewModel.isLoading {
+                Self.selectionLoadingPanelSize
             } else {
                 Self.selectionPanelSize
             }

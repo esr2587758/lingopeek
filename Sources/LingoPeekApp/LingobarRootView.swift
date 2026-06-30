@@ -78,6 +78,15 @@ struct LingobarRootView: View {
                 )
             }
 
+            if !viewModel.setupGateStatus.accessibilityPermissionGranted,
+               !AppSettings.accessibilityRuntimeIdentityNote.isEmpty {
+                Text(AppSettings.accessibilityRuntimeIdentityNote)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.lingoAccentText)
+                    .lineSpacing(3)
+                    .padding(.horizontal, 2)
+            }
+
             HStack(spacing: 8) {
                 footerButton("打开 AI 设置", systemName: "gearshape", prominent: true) {
                     onOpenSettings()
@@ -435,7 +444,12 @@ struct LingobarRootView: View {
     private var rootHeight: CGFloat {
         switch viewModel.mode {
         case .setup:
-            360
+            if !viewModel.setupGateStatus.accessibilityPermissionGranted,
+               !AppSettings.accessibilityRuntimeIdentityNote.isEmpty {
+                430
+            } else {
+                360
+            }
         case .selection:
             if viewModel.action == .grammar, viewModel.grammarResult != nil {
                 812

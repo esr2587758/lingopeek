@@ -45,6 +45,8 @@ The app launches as a menu bar utility and shows the dark Lingobar panel. Select
 
 Move the floating panel by dragging the small header strip at the top of Lingobar.
 
+If Accessibility shows `LingoPeek` as enabled in System Settings but the app still says permission is missing, remove the old `LingoPeek` row from System Settings → Privacy & Security → Accessibility, quit LingoPeek, reopen the current `.app`, then add/enable it again. Local packages are ad-hoc signed, so rebuilding or replacing `LingoPeek.app` can change the code-signing identity that macOS TCC grants.
+
 Open settings from the menu bar item:
 
 ```text

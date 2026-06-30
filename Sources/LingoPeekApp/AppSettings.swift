@@ -1,6 +1,7 @@
 import Foundation
 import LingobarCore
 import ApplicationServices
+import Security
 
 enum AppSettings {
     static let modelKey = "aiModel"
@@ -103,12 +104,44 @@ enum AppSettings {
     }
 
     static var accessibilityRuntimeIdentityNote: String {
-        guard isSwiftPMRuntime else {
-            return ""
-        }
         let executablePath = Bundle.main.executableURL?.path ?? CommandLine.arguments.first ?? "unknown"
         let bundleID = Bundle.main.bundleIdentifier ?? "无 bundle id"
+        guard isSwiftPMRuntime else {
+            guard isUnstableLocalCodeSignature else {
+                return ""
+            }
+            return "当前运行的是本地开发版 .app（未使用稳定 Developer ID/Team 签名）。macOS 辅助功能权限会绑定到当前签名身份；如果你重建或替换过 LingoPeek.app，请在系统设置中删除旧的 LingoPeek 条目，退出并重新打开当前 app 后再添加授权。当前 bundle：\(bundleID)，可执行文件：\(executablePath)"
+        }
         return "当前通过 SwiftPM/debug 可执行文件运行。macOS 辅助功能权限可能归属于 Terminal、Codex 或 .build 里的调试程序，不等同于系统设置中的 LingoPeek.app。当前 bundle：\(bundleID)，可执行文件：\(executablePath)"
+    }
+
+    private static var isUnstableLocalCodeSignature: Bool {
+        guard let signingTeamIdentifier else {
+            return true
+        }
+        return signingTeamIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private static var signingTeamIdentifier: String? {
+        var code: SecCode?
+        guard SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else {
+            return nil
+        }
+
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess,
+              let staticCode else {
+            return nil
+        }
+
+        var signingInfo: CFDictionary?
+        let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
+        guard SecCodeCopySigningInformation(staticCode, flags, &signingInfo) == errSecSuccess,
+              let signingInfo = signingInfo as? [String: Any] else {
+            return nil
+        }
+
+        return signingInfo[kSecCodeInfoTeamIdentifier as String] as? String
     }
 
     private static var isSwiftPMRuntime: Bool {

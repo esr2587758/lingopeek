@@ -1149,6 +1149,10 @@ func checkSelectionPermissionSourceGate() throws {
         contentsOf: root.appending(path: "Sources/LingoPeekApp/AppSettings.swift"),
         encoding: .utf8
     )
+    let lingobarRootSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarRootView.swift"),
+        encoding: .utf8
+    )
 
     try check(selectionReaderSource.contains("private static var canReadSelection"), "selection reader should centralize its permission gate")
     try check(selectionReaderSource.contains("AXIsProcessTrusted()"), "selection reader should ask the system Accessibility trust API")
@@ -1165,6 +1169,13 @@ func checkSelectionPermissionSourceGate() throws {
     )
     try check(appSettingsSource.contains("accessibilityRuntimeIdentityNote"), "settings should expose the current Accessibility runtime identity")
     try check(appSettingsSource.contains("/.build/"), "runtime identity note should detect SwiftPM debug executables")
+    try check(appSettingsSource.contains("SecCodeCopySigningInformation"), "runtime identity note should inspect the current app signing identity")
+    try check(appSettingsSource.contains("Developer ID/Team"), "runtime identity note should explain unstable local app signing")
+    try check(
+        lingobarRootSource.contains("AppSettings.accessibilityRuntimeIdentityNote") &&
+            lingobarRootSource.contains("viewModel.setupGateStatus.accessibilityPermissionGranted"),
+        "setup gate should surface runtime identity diagnostics when Accessibility is still missing"
+    )
 }
 
 do {

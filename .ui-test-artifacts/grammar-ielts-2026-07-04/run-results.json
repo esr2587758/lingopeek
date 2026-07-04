@@ -1,0 +1,172 @@
+[
+  {
+    "id": 1,
+    "sourceTitle": "British Council Academic Reading - Electroreception",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-1",
+    "sentence": "If the embryo's electroreceptors detect the presence of a predatory fish in the vicinity, however, the embryo stops moving until the fish has moved on.",
+    "wordCount": 25,
+    "finalMetric": {
+      "requestID": "539D7763-30B2-40AB-98AA-531B2CE14587",
+      "status": "AI 完成",
+      "elapsed": 8.899086952209473,
+      "action": "grammar",
+      "event": "complete",
+      "recordedAt": 804788747.383728
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-01.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 2,
+    "sourceTitle": "British Council Academic Reading - Fair games?",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-2",
+    "sentence": "Perpetually by-passing minor cities creates a cycle of disenfranchisement: these cities never get an injection of capital, they fail to become first-rate candidates, and they are constantly passed over in favour of more secure choices.",
+    "wordCount": 35,
+    "finalMetric": {
+      "elapsed": 11.429011940956116,
+      "event": "complete",
+      "requestID": "085E666D-C55F-432A-BB03-DFCC39AC41ED",
+      "status": "AI 完成",
+      "action": "grammar",
+      "recordedAt": 804788762.863752
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-02.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 3,
+    "sourceTitle": "British Council Academic Reading - Time Travel",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-3",
+    "sentence": "The prospect has certainly been wrenched much closer to the realm of possibility now that a major physical hurdle - the speed of light - has been cleared.",
+    "wordCount": 26,
+    "finalMetric": {
+      "action": "grammar",
+      "status": "AI 完成",
+      "requestID": "CCA93D0C-2D0E-4731-94F3-04B74721D39F",
+      "elapsed": 8.259667992591858,
+      "event": "complete",
+      "recordedAt": 804788773.81506
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-03.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 4,
+    "sourceTitle": "British Council Academic Reading Test 2 - A bar at the folies",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-1",
+    "sentence": "Yet while academics are understandably drawn to the compositional enigma of the painting, the layperson is always likely to see the much simpler, more human story beneath.",
+    "wordCount": 27,
+    "finalMetric": {
+      "event": "complete",
+      "action": "grammar",
+      "requestID": "97538EA3-F762-411E-94B6-9873134D43B4",
+      "recordedAt": 804788785.234687,
+      "elapsed": 8.158339977264404,
+      "status": "AI 完成"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-04.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 5,
+    "sourceTitle": "British Council Academic Reading Test 2 - Miles Davis",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-2",
+    "sentence": "Having graduated from high school in 1944, Davis moved to New York City, where he continued his musical education both in the clubs and in the classroom.",
+    "wordCount": 26,
+    "finalMetric": {
+      "elapsed": 8.373112082481384,
+      "recordedAt": 804788796.981221,
+      "requestID": "3376AC99-C9B1-4F40-87A2-5B67BEDA4318",
+      "event": "complete",
+      "action": "grammar",
+      "status": "AI 完成"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-05.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 6,
+    "sourceTitle": "British Council Academic Reading Test 2 - Rock climbing",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-3",
+    "sentence": "It is ironic that most rock climbers and mountaineers love the outdoors and have great respect for the majesty of nature and the impressive challenges she poses.",
+    "wordCount": 27,
+    "finalMetric": {
+      "recordedAt": 804788808.703314,
+      "requestID": "ADB3A0B4-D1B3-4D0F-AAFD-E8070940550F",
+      "elapsed": 8.509137034416199,
+      "action": "grammar",
+      "event": "complete",
+      "status": "AI 完成"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-06.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 7,
+    "sourceTitle": "IELTS Mentor Sample 112 - Dressed to Dazzle",
+    "sourceUrl": "https://www.ielts-mentor.com/reading-sample/academic-reading/782-ielts-academic-reading-sample-112",
+    "sentence": "The convergence of fashion and high technology is leading to new kinds of fibres, fabrics and coatings that are imbuing clothing with equally wondrous powers.",
+    "wordCount": 25,
+    "finalMetric": {
+      "recordedAt": 804788819.900072,
+      "event": "complete",
+      "status": "AI 完成",
+      "elapsed": 8.135686039924622,
+      "requestID": "05870C96-00E4-4A64-A4A3-D8ECEA237D76",
+      "action": "grammar"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-07.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 8,
+    "sourceTitle": "IELTS Mentor Sample 127 - Spoken Corpus Comes To Life",
+    "sourceUrl": "https://www.ielts-mentor.com/reading-sample/academic-reading/797-spoken-corpus-comes-to-life",
+    "sentence": "The latest technology, and simple technology at that, is revolutionising the content of dictionaries and the way they are put together.",
+    "wordCount": 21,
+    "finalMetric": {
+      "status": "AI 完成",
+      "event": "complete",
+      "recordedAt": 804788834.158208,
+      "action": "grammar",
+      "elapsed": 10.817679047584534,
+      "requestID": "72A11328-A62F-45BA-BB36-982FBAB725BC"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-08.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 9,
+    "sourceTitle": "IELTS Mentor Sample 142 - Play Is a Serious Business",
+    "sourceUrl": "https://www.ielts-mentor.com/reading-sample/academic-reading/812-ielts-academic-reading-sample-142-play-is-a-serious-business",
+    "sentence": "Playfulness, it seems, is common only among mammals, although a few of the larger-brained birds also indulge.",
+    "wordCount": 17,
+    "finalMetric": {
+      "elapsed": 9.52624499797821,
+      "status": "AI 完成",
+      "recordedAt": 804788846.438709,
+      "event": "complete",
+      "action": "grammar",
+      "requestID": "6786EAF1-2F55-4DA7-B248-69D6AFA6A9BB"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-09.png",
+    "screenshotOK": true
+  },
+  {
+    "id": 10,
+    "sourceTitle": "IELTS Mentor Academic Reading #50 - A Neuroscientist Reveals How to Think Differently",
+    "sourceUrl": "https://www.ielts-mentor.com/reading-sample/academic-reading/643-ielts-academic-reading-sample-50-a-neuroscientist-reveals-how-to-think-differently",
+    "sentence": "These discoveries have led to the field known as neuroeconomics, which studies the brain's secrets to success in an economic environment that demands innovation and being able to do things differently from competitors.",
+    "wordCount": 33,
+    "finalMetric": {
+      "elapsed": 10.262133002281189,
+      "event": "complete",
+      "action": "grammar",
+      "requestID": "30E51E76-C47C-4EEA-9DB3-2D86FD8D2311",
+      "recordedAt": 804788859.678523,
+      "status": "AI 完成"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-10.png",
+    "screenshotOK": true
+  }
+]

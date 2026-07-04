@@ -1,0 +1,3 @@
+{"event":"start","requestID":"97624A3B-8059-466A-ADF9-3864C71D56C6","action":"grammar","elapsed":3.993511199951172e-05,"status":"AI 生成中","recordedAt":804789216.082449}
+{"event":"start","requestID":"8A9D414E-AFB2-48BC-9FB6-CA28A72FF49C","action":"grammar","elapsed":2.300739288330078e-05,"status":"AI 生成中","recordedAt":804789216.082991}
+{"recordedAt":804789224.567475,"event":"complete","requestID":"8A9D414E-AFB2-48BC-9FB6-CA28A72FF49C","elapsed":8.484506964683533,"action":"grammar","status":"AI 完成"}

@@ -1,0 +1,3 @@
+{"recordedAt":804787979.493111,"requestID":"74290F24-1DFC-4450-B765-731E71E046DC","elapsed":3.600120544433594e-05,"status":"AI 生成中","action":"grammar","event":"start"}
+{"recordedAt":804787979.493768,"elapsed":2.5033950805664062e-05,"action":"grammar","event":"start","status":"AI 生成中","requestID":"6D6EE3CA-78CE-4480-9BB9-D3F55B522942"}
+{"recordedAt":804787994.761572,"elapsed":15.267397999763489,"requestID":"6D6EE3CA-78CE-4480-9BB9-D3F55B522942","action":"grammar","event":"failure","error":"dataCorrupted(Swift.DecodingError.Context(codingPath: [], debugDescription: \"No JSON object found in AI response\", underlyingError: nil))","status":"格式错误"}

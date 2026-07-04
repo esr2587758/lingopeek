@@ -1,0 +1,1 @@
+owner=LingoPeek name=Lingobar num=14387 x=1112 y=604 w=720 h=812

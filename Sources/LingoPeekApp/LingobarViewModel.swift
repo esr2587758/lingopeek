@@ -38,19 +38,14 @@ private enum LingobarAICompletionDecoder {
         user: String,
         onSpine: GrammarSpineHandler? = nil
     ) async throws -> GrammarResult {
-        var spine = try await decodeObject(
-            GrammarSpineCompletion.self,
-            aiClient: aiClient,
-            system: grammarSpinePrompt(),
-            user: user,
-            maxTokens: 1000
-        )
+        var spine = try await decodeGrammarSpine(aiClient: aiClient, user: user)
         if spine.sourceSentence.isEmpty {
             spine.sourceSentence = user
         }
         if spine.chineseMeaning.isEmpty {
             spine.chineseMeaning = "中文释义暂缺。"
         }
+        spine.chunks = GrammarResult.normalizedChunks(spine.chunks, in: spine.sourceSentence)
         let partial = makePartialGrammar(from: spine)
         if let onSpine {
             await onSpine(partial)
@@ -101,6 +96,23 @@ private enum LingobarAICompletionDecoder {
             tenseVoice: tenseVoice,
             knowledge: knowledge
         )
+    }
+
+    private static func decodeGrammarSpine(
+        aiClient: OpenAICompatibleClient,
+        user: String
+    ) async throws -> GrammarSpineCompletion {
+        do {
+            return try await decodeObject(
+                GrammarSpineCompletion.self,
+                aiClient: aiClient,
+                system: grammarSpinePrompt(),
+                user: user,
+                maxTokens: 1200
+            )
+        } catch {
+            return GrammarSpineCompletion.recovery(sourceText: user)
+        }
     }
 
     private static func decodeObject<T: Decodable>(
@@ -258,7 +270,11 @@ private enum LingobarAICompletionDecoder {
         Analyze the user's English sentence. Do not analyze Chinese or mixed-language text.
         Use only role values: subject, predicate, object, attr, adv, appos, conj.
         Return keys: title, sourceSentence, chineseMeaning, analysisScopeNote, chunks, pattern, defaultCollectionItem.
-        chunks must be 4-7 phrase-level items with id, role, text, label, note only. Do not include tokens.
+        chunks must be 5-10 flat, non-overlapping phrase-level items with id, role, text, label, note only. Do not include tokens.
+        Chunks must follow the source sentence order and must not repeat text.
+        Do not include both a parent clause and its child subject/predicate/object chunks in chunks.
+        For long adverbial, participial, relative, appositive, or object clauses, prefer smaller internal chunks such as connector, clause subject, clause predicate, clause object/complement, and short modifiers.
+        Keep each chunk under 10 English words when possible.
         Keep Chinese explanations short.
         pattern has en and zh. defaultCollectionItem has title, note, type, and type must be 句型.
         """
@@ -273,6 +289,7 @@ private enum LingobarAICompletionDecoder {
         Return key: chunks.
         For each canonical chunk, return { "id": "...", "tokens": [...] }.
         tokens are important words or short phrases with w, pos, infl. Keep token lists concise.
+        pos must be readable to Chinese learners; do not return bare abbreviations like adv or prep without a Chinese note.
         """
     }
 
@@ -286,6 +303,7 @@ private enum LingobarAICompletionDecoder {
         dependencies must be objects only: { "from": "<chunk id>", "to": "<chunk id>", "label": "主谓" }.
         Do not use tuple arrays for dependencies. Reference canonical chunk ids only and use labels such as 主谓, 动宾, 修饰, 同位, 连接.
         tree is a compact nested clause tree with label, role, text, children.
+        tree labels must be readable to Chinese learners. Prefer Chinese labels such as 主句, 状语短语, 连接词; if using abbreviations such as S, NP, VP, AdvP, or ConjP, append Chinese in the same label, for example "AdvP（状语短语）".
         """
     }
 
@@ -311,6 +329,7 @@ private enum LingobarAICompletionDecoder {
 
         Return key: tenseVoice.
         Include 2-4 items. Each item has scope, verb, tense, aspect, voice, mood, why, svo{agent,action,receiver}.
+        tense, aspect, voice, and mood must be readable to Chinese learners. Prefer Chinese; if using English terms such as past, simple, active, indicative, progressive, or non-finite, append Chinese in the same field.
         Keep why short and do not invent tense points absent from the sentence.
         """
     }
@@ -323,6 +342,7 @@ private enum LingobarAICompletionDecoder {
 
         Return keys: collocations, phrases, grammarPoints.
         collocations: 2-4 items with phrase, pos, zh, note, example.
+        collocations.pos must not be a bare abbreviation. Use Chinese or abbreviation plus Chinese, for example "v. phr.（动词短语）", "prep（介词）", or "adv（副词/状语）".
         phrases: 3-6 items with en, zh.
         grammarPoints: 3-5 items with tag, title, body.
         Keep every Chinese explanation concise.
@@ -364,6 +384,24 @@ private struct GrammarSpineCompletion: Decodable, Sendable {
         case defaultCollectionItem
     }
 
+    init(
+        title: String = "语法解析",
+        sourceSentence: String,
+        chineseMeaning: String,
+        analysisScopeNote: String,
+        chunks: [GrammarChunk],
+        pattern: GrammarPattern,
+        defaultCollectionItem: DefaultCollectionItem
+    ) {
+        self.title = title
+        self.sourceSentence = sourceSentence
+        self.chineseMeaning = chineseMeaning
+        self.analysisScopeNote = analysisScopeNote
+        self.chunks = chunks
+        self.pattern = pattern
+        self.defaultCollectionItem = defaultCollectionItem
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let pattern = try container.decodeIfPresent(GrammarPattern.self, forKey: .pattern)
@@ -376,6 +414,31 @@ private struct GrammarSpineCompletion: Decodable, Sendable {
         self.pattern = pattern
         self.defaultCollectionItem = try container.decodeIfPresent(DefaultCollectionItem.self, forKey: .defaultCollectionItem)
             ?? DefaultCollectionItem(title: pattern.en, note: pattern.zh, type: "句型")
+    }
+
+    static func recovery(sourceText: String) -> GrammarSpineCompletion {
+        let source = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let chunks = GrammarResult.recoveryChunks(for: source)
+        let patternText: String
+        let patternZh: String
+        if source.contains(":") {
+            patternText = "Main clause: explanation clauses"
+            patternZh = "主句：后面用多个分句解释或展开"
+        } else if source.range(of: ", but ", options: [.caseInsensitive]) != nil {
+            patternText = "Passive main clause, but coordinated passive clauses"
+            patternZh = "被动主句后接转折并列被动分句"
+        } else {
+            patternText = "S + V + complements/modifiers"
+            patternZh = "主语 + 谓语 + 补足/修饰成分"
+        }
+        return GrammarSpineCompletion(
+            sourceSentence: source,
+            chineseMeaning: "该长句包含多个分句；已先恢复语法骨架，完整细节可重试补全。",
+            analysisScopeNote: "AI 首次返回未形成可解析 JSON，Lingobar 先显示可恢复的语法骨架。",
+            chunks: chunks,
+            pattern: GrammarPattern(en: patternText, zh: patternZh),
+            defaultCollectionItem: DefaultCollectionItem(title: patternText, note: patternZh, type: "句型")
+        )
     }
 }
 

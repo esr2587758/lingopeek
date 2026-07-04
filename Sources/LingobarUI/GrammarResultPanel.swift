@@ -7,10 +7,19 @@ public struct GrammarResultPanel: View {
     @State private var selectedView: GrammarVizView
     @State private var hoveredRole: GrammarRole?
     @State private var openChunkID: String?
+    private var initialDependencyHoveredChunkID: String?
+    private var initialDependencyHoveredDependencyID: String?
 
-    public init(result: GrammarResult, initialView: GrammarVizView = .annotated) {
+    public init(
+        result: GrammarResult,
+        initialView: GrammarVizView = .annotated,
+        initialDependencyHoveredChunkID: String? = nil,
+        initialDependencyHoveredDependencyID: String? = nil
+    ) {
         self.result = result
         self._selectedView = State(initialValue: initialView)
+        self.initialDependencyHoveredChunkID = initialDependencyHoveredChunkID
+        self.initialDependencyHoveredDependencyID = initialDependencyHoveredDependencyID
     }
 
     public var body: some View {
@@ -106,7 +115,9 @@ public struct GrammarResultPanel: View {
                 DependencyDiagram(
                     chunks: result.chunks,
                     dependencies: result.dependencies,
-                    hoveredRole: $hoveredRole
+                    hoveredRole: $hoveredRole,
+                    initialHoveredChunkID: initialDependencyHoveredChunkID,
+                    initialHoveredDependencyID: initialDependencyHoveredDependencyID
                 )
             case .tree:
                 GrammarTreeView(node: result.tree)
@@ -431,7 +442,7 @@ private struct GrammarChunkPill: View {
                 }
                 .overlay(alignment: .topLeading) {
                     if isHovered || isOpen {
-                        Text(chunk.label)
+                        Text(GrammarAbbreviationGlossary.displayText(for: chunk.label))
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(Color.white)
                             .padding(.horizontal, 5)
@@ -463,7 +474,7 @@ private struct GrammarChunkNote: View {
             VStack(alignment: .leading, spacing: 3) {
                 Button(action: onTap) {
                     HStack(spacing: 8) {
-                        Text(chunk.label)
+                        Text(GrammarAbbreviationGlossary.displayText(for: chunk.label))
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(chunk.role.color)
                         Text(chunk.text)
@@ -491,10 +502,11 @@ private struct GrammarChunkNote: View {
                                     .font(.system(size: 13.5, weight: .medium))
                                     .foregroundStyle(Color.lingoText)
                                     .frame(minWidth: 80, alignment: .leading)
-                                Text(token.pos)
+                                Text(GrammarAbbreviationGlossary.displayText(for: token.pos))
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(chunk.role.color)
-                                    .fixedSize()
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 Text(token.infl)
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(Color.lingoSubtle)
@@ -517,96 +529,266 @@ private struct DependencyDiagram: View {
     var chunks: [GrammarChunk]
     var dependencies: [GrammarDependency]
     @Binding var hoveredRole: GrammarRole?
+    @State private var hoveredChunkID: String?
+    @State private var hoveredDependencyID: String?
+
+    init(
+        chunks: [GrammarChunk],
+        dependencies: [GrammarDependency],
+        hoveredRole: Binding<GrammarRole?>,
+        initialHoveredChunkID: String? = nil,
+        initialHoveredDependencyID: String? = nil
+    ) {
+        self.chunks = chunks
+        self.dependencies = dependencies
+        self._hoveredRole = hoveredRole
+        self._hoveredChunkID = State(initialValue: initialHoveredChunkID)
+        self._hoveredDependencyID = State(initialValue: initialHoveredDependencyID)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            GeometryReader { proxy in
-                Canvas { context, size in
-                    drawDependencies(context: &context, size: size)
-                }
-                .frame(width: proxy.size.width, height: 90)
-            }
-            .frame(height: 90)
+            Color.clear
+                .frame(height: 90)
 
             GrammarWrapLayout(spacing: 6, rowSpacing: 8) {
                 ForEach(chunks) { chunk in
+                    let isFocused = isChunkFocused(chunk)
                     Text(chunk.text)
-                        .font(.system(size: 14))
+                        .font(.system(size: 14, weight: isFocused ? .semibold : .regular))
                         .foregroundStyle(Color.lingoText)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 5)
-                        .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .background(isFocused ? chunk.role.color.opacity(0.24) : Color.lingoChip, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(chunk.role.color.opacity(isFocused ? 0.95 : 0), lineWidth: isFocused ? 1.4 : 0)
+                        }
                         .overlay(alignment: .bottom) {
                             Rectangle()
                                 .fill(chunk.role.color)
-                                .frame(height: 2)
+                                .frame(height: isFocused ? 3 : 2)
                         }
-                        .opacity(hoveredRole == nil || hoveredRole == chunk.role ? 1 : 0.32)
-                        .onHover { hoveredRole = $0 ? chunk.role : nil }
+                        .opacity(chunkOpacity(chunk))
+                        .onHover { handleChunkHover($0, chunk: chunk) }
+                        .anchorPreference(key: DependencyChunkBoundsKey.self, value: .bounds) { bounds in
+                            [chunk.id: bounds]
+                        }
+                }
+            }
+        }
+        .overlayPreferenceValue(DependencyChunkBoundsKey.self) { bounds in
+            GeometryReader { proxy in
+                let frames = bounds.mapValues { proxy[$0] }
+                ZStack(alignment: .topLeading) {
+                    Canvas { context, size in
+                        drawDependencies(context: &context, size: size, frames: frames)
+                    }
+                    .allowsHitTesting(false)
+
+                    ForEach(dependencies) { dependency in
+                        if let arc = dependencyArc(for: dependency, size: proxy.size, frames: frames) {
+                            DependencyCurveShape(
+                                fromX: arc.fromX,
+                                toX: arc.toX,
+                                yBase: arc.yBase,
+                                lift: arc.lift
+                            )
+                            .stroke(Color.white.opacity(0.001), style: StrokeStyle(lineWidth: 18, lineCap: .round, lineJoin: .round))
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .onHover { isHovered in
+                                handleDependencyHover(isHovered, dependency: dependency)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    private func drawDependencies(context: inout GraphicsContext, size: CGSize) {
+    private func drawDependencies(context: inout GraphicsContext, size: CGSize, frames: [String: CGRect]) {
         guard chunks.count > 1 else {
             return
         }
-        let yBase = size.height - 5
-        let usableWidth = max(size.width - 40, 1)
-        let step = usableWidth / CGFloat(max(chunks.count - 1, 1))
-
-        func xPosition(for id: String) -> CGFloat? {
-            guard let index = chunks.firstIndex(where: { $0.id == id }) else {
-                return nil
-            }
-            return 20 + CGFloat(index) * step
-        }
-
         for dependency in dependencies {
-            guard let fromX = xPosition(for: dependency.from),
-                  let toX = xPosition(for: dependency.to),
+            guard let arc = dependencyArc(for: dependency, size: size, frames: frames),
                   let fromChunk = chunks.first(where: { $0.id == dependency.from }) else {
                 continue
             }
-            let span = abs(toX - fromX)
-            let lift = min(20 + span * 0.22, 74)
             let role = fromChunk.role
-            let isDimmed = hoveredRole != nil && hoveredRole != role
-            let opacity = isDimmed ? 0.22 : 0.85
+            let isDependencyActive = isDependencyFocused(dependency)
+            let hasFocusedItem = hoveredChunkID != nil || hoveredDependencyID != nil
+            let isDimmed = (hoveredRole != nil && hoveredRole != role) || (hasFocusedItem && !isDependencyActive)
+            let opacity: Double = if isDependencyActive {
+                1
+            } else if isDimmed {
+                0.18
+            } else {
+                0.85
+            }
             let color = role.color.opacity(opacity)
 
             var path = Path()
-            path.move(to: CGPoint(x: fromX, y: yBase))
+            path.move(to: CGPoint(x: arc.fromX, y: arc.yBase))
             path.addCurve(
-                to: CGPoint(x: toX, y: yBase),
-                control1: CGPoint(x: fromX, y: yBase - lift),
-                control2: CGPoint(x: toX, y: yBase - lift)
+                to: CGPoint(x: arc.toX, y: arc.yBase),
+                control1: CGPoint(x: arc.fromX, y: arc.yBase - arc.lift),
+                control2: CGPoint(x: arc.toX, y: arc.yBase - arc.lift)
             )
-            context.stroke(path, with: .color(color), lineWidth: 1.6)
+            context.stroke(path, with: .color(color), lineWidth: isDependencyActive ? 2.7 : 1.6)
 
             var arrow = Path()
-            arrow.move(to: CGPoint(x: toX - 4, y: yBase - 7))
-            arrow.addLine(to: CGPoint(x: toX + 4, y: yBase - 7))
-            arrow.addLine(to: CGPoint(x: toX, y: yBase - 1))
+            arrow.move(to: CGPoint(x: arc.toX - 4, y: arc.yBase - 7))
+            arrow.addLine(to: CGPoint(x: arc.toX + 4, y: arc.yBase - 7))
+            arrow.addLine(to: CGPoint(x: arc.toX, y: arc.yBase - 1))
             arrow.closeSubpath()
             context.fill(arrow, with: .color(color))
 
-            let midX = (fromX + toX) / 2
-            let labelY = yBase - lift
+            let midX = (arc.fromX + arc.toX) / 2
+            let labelY = arc.yBase - arc.lift
             let labelWidth = max(CGFloat(dependency.label.count * 12 + 12), 34)
             let labelRect = CGRect(x: midX - labelWidth / 2, y: labelY - 9, width: labelWidth, height: 17)
             let labelPath = RoundedRectangle(cornerRadius: 6, style: .continuous).path(in: labelRect)
-            context.fill(labelPath, with: .color(Color(red: 27 / 255, green: 29 / 255, blue: 39 / 255).opacity(isDimmed ? 0.25 : 1)))
-            context.stroke(labelPath, with: .color(role.color.opacity(isDimmed ? 0.16 : 0.40)), lineWidth: 1)
+            let labelFill = isDependencyActive
+                ? role.color.opacity(0.28)
+                : Color(red: 27 / 255, green: 29 / 255, blue: 39 / 255).opacity(isDimmed ? 0.25 : 1)
+            context.fill(labelPath, with: .color(labelFill))
+            context.stroke(labelPath, with: .color(role.color.opacity(isDependencyActive ? 0.95 : (isDimmed ? 0.16 : 0.40))), lineWidth: isDependencyActive ? 1.5 : 1)
 
             let text = context.resolve(
                 Text(dependency.label)
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(role.color.opacity(isDimmed ? 0.30 : 1))
+                    .font(.system(size: 10.5, weight: isDependencyActive ? .bold : .medium))
+                    .foregroundStyle(isDependencyActive ? Color.lingoText : role.color.opacity(isDimmed ? 0.30 : 1))
             )
             context.draw(text, at: CGPoint(x: midX, y: labelY - 0.5), anchor: .center)
         }
+    }
+
+    private func handleChunkHover(_ isHovered: Bool, chunk: GrammarChunk) {
+        if isHovered {
+            hoveredChunkID = chunk.id
+            hoveredDependencyID = nil
+            hoveredRole = chunk.role
+        } else if hoveredChunkID == chunk.id {
+            hoveredChunkID = nil
+            hoveredRole = nil
+        }
+    }
+
+    private func handleDependencyHover(_ isHovered: Bool, dependency: GrammarDependency) {
+        guard let fromChunk = chunks.first(where: { $0.id == dependency.from }) else {
+            return
+        }
+        if isHovered {
+            hoveredDependencyID = dependency.id
+            hoveredChunkID = nil
+            hoveredRole = fromChunk.role
+        } else if hoveredDependencyID == dependency.id {
+            hoveredDependencyID = nil
+            hoveredRole = nil
+        }
+    }
+
+    private func chunkOpacity(_ chunk: GrammarChunk) -> Double {
+        if let hoveredDependencyID,
+           let dependency = dependencies.first(where: { $0.id == hoveredDependencyID }) {
+            return dependencyTouches(dependency, chunkID: chunk.id) ? 1 : 0.26
+        }
+        if let hoveredChunkID {
+            if chunk.id == hoveredChunkID {
+                return 1
+            }
+            return dependencies.contains { dependencyTouches($0, chunkID: chunk.id) && dependencyTouches($0, chunkID: hoveredChunkID) }
+                ? 0.78
+                : 0.26
+        }
+        return hoveredRole == nil || hoveredRole == chunk.role ? 1 : 0.32
+    }
+
+    private func isChunkFocused(_ chunk: GrammarChunk) -> Bool {
+        if hoveredChunkID == chunk.id {
+            return true
+        }
+        guard let hoveredDependencyID,
+              let dependency = dependencies.first(where: { $0.id == hoveredDependencyID }) else {
+            return false
+        }
+        return dependencyTouches(dependency, chunkID: chunk.id)
+    }
+
+    private func isDependencyFocused(_ dependency: GrammarDependency) -> Bool {
+        if hoveredDependencyID == dependency.id {
+            return true
+        }
+        guard let hoveredChunkID else {
+            return false
+        }
+        return dependencyTouches(dependency, chunkID: hoveredChunkID)
+    }
+
+    private func dependencyTouches(_ dependency: GrammarDependency, chunkID: String) -> Bool {
+        dependency.from == chunkID || dependency.to == chunkID
+    }
+
+    private func dependencyArc(for dependency: GrammarDependency, size: CGSize, frames: [String: CGRect]) -> DependencyArc? {
+        let fallbackYBase: CGFloat = 85
+        guard let fromX = xPosition(for: dependency.from, size: size, frames: frames),
+              let toX = xPosition(for: dependency.to, size: size, frames: frames) else {
+            return nil
+        }
+        let span = abs(toX - fromX)
+        return DependencyArc(
+            fromX: fromX,
+            toX: toX,
+            yBase: frames.isEmpty ? min(size.height - 5, fallbackYBase) : fallbackYBase,
+            lift: min(20 + span * 0.22, 74)
+        )
+    }
+
+    private func xPosition(for id: String, size: CGSize, frames: [String: CGRect]) -> CGFloat? {
+        if let frame = frames[id] {
+            return frame.midX
+        }
+        guard let index = chunks.firstIndex(where: { $0.id == id }) else {
+            return nil
+        }
+        let usableWidth = max(size.width - 40, 1)
+        let step = usableWidth / CGFloat(max(chunks.count - 1, 1))
+        return 20 + CGFloat(index) * step
+    }
+
+}
+
+private struct DependencyArc {
+    var fromX: CGFloat
+    var toX: CGFloat
+    var yBase: CGFloat
+    var lift: CGFloat
+}
+
+private struct DependencyCurveShape: Shape {
+    var fromX: CGFloat
+    var toX: CGFloat
+    var yBase: CGFloat
+    var lift: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: fromX, y: yBase))
+        path.addCurve(
+            to: CGPoint(x: toX, y: yBase),
+            control1: CGPoint(x: fromX, y: yBase - lift),
+            control2: CGPoint(x: toX, y: yBase - lift)
+        )
+        return path
+    }
+}
+
+private struct DependencyChunkBoundsKey: PreferenceKey {
+    static let defaultValue: [String: Anchor<CGRect>] = [:]
+
+    static func reduce(value: inout [String: Anchor<CGRect>], nextValue: () -> [String: Anchor<CGRect>]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
@@ -626,17 +808,16 @@ private struct GrammarTreeNodeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 9) {
+            HStack(alignment: .top, spacing: 9) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(node.role.color)
-                    .frame(width: 3, height: 16)
-                Text(node.label)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(node.role.color)
-                    .frame(width: 76, alignment: .leading)
+                    .frame(width: 3, height: GrammarAbbreviationGlossary.chineseNote(for: node.label) == nil ? 16 : 27)
+                    .padding(.top, 1)
+                GrammarTreeLabel(label: node.label, color: node.role.color)
                 Text(node.text)
                     .font(.system(size: 13.5))
                     .foregroundStyle(Color.lingoText)
+                    .padding(.top, 1)
             }
             .padding(.vertical, 6)
             .padding(.leading, CGFloat(depth) * 18)
@@ -658,6 +839,32 @@ private struct GrammarTreeNodeView: View {
     }
 }
 
+private struct GrammarTreeLabel: View {
+    var label: String
+    var color: Color
+
+    private var note: String? {
+        GrammarAbbreviationGlossary.chineseNote(for: label)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+            if let note {
+                Text(note)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Color.lingoSubtle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+        }
+        .foregroundStyle(color)
+        .frame(width: 88, alignment: .leading)
+        .help(note.map { "\(label) = \($0)" } ?? label)
+    }
+}
+
 private struct DashedVerticalLine: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -671,7 +878,18 @@ private struct GrammarTenseCard: View {
     var clause: GrammarTenseClause
 
     private var isPassive: Bool {
-        clause.voice == "被动"
+        clause.voice == "被动" || clause.voice.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "passive"
+    }
+
+    private var moodBadgeText: String {
+        let mood = clause.mood.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !mood.isEmpty else {
+            return "语气"
+        }
+        if GrammarAbbreviationGlossary.chineseNote(for: mood) != nil {
+            return GrammarAbbreviationGlossary.displayText(for: mood)
+        }
+        return mood.contains("语气") ? mood : "\(mood)语气"
     }
 
     var body: some View {
@@ -686,10 +904,10 @@ private struct GrammarTenseCard: View {
             }
 
             GrammarWrapLayout(spacing: 6, rowSpacing: 6) {
-                badge(clause.tense, fill: Color.lingoAccent2.opacity(0.18), foreground: Color(red: 179 / 255, green: 170 / 255, blue: 1))
-                badge(clause.aspect)
-                badge(clause.voice, fill: isPassive ? Color(red: 79 / 255, green: 184 / 255, blue: 201 / 255).opacity(0.20) : Color.lingoChipHover, foreground: isPassive ? Color(red: 127 / 255, green: 214 / 255, blue: 227 / 255) : Color.lingoMuted)
-                badge("\(clause.mood)语气")
+                badge(GrammarAbbreviationGlossary.displayText(for: clause.tense), fill: Color.lingoAccent2.opacity(0.18), foreground: Color(red: 179 / 255, green: 170 / 255, blue: 1))
+                badge(GrammarAbbreviationGlossary.displayText(for: clause.aspect))
+                badge(GrammarAbbreviationGlossary.displayText(for: clause.voice), fill: isPassive ? Color(red: 79 / 255, green: 184 / 255, blue: 201 / 255).opacity(0.20) : Color.lingoChipHover, foreground: isPassive ? Color(red: 127 / 255, green: 214 / 255, blue: 227 / 255) : Color.lingoMuted)
+                badge(moodBadgeText)
             }
             .padding(.top, 9)
 
@@ -732,6 +950,8 @@ private struct GrammarTenseCard: View {
         Text(text)
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(foreground)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 9)
             .padding(.vertical, 3)
             .background(fill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -802,10 +1022,12 @@ private struct GrammarCollocationCard: View {
                 Text(collocation.phrase)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Color.lingoAccentText)
-                Text(collocation.pos)
+                Text(GrammarAbbreviationGlossary.displayText(for: collocation.pos))
                     .font(.system(size: 10.5))
                     .italic()
                     .foregroundStyle(Color.lingoSubtle)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 6)
                 Image(systemName: "speaker.wave.2")
                     .font(.system(size: 13, weight: .semibold))

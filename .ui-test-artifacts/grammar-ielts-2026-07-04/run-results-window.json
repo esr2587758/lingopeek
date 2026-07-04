@@ -1,0 +1,253 @@
+[
+  {
+    "id": 1,
+    "sourceTitle": "British Council Academic Reading - Electroreception",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-1",
+    "sentence": "If the embryo's electroreceptors detect the presence of a predatory fish in the vicinity, however, the embryo stops moving until the fish has moved on.",
+    "wordCount": 25,
+    "finalMetric": {
+      "recordedAt": 804789224.567475,
+      "event": "complete",
+      "requestID": "8A9D414E-AFB2-48BC-9FB6-CA28A72FF49C",
+      "elapsed": 8.484506964683533,
+      "action": "grammar",
+      "status": "AI 完成"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-01.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14396 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14396,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 2,
+    "sourceTitle": "British Council Academic Reading - Fair games?",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-2",
+    "sentence": "Perpetually by-passing minor cities creates a cycle of disenfranchisement: these cities never get an injection of capital, they fail to become first-rate candidates, and they are constantly passed over in favour of more secure choices.",
+    "wordCount": 35,
+    "finalMetric": {
+      "recordedAt": 804789244.777252,
+      "status": "格式错误",
+      "event": "failure",
+      "error": "dataCorrupted(Swift.DecodingError.Context(codingPath: [], debugDescription: \"No JSON object found in AI response\", underlyingError: nil))",
+      "action": "grammar",
+      "requestID": "EBE6EADF-46AC-41C9-B649-F51C99A1B156",
+      "elapsed": 17.02170503139496
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-02.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14402 x=1112 y=884 w=720 h=480 owner=LingoPeek name=Lingobar",
+      "id": 14402,
+      "x": 1112,
+      "y": 884,
+      "w": 720,
+      "h": 480
+    }
+  },
+  {
+    "id": 3,
+    "sourceTitle": "British Council Academic Reading - Time Travel",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-3",
+    "sentence": "The prospect has certainly been wrenched much closer to the realm of possibility now that a major physical hurdle - the speed of light - has been cleared.",
+    "wordCount": 26,
+    "finalMetric": {
+      "status": "AI 完成",
+      "event": "complete",
+      "requestID": "F47E174B-EA48-4B8A-8FC0-4C85DD65FF19",
+      "elapsed": 7.783771991729736,
+      "action": "grammar",
+      "recordedAt": 804789255.767959
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-03.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14409 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14409,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 4,
+    "sourceTitle": "British Council Academic Reading Test 2 - A bar at the folies",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-1",
+    "sentence": "Yet while academics are understandably drawn to the compositional enigma of the painting, the layperson is always likely to see the much simpler, more human story beneath.",
+    "wordCount": 27,
+    "finalMetric": {
+      "elapsed": 8.058163046836853,
+      "recordedAt": 804789266.696791,
+      "event": "complete",
+      "requestID": "FE1CD092-5E16-4253-8A10-9227628839B4",
+      "status": "AI 完成",
+      "action": "grammar"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-04.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14415 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14415,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 5,
+    "sourceTitle": "British Council Academic Reading Test 2 - Miles Davis",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-2",
+    "sentence": "Having graduated from high school in 1944, Davis moved to New York City, where he continued his musical education both in the clubs and in the classroom.",
+    "wordCount": 26,
+    "finalMetric": {
+      "event": "complete",
+      "action": "grammar",
+      "elapsed": 8.31455111503601,
+      "recordedAt": 804789278.137597,
+      "status": "AI 完成",
+      "requestID": "9E3621B5-2E97-49FB-8B3D-73E17790271B"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-05.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14421 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14421,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 6,
+    "sourceTitle": "British Council Academic Reading Test 2 - Rock climbing",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-3",
+    "sentence": "It is ironic that most rock climbers and mountaineers love the outdoors and have great respect for the majesty of nature and the impressive challenges she poses.",
+    "wordCount": 27,
+    "finalMetric": {
+      "elapsed": 7.778180003166199,
+      "status": "AI 完成",
+      "event": "complete",
+      "requestID": "5C51D032-56FC-4513-9455-C7DFC99C9CA0",
+      "recordedAt": 804789288.791105,
+      "action": "grammar"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-06.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14427 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14427,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 7,
+    "sourceTitle": "IELTS Mentor Sample 112 - Dressed to Dazzle",
+    "sourceUrl": "https://www.ielts-mentor.com/reading-sample/academic-reading/782-ielts-academic-reading-sample-112",
+    "sentence": "The convergence of fashion and high technology is leading to new kinds of fibres, fabrics and coatings that are imbuing clothing with equally wondrous powers.",
+    "wordCount": 25,
+    "finalMetric": {
+      "recordedAt": 804789299.692916,
+      "event": "complete",
+      "action": "grammar",
+      "status": "AI 完成",
+      "elapsed": 8.023638010025024,
+      "requestID": "8B80BE05-C400-4CAE-A7D8-1864BCDA8923"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-07.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14433 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14433,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 8,
+    "sourceTitle": "IELTS Mentor Sample 127 - Spoken Corpus Comes To Life",
+    "sourceUrl": "https://www.ielts-mentor.com/reading-sample/academic-reading/797-spoken-corpus-comes-to-life",
+    "sentence": "The latest technology, and simple technology at that, is revolutionising the content of dictionaries and the way they are put together.",
+    "wordCount": 21,
+    "finalMetric": {
+      "event": "complete",
+      "action": "grammar",
+      "requestID": "631B9C28-63B6-42BB-9985-B28DE746375C",
+      "elapsed": 9.294924020767212,
+      "status": "AI 完成",
+      "recordedAt": 804789312.156283
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-08.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14439 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14439,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 9,
+    "sourceTitle": "IELTS Mentor Sample 142 - Play Is a Serious Business",
+    "sourceUrl": "https://www.ielts-mentor.com/reading-sample/academic-reading/812-ielts-academic-reading-sample-142-play-is-a-serious-business",
+    "sentence": "Playfulness, it seems, is common only among mammals, although a few of the larger-brained birds also indulge.",
+    "wordCount": 17,
+    "finalMetric": {
+      "recordedAt": 804789323.224891,
+      "status": "AI 完成",
+      "requestID": "A6EBA10C-F70C-4317-AF74-A24971E5FA70",
+      "event": "complete",
+      "action": "grammar",
+      "elapsed": 8.201539039611816
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-09.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14445 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14445,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 10,
+    "sourceTitle": "IELTS Mentor Academic Reading #50 - A Neuroscientist Reveals How to Think Differently",
+    "sourceUrl": "https://www.ielts-mentor.com/reading-sample/academic-reading/643-ielts-academic-reading-sample-50-a-neuroscientist-reveals-how-to-think-differently",
+    "sentence": "These discoveries have led to the field known as neuroeconomics, which studies the brain's secrets to success in an economic environment that demands innovation and being able to do things differently from competitors.",
+    "wordCount": 33,
+    "finalMetric": {
+      "requestID": "28B57185-9971-48B6-9477-78CEC7A06F36",
+      "action": "grammar",
+      "elapsed": 9.161375045776367,
+      "status": "AI 完成",
+      "recordedAt": 804789335.381952,
+      "event": "complete"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-2026-07-04/lingopeek-10.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14451 x=1112 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14451,
+      "x": 1112,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  }
+]

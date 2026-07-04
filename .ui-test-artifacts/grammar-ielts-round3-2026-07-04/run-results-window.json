@@ -1,0 +1,253 @@
+[
+  {
+    "id": 1,
+    "sourceTitle": "British Council Academic Reading - Electroreception",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-1",
+    "sentence": "Although researchers have documented how electroreception alters hunting, defence and communication systems through observation, the exact neurological processes that encode and decode this information are unclear.",
+    "wordCount": 25,
+    "finalMetric": {
+      "action": "grammar",
+      "requestID": "071FDA87-C1DF-4D9A-A1A6-75E67A05F4BB",
+      "elapsed": 9.627048969268799,
+      "status": "AI 完成",
+      "recordedAt": 804868739.112999,
+      "event": "complete"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-01.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14629 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14629,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 2,
+    "sourceTitle": "British Council Academic Reading - Electroreception",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-1",
+    "sentence": "In areas where shark attacks on humans are likely to occur, scientists are exploring ways to create artificial electroreceptors that would disorient the sharks and repel them from swimming beaches.",
+    "wordCount": 29,
+    "finalMetric": {
+      "status": "AI 完成",
+      "elapsed": 10.958376049995422,
+      "event": "complete",
+      "recordedAt": 804868753.330901,
+      "action": "grammar",
+      "requestID": "9F8FF797-0CDC-4226-A6CF-08BC0CB56FAE"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-02.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14635 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14635,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 3,
+    "sourceTitle": "British Council Academic Reading - Fair games?",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-2",
+    "sentence": "The staggering expenses involved in a successful Olympic bid are often assumed to be easily mitigated by tourist revenues and an increase in local employment, but more often than not host cities are short changed and their taxpayers for generations to come are left settling the debt.",
+    "wordCount": 44,
+    "finalMetric": {
+      "status": "格式错误",
+      "requestID": "4327BC50-B6DA-4968-ACCC-DF6AF27F74F4",
+      "error": "dataCorrupted(Swift.DecodingError.Context(codingPath: [], debugDescription: \"No JSON object found in AI response\", underlyingError: nil))",
+      "action": "grammar",
+      "event": "failure",
+      "elapsed": 17.565964102745056,
+      "recordedAt": 804868774.120439
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-03.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14639 x=1346 y=884 w=720 h=480 owner=LingoPeek name=Lingobar",
+      "id": 14639,
+      "x": 1346,
+      "y": 884,
+      "w": 720,
+      "h": 480
+    }
+  },
+  {
+    "id": 4,
+    "sourceTitle": "British Council Academic Reading - Fair games?",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-2",
+    "sentence": "Aside from the financial costs of the bid alone, the process ties up real estate in prized urban locations until the outcome is known, which can cost local economies millions of dollars of lost revenue from private developers who could have made use of the land.",
+    "wordCount": 43,
+    "finalMetric": {
+      "requestID": "9406A215-2081-4F4E-AA9C-61E3557534C4",
+      "status": "AI 完成",
+      "recordedAt": 804868791.983912,
+      "elapsed": 14.719704985618591,
+      "event": "complete",
+      "action": "grammar"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-04.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14644 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14644,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 5,
+    "sourceTitle": "British Council Academic Reading - Time Travel",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-3",
+    "sentence": "This is how much faster than the speed of light the neutrinos managed to go in their underground travels and at a consistent rate, even allowing for a margin of error of ten billionths of a second.",
+    "wordCount": 35,
+    "finalMetric": {
+      "event": "complete",
+      "requestID": "3AFA0ECA-0D7E-40AB-A654-D0E72247E50E",
+      "action": "grammar",
+      "elapsed": 11.127987027168274,
+      "recordedAt": 804868806.215148,
+      "status": "AI 完成"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-05.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14651 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14651,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 6,
+    "sourceTitle": "British Council Academic Reading - Time Travel",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic/section-3",
+    "sentence": "If this were to happen, however, the time traveller himself would not be born, which is already known to be true.",
+    "wordCount": 20,
+    "finalMetric": {
+      "requestID": "C734C165-88B0-42A7-9514-6685C1EAACAF",
+      "event": "complete",
+      "recordedAt": 804868818.47009,
+      "action": "grammar",
+      "elapsed": 8.980606079101562,
+      "status": "AI 完成"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-06.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14656 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14656,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 7,
+    "sourceTitle": "British Council Academic Reading Test 2 - A bar at the folies",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-1",
+    "sentence": "What we see in the mirrored reflection is the barmaid's working self, busy serving a customer.",
+    "wordCount": 15,
+    "finalMetric": {
+      "recordedAt": 804868829.620154,
+      "action": "grammar",
+      "status": "AI 完成",
+      "requestID": "DC5A97B6-2F79-4F29-A0A1-80CCDE063A6F",
+      "elapsed": 7.840252041816711,
+      "event": "complete"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-07.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14661 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14661,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 8,
+    "sourceTitle": "British Council Academic Reading Test 2 - Miles Davis",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-2",
+    "sentence": "Although it received little acclaim at the time, in hindsight The Birth of Cool has become recognised as a pivotal moment in jazz history, cementing Davis' legacy as one of the most innovative musicians of his era.",
+    "wordCount": 35,
+    "finalMetric": {
+      "status": "AI 完成",
+      "recordedAt": 804868842.47227,
+      "action": "grammar",
+      "event": "complete",
+      "elapsed": 10.00459110736847,
+      "requestID": "285870E1-81EC-4578-B736-C20F1484ACBE"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-08.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14668 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14668,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 9,
+    "sourceTitle": "British Council Academic Reading Test 2 - Miles Davis",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-2",
+    "sentence": "In the face of this criticism Davis remained defiant, commenting that his earlier recordings were part of a moment in time that he had no feel for any more.",
+    "wordCount": 27,
+    "finalMetric": {
+      "status": "AI 完成",
+      "requestID": "8713B920-710E-452B-B653-3722CF742389",
+      "elapsed": 8.959735989570618,
+      "event": "complete",
+      "action": "grammar",
+      "recordedAt": 804868854.588983
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-09.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14673 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14673,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  },
+  {
+    "id": 10,
+    "sourceTitle": "British Council Academic Reading Test 2 - Rock climbing",
+    "sourceUrl": "https://takeielts.britishcouncil.org/take-ielts/prepare/free-ielts-english-practice-tests/reading-academic-2/section-3",
+    "sentence": "This was partly due to the hallmark of clean climbing, the use of nuts, which were favoured over bolts because they could be placed into the rock wall with one hand while climbers maintained their grip on the rock with the other.",
+    "wordCount": 41,
+    "finalMetric": {
+      "elapsed": 10.664981961250305,
+      "status": "AI 完成",
+      "recordedAt": 804868868.644453,
+      "action": "grammar",
+      "event": "complete",
+      "requestID": "C1DF0964-61E6-4E00-BF60-8125E18F4D8E"
+    },
+    "screenshot": "/Users/lancer/app/LingoPeek/.ui-test-artifacts/grammar-ielts-round3-2026-07-04/lingopeek-10.png",
+    "screenshotOK": true,
+    "windowInfo": {
+      "raw": "num=14678 x=1346 y=604 w=720 h=812 owner=LingoPeek name=Lingobar",
+      "id": 14678,
+      "x": 1346,
+      "y": 604,
+      "w": 720,
+      "h": 812
+    }
+  }
+]

@@ -98,7 +98,7 @@ public enum OpenAICompatibleRequestFactory {
                 OpenAIMessage(role: "system", content: system),
                 OpenAIMessage(role: "user", content: user)
             ],
-            temperature: 0.2,
+            temperature: 0,
             maxTokens: maxTokens,
             responseFormat: OpenAIResponseFormat(type: "json_object"),
             thinking: thinkingConfiguration(for: configuration),

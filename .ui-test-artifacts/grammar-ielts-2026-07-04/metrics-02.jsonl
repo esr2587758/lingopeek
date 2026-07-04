@@ -1,0 +1,3 @@
+{"requestID":"FE666125-092C-4A54-94E5-90D3EEB3C960","elapsed":3.802776336669922e-05,"status":"AI 生成中","recordedAt":804789227.75485,"event":"start","action":"grammar"}
+{"requestID":"EBE6EADF-46AC-41C9-B649-F51C99A1B156","elapsed":2.300739288330078e-05,"status":"AI 生成中","recordedAt":804789227.755376,"event":"start","action":"grammar"}
+{"recordedAt":804789244.777252,"status":"格式错误","event":"failure","error":"dataCorrupted(Swift.DecodingError.Context(codingPath: [], debugDescription: \"No JSON object found in AI response\", underlyingError: nil))","action":"grammar","requestID":"EBE6EADF-46AC-41C9-B649-F51C99A1B156","elapsed":17.02170503139496}

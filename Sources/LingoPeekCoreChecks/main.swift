@@ -607,6 +607,301 @@ func checkGrammarAIResponseTolerance() throws {
     try check(decoded.defaultCollectionItem.title == "sth. calls into question sth.", "grammar decode should default collection item from pattern")
 }
 
+func checkGrammarAbbreviationGlossary() throws {
+    try check(GrammarAbbreviationGlossary.displayText(for: "S") == "S · 句子", "grammar glossary should explain S")
+    try check(GrammarAbbreviationGlossary.displayText(for: "AdvP") == "AdvP · 状语短语", "grammar glossary should explain AdvP")
+    try check(GrammarAbbreviationGlossary.displayText(for: "ConjP") == "ConjP · 连接短语", "grammar glossary should explain ConjP")
+    try check(GrammarAbbreviationGlossary.displayText(for: "adv") == "adv · 副词/状语", "grammar glossary should explain adv")
+    try check(GrammarAbbreviationGlossary.displayText(for: "prep") == "prep · 介词", "grammar glossary should explain prep")
+    try check(GrammarAbbreviationGlossary.displayText(for: "past") == "past · 过去时", "grammar glossary should explain tense terms")
+    try check(GrammarAbbreviationGlossary.displayText(for: "simple") == "simple · 一般体", "grammar glossary should explain aspect terms")
+    try check(GrammarAbbreviationGlossary.displayText(for: "active") == "active · 主动", "grammar glossary should explain voice terms")
+    try check(GrammarAbbreviationGlossary.displayText(for: "indicative") == "indicative · 陈述语气", "grammar glossary should explain mood terms")
+    try check(GrammarAbbreviationGlossary.displayText(for: "non-finite") == "non-finite · 非限定", "grammar glossary should explain non-finite forms")
+    try check(
+        GrammarAbbreviationGlossary.displayText(for: "v. phr. (passive)") == "v. phr. (passive) · 动词短语（被动）",
+        "grammar glossary should explain qualified phrase abbreviations"
+    )
+    try check(
+        GrammarAbbreviationGlossary.displayText(for: "concessive clause") == "concessive clause · 让步从句",
+        "grammar glossary should explain common English grammar terms"
+    )
+    try check(
+        GrammarAbbreviationGlossary.displayText(for: "prep（介词）") == "prep（介词）",
+        "grammar glossary should not duplicate existing Chinese notes"
+    )
+}
+
+func checkGrammarChunkNormalization() throws {
+    let duplicateSource = "This means you can keep your main application responsive (e.g., a web server or UI) while the agent continues its work, only inspecting the result when you need it."
+    let duplicateChunks = [
+        GrammarChunk(id: "s", role: .subject, text: "This", label: "主语", note: "代词作主语"),
+        GrammarChunk(id: "v", role: .predicate, text: "means", label: "谓语", note: "及物动词"),
+        GrammarChunk(
+            id: "o",
+            role: .object,
+            text: "you can keep your main application responsive (e.g., a web server or UI) while the agent continues its work, only inspecting the result when you need it",
+            label: "宾语从句",
+            note: "整个从句作宾语"
+        ),
+        GrammarChunk(id: "sub-s", role: .subject, text: "you", label: "从句主语", note: "宾语从句中的主语"),
+        GrammarChunk(id: "sub-v", role: .predicate, text: "can keep", label: "从句谓语", note: "情态动词 + 动词原形"),
+        GrammarChunk(
+            id: "sub-o",
+            role: .object,
+            text: "your main application responsive (e.g., a web server or UI)",
+            label: "从句宾语",
+            note: "keep 的宾语和宾补"
+        ),
+        GrammarChunk(
+            id: "adv",
+            role: .adv,
+            text: "while the agent continues its work, only inspecting the result when you need it",
+            label: "状语",
+            note: "说明并行动作和检查时机"
+        )
+    ]
+
+    let normalizedDuplicate = GrammarResult.normalizedChunks(duplicateChunks, in: duplicateSource)
+    try check(
+        normalizedDuplicate.map(\.text) == [
+            "This",
+            "means",
+            "you",
+            "can keep",
+            "your main application responsive (e.g., a web server or UI)",
+            "while the agent continues its work, only inspecting the result when you need it"
+        ],
+        "grammar chunk normalization should remove a duplicated parent clause while preserving child chunks"
+    )
+    try check(
+        !normalizedDuplicate.contains { $0.id == "o" },
+        "grammar chunk normalization should drop the coarse parent object clause"
+    )
+
+    let adverbialSource = "Search and Fetch connects to PatSnap patent and paper search and fetch capabilities, allowing the AI assistant to search for relevant records and retrieve detailed information for selected items."
+    let coarseAdverbial = "allowing the AI assistant to search for relevant records and retrieve detailed information for selected items"
+    let normalizedAdverbial = GrammarResult.normalizedChunks(
+        [
+            GrammarChunk(id: "s", role: .subject, text: "Search and Fetch", label: "主语", note: "专有名词，功能名称"),
+            GrammarChunk(id: "v", role: .predicate, text: "connects to", label: "谓语", note: "动词短语，表示连接"),
+            GrammarChunk(
+                id: "o",
+                role: .object,
+                text: "PatSnap patent and paper search and fetch capabilities",
+                label: "宾语",
+                note: "名词短语，表示连接的对象"
+            ),
+            GrammarChunk(id: "adv", role: .adv, text: coarseAdverbial, label: "状语", note: "现在分词短语作结果状语")
+        ],
+        in: adverbialSource
+    )
+
+    try check(
+        !normalizedAdverbial.contains { $0.text == coarseAdverbial },
+        "grammar chunk normalization should split oversized present-participle adverbials"
+    )
+    try check(
+        normalizedAdverbial.contains { $0.text == "allowing" && $0.role == .adv },
+        "grammar chunk normalization should keep the participle as a small adverbial marker"
+    )
+    try check(
+        normalizedAdverbial.contains { $0.text == "the AI assistant" && $0.role == .object },
+        "grammar chunk normalization should expose the internal object of an oversized adverbial"
+    )
+    try check(
+        normalizedAdverbial.contains { $0.text == "to search for relevant records" && $0.role == .predicate },
+        "grammar chunk normalization should expose the first infinitive action"
+    )
+    try check(
+        normalizedAdverbial.contains { $0.text == "and retrieve detailed information for selected items" && $0.role == .predicate },
+        "grammar chunk normalization should expose the coordinated infinitive action"
+    )
+
+    let relativeClauseSource = "The Auckland region of New Zealand is built on a basement of greywacke rocks that form many of the islands in the Hauraki Gulf, the Hunua Ranges, and land south of Port Waikato."
+    let normalizedRelativeClause = GrammarResult.normalizedChunks(
+        [
+            GrammarChunk(id: "s", role: .subject, text: "The Auckland region of New Zealand", label: "主语", note: "地名区域作主语"),
+            GrammarChunk(id: "v", role: .predicate, text: "is built on", label: "谓语", note: "被动谓语"),
+            GrammarChunk(id: "o", role: .object, text: "a basement of greywacke rocks", label: "宾语", note: "介词 on 的宾语"),
+            GrammarChunk(id: "attr", role: .attr, text: "that form many of the islands in the Hauraki Gulf", label: "定语从句", note: "修饰 rocks"),
+            GrammarChunk(id: "tail-1", role: .object, text: "the Hunua Ranges", label: "并列宾语", note: "AI 曾误提升为主句级宾语"),
+            GrammarChunk(id: "tail-2", role: .object, text: "and land south of Port Waikato", label: "并列宾语", note: "AI 曾误提升为主句级宾语")
+        ],
+        in: relativeClauseSource
+    )
+
+    try check(
+        normalizedRelativeClause.contains { $0.text == "that" && $0.role == .conj },
+        "relative-clause normalization should split the relative connector out of the coarse clause"
+    )
+    try check(
+        normalizedRelativeClause.contains { $0.text == "form" && $0.role == .predicate },
+        "relative-clause normalization should expose the relative-clause predicate"
+    )
+    try check(
+        normalizedRelativeClause.contains { $0.text == "many of the islands in the Hauraki Gulf" && $0.role == .object && $0.label.contains("定语从句") },
+        "relative-clause normalization should keep the first internal object scoped to the relative clause"
+    )
+    try check(
+        normalizedRelativeClause.first { $0.text == "the Hunua Ranges" }?.label.contains("定语从句") == true,
+        "relative-clause normalization should label the first tail object as relative-clause internal"
+    )
+    try check(
+        normalizedRelativeClause.first { $0.text == "and land south of Port Waikato" }?.label.contains("定语从句") == true,
+        "relative-clause normalization should label the second tail object as relative-clause internal"
+    )
+
+    let duplicateRelativePronounSource = "The convergence of fashion and high technology is leading to new kinds of fibres, fabrics and coatings that are imbuing clothing with equally wondrous powers."
+    let normalizedDuplicateRelativePronoun = GrammarResult.normalizedChunks(
+        [
+            GrammarChunk(id: "s", role: .subject, text: "The convergence of fashion and high technology", label: "主语", note: "抽象名词短语"),
+            GrammarChunk(id: "v", role: .predicate, text: "is leading to", label: "谓语", note: "现在进行时谓语"),
+            GrammarChunk(id: "o", role: .object, text: "new kinds of fibres, fabrics and coatings", label: "宾语", note: "介词 to 的宾语"),
+            GrammarChunk(id: "rel", role: .conj, text: "that", label: "关系代词", note: "引导定语从句"),
+            GrammarChunk(id: "rel-s", role: .subject, text: "that", label: "从句主语", note: "that 在定语从句中作主语"),
+            GrammarChunk(id: "rel-v", role: .predicate, text: "are imbuing", label: "从句谓语", note: "定语从句谓语"),
+            GrammarChunk(id: "rel-o", role: .object, text: "clothing", label: "从句宾语", note: "imbuing 的宾语"),
+            GrammarChunk(id: "rel-adv", role: .adv, text: "with equally wondrous powers", label: "方式/内容状语", note: "with 短语说明赋予的内容")
+        ],
+        in: duplicateRelativePronounSource
+    )
+
+    try check(
+        normalizedDuplicateRelativePronoun.filter { $0.text == "that" }.count == 1,
+        "relative pronoun used as clause subject should render once, not as connector plus duplicate subject"
+    )
+    try check(
+        normalizedDuplicateRelativePronoun.first { $0.text == "that" }?.label.contains("从句主语") == true,
+        "merged relative pronoun should preserve its relative-clause subject role in the label"
+    )
+    try check(
+        normalizedDuplicateRelativePronoun.map(\.text).joined(separator: " ").doesNotContainAny(["that that", "which which"]),
+        "normalized chunks should not create duplicated relative-pronoun surface text"
+    )
+
+    let coordinatedPredicateSource = "Despite an initial positive reception in Europe, the series was panned by critics, viewers, and longtime fans for its animation, writing, and deviations from its predecessor, and has since been widely regarded as one of the worst animated series ever made."
+    let normalizedCoordinatedPredicate = GrammarResult.normalizedChunks(
+        [
+            GrammarChunk(id: "adv", role: .adv, text: "Despite an initial positive reception in Europe", label: "让步状语", note: "让步介词短语"),
+            GrammarChunk(id: "s", role: .subject, text: "the series", label: "主语", note: "共享主语"),
+            GrammarChunk(id: "v1", role: .predicate, text: "was panned", label: "谓语", note: "第一个被动谓语"),
+            GrammarChunk(id: "by", role: .adv, text: "by critics, viewers, and longtime fans", label: "施事状语", note: "被动结构的 by 短语"),
+            GrammarChunk(id: "for", role: .adv, text: "for its animation, writing, and deviations from its predecessor", label: "原因状语", note: "说明批评原因"),
+            GrammarChunk(id: "v2", role: .adv, text: "and has since been widely regarded", label: "状语", note: "AI 曾误标为状语"),
+            GrammarChunk(id: "comp", role: .object, text: "as one of the worst animated series ever made", label: "补足语", note: "regarded as 的补足成分")
+        ],
+        in: coordinatedPredicateSource
+    )
+
+    try check(
+        normalizedCoordinatedPredicate.first { $0.text == "and has since been widely regarded" }?.role == .predicate,
+        "coordinated finite verb phrase should normalize from adverbial to predicate"
+    )
+    try check(
+        normalizedCoordinatedPredicate.first { $0.text == "and has since been widely regarded" }?.label.contains("并列谓语") == true,
+        "coordinated finite verb phrase should be labeled as a coordinated predicate"
+    )
+
+    let copularComplementSource = "The feel good factor that most proponents of Olympic bids extol, and that was no doubt driving the approval rates of Parisians and Londoners for their cities' respective bids, can be an elusive phenomenon, and one that is tied to that nation's standing on the medal tables."
+    let normalizedCopularComplement = GrammarResult.normalizedChunks(
+        [
+            GrammarChunk(id: "s", role: .subject, text: "The feel good factor", label: "主语", note: "主句主语"),
+            GrammarChunk(id: "attr-1", role: .attr, text: "that most proponents of Olympic bids extol", label: "定语从句", note: "修饰 factor"),
+            GrammarChunk(id: "attr-2", role: .attr, text: "and that was no doubt driving the approval rates of Parisians and Londoners for their cities' respective bids", label: "并列定语从句", note: "继续修饰 factor"),
+            GrammarChunk(id: "v", role: .predicate, text: "can be", label: "谓语", note: "系动词结构"),
+            GrammarChunk(id: "c1", role: .object, text: "an elusive phenomenon", label: "宾语", note: "AI 曾误标为宾语"),
+            GrammarChunk(id: "c2", role: .object, text: "and one that is tied to that nation's standing on the medal tables", label: "并列宾语", note: "AI 曾误标为第二宾语")
+        ],
+        in: copularComplementSource
+    )
+
+    try check(
+        normalizedCopularComplement.first { $0.text == "an elusive phenomenon" }?.role == .appos,
+        "copular complement after can be should normalize away from object"
+    )
+    try check(
+        normalizedCopularComplement.first { $0.text == "an elusive phenomenon" }?.label.contains("表语") == true,
+        "copular complement should be labeled as predicative complement"
+    )
+    try check(
+        normalizedCopularComplement.first { $0.text == "and one that is tied to that nation's standing on the medal tables" }?.role == .appos,
+        "coordinated copular complement should normalize away from object"
+    )
+
+    let invertedCopularSource = "Even more confounding than Manet's relaxed attention to detail, however, is the relationship in the painting between the activity in the mirrored reflection and that which we see in the unreflected foreground."
+    let normalizedInvertedCopular = GrammarResult.normalizedChunks(
+        [
+            GrammarChunk(id: "front", role: .adv, text: "Even more confounding than Manet's relaxed attention to detail", label: "状语", note: "AI 曾误标为状语"),
+            GrammarChunk(id: "v", role: .predicate, text: "is", label: "谓语", note: "倒装系动词"),
+            GrammarChunk(id: "place", role: .adv, text: "in the painting", label: "地点状语", note: "AI 输出中保留的局部短语"),
+            GrammarChunk(id: "mirror", role: .adv, text: "in the mirrored reflection", label: "地点状语", note: "AI 输出中保留的局部短语"),
+            GrammarChunk(id: "relative", role: .attr, text: "that which we see in the unreflected foreground", label: "定语从句", note: "修饰 activity/that")
+        ],
+        in: invertedCopularSource
+    )
+
+    try check(
+        normalizedInvertedCopular.first?.role == .appos,
+        "fronted inverted copular complement should normalize away from adverbial"
+    )
+    try check(
+        normalizedInvertedCopular.contains { $0.role == .subject && $0.text.contains("the relationship") && $0.text.contains("the activity") },
+        "inverted copular normalization should restore the omitted subject noun phrase"
+    )
+    try check(
+        normalizedInvertedCopular.map(\.text).joined(separator: " ").contains("the relationship"),
+        "inverted copular normalized chunks should not drop the relationship token"
+    )
+    try check(
+        normalizedInvertedCopular.map(\.text).joined(separator: " ").contains("the activity"),
+        "inverted copular normalized chunks should not drop the activity token"
+    )
+
+    let olympicBidSource = "The staggering expenses involved in a successful Olympic bid are often assumed to be easily mitigated by tourist revenues and an increase in local employment, but more often than not host cities are short changed and their taxpayers for generations to come are left settling the debt."
+    let olympicBidRecovery = GrammarResult.recoveryChunks(for: olympicBidSource)
+    try check(
+        olympicBidRecovery.first { $0.text == "The staggering expenses involved in a successful Olympic bid" }?.role == .subject,
+        "Olympic bid schema recovery should identify the passive main-clause subject"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "are often assumed to be easily mitigated" }?.role == .predicate,
+        "Olympic bid schema recovery should identify the passive main-clause predicate"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "by tourist revenues and an increase in local employment" }?.role == .adv,
+        "Olympic bid schema recovery should keep the by-phrase as an adverbial"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "but" }?.role == .conj,
+        "Olympic bid schema recovery should keep the contrast connector"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "more often than not" }?.role == .adv,
+        "Olympic bid schema recovery should identify the contrast-half frequency adverbial"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "host cities" }?.role == .subject,
+        "Olympic bid schema recovery should identify the first contrast subject"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "are short changed" }?.role == .predicate,
+        "Olympic bid schema recovery should identify the first contrast passive predicate"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "their taxpayers for generations to come" }?.role == .subject,
+        "Olympic bid schema recovery should identify the second contrast subject"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "are left settling" }?.role == .predicate,
+        "Olympic bid schema recovery should identify the second contrast passive predicate"
+    )
+    try check(
+        olympicBidRecovery.first { $0.text == "the debt" }?.role == .object,
+        "Olympic bid schema recovery should identify the settling object"
+    )
+}
+
 func checkLanguageActionCodable() throws {
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
@@ -1000,6 +1295,83 @@ func checkLingobarViewModelHistoryRecordingSourceGate() throws {
     }
 }
 
+func checkGrammarStagedDecodingRecoverySourceGate() throws {
+    let sourceURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift")
+    let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+    let decoder = try sourceRegion(source, from: "static func decodeGrammar", to: "private static func decodeObject")
+    try check(decoder.contains("grammarSpinePrompt()"), "grammar decode should start with a compact spine request")
+    try check(decoder.contains("decodeGrammarSpine"), "grammar decode should recover when the first compact spine response is not JSON")
+    try check(decoder.contains("GrammarResult.normalizedChunks"), "grammar spine should normalize chunks before rendering")
+    try check(decoder.contains("await onSpine(partial)"), "grammar decode should publish a partial spine before slower sections finish")
+    try check(
+        decoder.contains("async let tokens") &&
+            decoder.contains("async let dependenciesTree") &&
+            decoder.contains("async let trunkOrder") &&
+            decoder.contains("async let tenseVoice") &&
+            decoder.contains("async let knowledge"),
+        "grammar decode should split long-sentence sections into bounded parallel JSON requests"
+    )
+
+    let decodeObject = try sourceRegion(source, from: "private static func decodeObject", to: "private static func decodeStructured")
+    try check(decodeObject.contains("for attempt in 0..<2"), "grammar JSON section decode should retry once on schema drift")
+    try check(
+        decodeObject.contains("Previous response was not valid for the requested schema"),
+        "grammar JSON retry should force a schema-only response"
+    )
+
+    let runAI = try sourceRegion(source, from: "private func runAIIfAvailable", to: "private func completeAIRequest")
+    try check(runAI.contains("LingobarAICompletionDecoder.decodeGrammar"), "grammar actions should use the staged grammar decoder")
+    try check(runAI.contains("completeGrammarSpine"), "grammar actions should surface the staged spine result")
+    try check(runAI.contains("failGrammarRequest"), "grammar actions should route failures through the grammar recovery path")
+
+    let failGrammar = try sourceRegion(source, from: "private func failGrammarRequest", to: "private func completeAIRequest")
+    try check(failGrammar.contains("if grammarResult != nil"), "grammar failures after a spine result should keep the partial panel visible")
+    try check(failGrammar.contains("partial_failure"), "grammar partial failures should be recorded for diagnosis")
+    try check(failGrammar.contains("语法补全失败"), "grammar partial failure status should distinguish completion failure from format failure")
+}
+
+func checkGrammarAbbreviationDisplaySourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let uiSource = try String(
+        contentsOf: root.appending(path: "Sources/LingobarUI/GrammarResultPanel.swift"),
+        encoding: .utf8
+    )
+    let viewModelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift"),
+        encoding: .utf8
+    )
+
+    try check(
+        uiSource.contains("GrammarTreeLabel(label: node.label") &&
+            uiSource.contains("GrammarAbbreviationGlossary.chineseNote(for: label)"),
+        "grammar tree labels should show Chinese notes for abbreviations"
+    )
+    try check(
+        uiSource.contains("GrammarAbbreviationGlossary.displayText(for: token.pos)"),
+        "grammar token POS labels should show Chinese notes for abbreviations"
+    )
+    try check(
+        uiSource.contains("GrammarAbbreviationGlossary.displayText(for: collocation.pos)"),
+        "grammar collocation POS labels should show Chinese notes for abbreviations"
+    )
+    try check(
+        uiSource.contains("GrammarAbbreviationGlossary.displayText(for: clause.tense)") &&
+            uiSource.contains("GrammarAbbreviationGlossary.displayText(for: clause.aspect)") &&
+            uiSource.contains("GrammarAbbreviationGlossary.displayText(for: clause.voice)") &&
+            uiSource.contains("moodBadgeText"),
+        "grammar tense cards should show Chinese notes for tense/aspect/voice/mood abbreviations"
+    )
+    try check(
+        viewModelSource.contains("do not return bare abbreviations like adv or prep") &&
+            viewModelSource.contains("if using abbreviations such as S, NP, VP, AdvP, or ConjP") &&
+            viewModelSource.contains("collocations.pos must not be a bare abbreviation") &&
+            viewModelSource.contains("tense, aspect, voice, and mood must be readable to Chinese learners"),
+        "grammar prompts should ask the AI to avoid bare abbreviations"
+    )
+}
+
 func sourceRegion(_ source: String, from start: String, to end: String) throws -> String {
     let startRange = try requiredRange(in: source, needle: start, message: "source should contain \(start)")
     guard let endRange = source[startRange.upperBound...].range(of: end) else {
@@ -1191,11 +1563,15 @@ do {
     try checkGrammarResultFixture()
     try checkGrammarUITestFixtures()
     try checkGrammarAIResponseTolerance()
+    try checkGrammarAbbreviationGlossary()
+    try checkGrammarChunkNormalization()
     try checkLanguageActionCodable()
     try checkLingobarHistoryStore()
     try checkLingobarHistoryRecordBuilderPrivacy()
     try checkLingobarHubLibraryItems()
     try checkLingobarViewModelHistoryRecordingSourceGate()
+    try checkGrammarStagedDecodingRecoverySourceGate()
+    try checkGrammarAbbreviationDisplaySourceGate()
     try checkSelectionPermissionSourceGate()
     try checkPhraseStore()
     try checkLingobarHubShellSourceGate()

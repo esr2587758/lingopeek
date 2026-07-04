@@ -19,9 +19,9 @@ const eg = (text, src, when) => ({ text, src, when });
 const TREE = [
   { id: "root", label: "英语语法", parent: null, cat: "core", met: 99, mastery: 0.9, eg: [] },
 
-  // ===== 两大支柱 =====
-  { id: "morph",  label: "词法", parent: "root", cat: "morph",  met: 60, mastery: 0.7, eg: [] },
-  { id: "syntax", label: "句法", parent: "root", cat: "syntax", met: 55, mastery: 0.6, eg: [] },
+  // ===== 两大支柱（不作节点占位，降为背景扇区，其子类提升到第一环放射）=====
+  { id: "morph",  label: "词法", parent: "root", cat: "morph",  met: 60, mastery: 0.7, pillar: true, eg: [] },
+  { id: "syntax", label: "句法", parent: "root", cat: "syntax", met: 55, mastery: 0.6, pillar: true, eg: [] },
 
   // ===== 词法 → 词类 =====
   { id: "verb",  label: "动词", parent: "morph", cat: "verb", met: 40, mastery: 0.65, eg: [
@@ -159,17 +159,46 @@ const TREE = [
 ];
 
 const MAX_MET = Math.max(...TREE.filter(n => n.id !== "root").map((n) => n.met));
+
+// ===== 掌握 = 「懂了」确认累积 =====
+// 掌握度不是手填的玄学分，而是你在阅读里点过几次「懂了」推出来的。
+// 每次「懂了」抹掉剩余差距的 30%：0→0  1→.30  2→.51  3→.66  4→.76  5→.83 …
+// 约 4 次确认（在不同句子/时间）→ 视为已掌握。可解释、会累积、防虚熟。
+const MASTER_BASE = 0.7;
+const MASTER_THRESHOLD = 4; // 达到「已掌握」所需的确认次数
+function masteryFrom(u) { return u <= 0 ? 0 : 1 - Math.pow(MASTER_BASE, u); }
+function understoodFrom(mastery) { // 把作者预设的 mastery 反推成「懂了」次数作为种子
+  if (mastery <= 0) return 0;
+  return Math.round(Math.log(1 - Math.min(mastery, 0.985)) / Math.log(MASTER_BASE));
+}
+// 初始「懂了」次数种子（写回每个节点）
+// confirms[]：每个例句你当时点没点「懂了」（最早遇到的先被确认）。
+// hiddenConfirms：在未展示/更早句子里的确认次数。understood = hiddenConfirms + 已确认句子数。
+TREE.forEach((n) => {
+  // 掌握度 <0.3 视为「几乎没确认过」→ 种子 0（高频未确认 = 盲区）；其余按反推取整。
+  const u = n.mastery < 0.3 ? 0 : understoodFrom(n.mastery);
+  const len = (n.eg || []).length;
+  const onSentences = Math.min(u, len);
+  n.confirms = (n.eg || []).map((_, i) => i < onSentences); // 最早的若干句标记为已懂
+  n.hiddenConfirms = Math.max(0, u - len);
+  n.understood = n.hiddenConfirms + n.confirms.filter(Boolean).length;
+});
+function liveUnderstood(n) { return (n.hiddenConfirms || 0) + (n.confirms ? n.confirms.filter(Boolean).length : 0); }
+
 function stateOf(n) {
   if (n.met === 0) return "locked";
-  if (n.mastery >= 0.75) return "mastered";
+  if (liveUnderstood(n) >= MASTER_THRESHOLD) return "mastered";
   return "unlocked";
 }
-function isBlind(n) { return stateOf(n) === "unlocked" && n.mastery < 0.3 && n.met >= 8; }
+// 高频盲区：遇到得多，却一次都没确认过「懂了」
+function isBlind(n) { return stateOf(n) === "unlocked" && n.met >= 8 && liveUnderstood(n) === 0; }
+// 轻推断兜底：遇到不少、却懒得标记 → 提示一键确认
+function shouldNudge(n) { return stateOf(n) === "unlocked" && n.met >= 10 && liveUnderstood(n) >= 1 && liveUnderstood(n) < MASTER_THRESHOLD; }
 
 const STATES = {
   locked:   { zh: "未探索", desc: "还没在阅读中遇到" },
-  unlocked: { zh: "待掌握", desc: "遇到过，仍需巩固" },
-  mastered: { zh: "已掌握", desc: "再遇到也不用查" },
+  unlocked: { zh: "待掌握", desc: "遇到过，仍需确认" },
+  mastered: { zh: "已掌握", desc: "你已多次确认看得懂" },
 };
 
 const OVERVIEW = {
@@ -183,4 +212,8 @@ function relTime(min) {
   return `${Math.floor(h / 24)} 天前`;
 }
 
-Object.assign(window, { CATS, TREE, MAX_MET, STATES, OVERVIEW, stateOf, isBlind, relTime });
+Object.assign(window, {
+  CATS, TREE, MAX_MET, STATES, OVERVIEW,
+  stateOf, isBlind, shouldNudge, relTime, liveUnderstood,
+  masteryFrom, understoodFrom, MASTER_BASE, MASTER_THRESHOLD,
+});

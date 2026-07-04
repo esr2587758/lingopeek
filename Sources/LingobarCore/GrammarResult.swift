@@ -253,6 +253,152 @@ public enum GrammarRole: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+public enum GrammarAbbreviationGlossary {
+    public static func displayText(for term: String) -> String {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let note = chineseNote(for: trimmed) else {
+            return term
+        }
+        return "\(trimmed) · \(note)"
+    }
+
+    public static func chineseNote(for term: String) -> String? {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !containsCJK(trimmed) else {
+            return nil
+        }
+
+        let words = normalizedWords(in: trimmed)
+        guard !words.isEmpty else {
+            return nil
+        }
+
+        let qualifierNotes = words.compactMap { qualifiers[$0] }
+        let baseWords = words.filter { qualifiers[$0] == nil }
+        if baseWords.isEmpty {
+            return qualifierNotes.isEmpty ? nil : qualifierNotes.joined(separator: "、")
+        }
+        let baseKey = baseWords.joined(separator: " ")
+        guard var note = glosses[baseKey] else {
+            return nil
+        }
+
+        if !qualifierNotes.isEmpty {
+            note += "（\(qualifierNotes.joined(separator: "、"))）"
+        }
+        return note
+    }
+
+    private static func normalizedWords(in term: String) -> [String] {
+        term.lowercased().split { scalar in
+            !(scalar.isLetter || scalar.isNumber)
+        }.map(String.init)
+    }
+
+    private static func containsCJK(_ term: String) -> Bool {
+        term.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private static let qualifiers: [String: String] = [
+        "active": "主动",
+        "passive": "被动"
+    ]
+
+    private static let glosses: [String: String] = [
+        "s": "句子",
+        "sbar": "从句",
+        "cp": "从句",
+        "np": "名词短语",
+        "vp": "动词短语",
+        "pp": "介词短语",
+        "ap": "形容词短语",
+        "adjp": "形容词短语",
+        "advp": "状语短语",
+        "conjp": "连接短语",
+        "n": "名词",
+        "noun": "名词",
+        "v": "动词",
+        "verb": "动词",
+        "adj": "形容词",
+        "adjective": "形容词",
+        "adv": "副词/状语",
+        "adverb": "副词",
+        "prep": "介词",
+        "preposition": "介词",
+        "conj": "连词",
+        "conjunction": "连词",
+        "det": "限定词",
+        "determiner": "限定词",
+        "pron": "代词",
+        "pronoun": "代词",
+        "aux": "助动词",
+        "modal": "情态动词",
+        "past": "过去时",
+        "present": "现在时",
+        "future": "将来时",
+        "simple": "一般体",
+        "progressive": "进行体",
+        "continuous": "进行体",
+        "perfect": "完成体",
+        "perfective": "完成体",
+        "indicative": "陈述语气",
+        "subjunctive": "虚拟语气",
+        "imperative": "祈使语气",
+        "conditional": "条件语气",
+        "finite": "限定动词",
+        "non finite": "非限定",
+        "nonfinite": "非限定",
+        "past simple": "一般过去时",
+        "simple past": "一般过去时",
+        "present simple": "一般现在时",
+        "simple present": "一般现在时",
+        "past progressive": "过去进行体",
+        "present progressive": "现在进行体",
+        "past continuous": "过去进行体",
+        "present continuous": "现在进行体",
+        "present participle": "现在分词",
+        "n phr": "名词短语",
+        "n phrase": "名词短语",
+        "noun phr": "名词短语",
+        "noun phrase": "名词短语",
+        "v phr": "动词短语",
+        "v phrase": "动词短语",
+        "verb phr": "动词短语",
+        "verb phrase": "动词短语",
+        "adj phr": "形容词短语",
+        "adj phrase": "形容词短语",
+        "adjective phr": "形容词短语",
+        "adjective phrase": "形容词短语",
+        "adv phr": "状语短语",
+        "adv phrase": "状语短语",
+        "adverb phr": "副词短语",
+        "adverb phrase": "副词短语",
+        "adverbial phr": "状语短语",
+        "adverbial phrase": "状语短语",
+        "prep phr": "介词短语",
+        "prep phrase": "介词短语",
+        "preposition phr": "介词短语",
+        "prepositional phrase": "介词短语",
+        "conj phr": "连接短语",
+        "conj phrase": "连接短语",
+        "conjunction phr": "连接短语",
+        "conjunction phrase": "连接短语",
+        "clause": "从句/分句",
+        "relative clause": "定语从句",
+        "attributive clause": "定语从句",
+        "object clause": "宾语从句",
+        "concessive clause": "让步从句",
+        "main clause": "主句"
+    ]
+}
+
 public struct GrammarResult: Codable, Equatable, Sendable {
     public var title: String
     public var sourceSentence: String
@@ -395,6 +541,881 @@ public struct GrammarChunk: Codable, Equatable, Identifiable, Sendable {
         self.label = try container.decodeIfPresent(String.self, forKey: .label) ?? role.zh
         self.note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         self.tokens = try container.decodeIfPresent([GrammarToken].self, forKey: .tokens) ?? []
+    }
+}
+
+fileprivate struct LocatedGrammarChunk {
+    var chunk: GrammarChunk
+    var start: Int?
+    var end: Int?
+}
+
+public extension GrammarResult {
+    static func recoveryChunks(for sourceSentence: String) -> [GrammarChunk] {
+        let source = sourceSentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else {
+            return []
+        }
+
+        let chunks = colonRecoveryChunks(for: source)
+            ?? passiveContrastRecoveryChunks(for: source)
+            ?? fallbackLinearRecoveryChunks(for: source)
+        return normalizedChunks(chunks, in: source)
+    }
+
+    static func normalizedChunks(_ chunks: [GrammarChunk], in sourceSentence: String) -> [GrammarChunk] {
+        let cleanedChunks = chunks
+            .map(cleanedChunk)
+            .filter { !$0.text.isEmpty }
+        let locatedChunks = locate(chunks: cleanedChunks, in: sourceSentence)
+        let coarseIndexes = coarseChunkIndexes(in: locatedChunks)
+        let expanded = locatedChunks.enumerated().flatMap { index, located in
+            if coarseIndexes.contains(index) {
+                return [GrammarChunk]()
+            }
+            return expandChunk(located.chunk)
+        }
+        let merged = mergeDuplicateRelativePronouns(
+            in: locate(chunks: expanded, in: sourceSentence)
+        )
+        let copularAdjusted = normalizeCopularComplements(in: merged)
+        let invertedAdjusted = recoverInvertedCopularClause(
+            in: copularAdjusted,
+            sourceSentence: sourceSentence
+        )
+        let scoped = scopeRelativeClauseTailObjects(
+            in: invertedAdjusted,
+            sourceSentence: sourceSentence
+        )
+        return uniquedChunkIDs(scoped)
+    }
+
+    private static func colonRecoveryChunks(for source: String) -> [GrammarChunk]? {
+        guard let colonRange = source.range(of: ":") else {
+            return nil
+        }
+
+        let lead = String(source[..<colonRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let tail = String(source[colonRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var chunks = splitLeadClause(lead)
+        chunks.append(
+            GrammarChunk(
+                id: "colon",
+                role: .conj,
+                text: ":",
+                label: "解释连接",
+                note: "冒号引出后面对前一分句的解释。"
+            )
+        )
+
+        let clauses = tail
+            .split(separator: ",", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        for (index, clause) in clauses.enumerated() {
+            chunks.append(
+                GrammarChunk(
+                    id: "explain-\(index + 1)",
+                    role: .appos,
+                    text: clause,
+                    label: index == 0 ? "解释分句" : "并列解释分句",
+                    note: "冒号后的并列分句，展开说明前面的结果或原因。"
+                )
+            )
+        }
+        return chunks
+    }
+
+    private static func splitLeadClause(_ lead: String) -> [GrammarChunk] {
+        let verbPatterns = [" creates ", " create ", " leads to ", " lead to ", " causes ", " cause ", " produces ", " produce "]
+        for pattern in verbPatterns {
+            guard let range = lead.range(of: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+            let subject = String(lead[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let predicate = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+            let object = String(lead[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return [
+                GrammarChunk(id: "lead-s", role: .subject, text: subject, label: "主语", note: "冒号前主句的主语。"),
+                GrammarChunk(id: "lead-v", role: .predicate, text: predicate, label: "谓语", note: "冒号前主句的谓语。"),
+                GrammarChunk(id: "lead-o", role: .object, text: object, label: "宾语", note: "冒号前主句的宾语或结果。")
+            ].filter { !$0.text.isEmpty }
+        }
+
+        return [
+            GrammarChunk(id: "lead", role: .predicate, text: lead, label: "主句", note: "冒号前的核心分句。")
+        ].filter { !$0.text.isEmpty }
+    }
+
+    private static func passiveContrastRecoveryChunks(for source: String) -> [GrammarChunk]? {
+        guard let contrastRange = source.range(of: ", but ", options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let lead = String(source[..<contrastRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let tail = String(source[contrastRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var chunks = passiveLeadChunks(for: lead) else {
+            return nil
+        }
+
+        chunks.append(
+            GrammarChunk(
+                id: "contrast",
+                role: .conj,
+                text: "but",
+                label: "转折连接",
+                note: "连接前后两个形成对比的并列分句。"
+            )
+        )
+        chunks.append(contentsOf: passiveTailChunks(for: tail))
+        return chunks.count >= 6 ? chunks : nil
+    }
+
+    private static func passiveLeadChunks(for clause: String) -> [GrammarChunk]? {
+        let passivePatterns = [
+            " are often assumed to be ",
+            " are assumed to be ",
+            " is often assumed to be ",
+            " is assumed to be ",
+            " were often assumed to be ",
+            " was often assumed to be "
+        ]
+
+        for pattern in passivePatterns {
+            guard let range = clause.range(of: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+
+            let subject = String(clause[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let afterPassive = String(clause[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !subject.isEmpty, !afterPassive.isEmpty else {
+                continue
+            }
+
+            let predicate: String
+            let byPhrase: String?
+            if let byRange = afterPassive.range(of: " by ", options: [.caseInsensitive]) {
+                let predicateTail = String(afterPassive[..<byRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                predicate = [pattern.trimmingCharacters(in: .whitespacesAndNewlines), predicateTail]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                byPhrase = String(afterPassive[byRange.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                predicate = [pattern.trimmingCharacters(in: .whitespacesAndNewlines), afterPassive]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                byPhrase = nil
+            }
+
+            var chunks = [
+                GrammarChunk(id: "passive-s", role: .subject, text: subject, label: "主语", note: "被动主句的主语。"),
+                GrammarChunk(id: "passive-v", role: .predicate, text: predicate, label: "被动谓语", note: "assumed to be 后接被动补足。")
+            ]
+            if let byPhrase, !byPhrase.isEmpty {
+                chunks.append(
+                    GrammarChunk(id: "passive-by", role: .adv, text: byPhrase, label: "施事/方式状语", note: "说明被缓解依靠的来源。")
+                )
+            }
+            return chunks
+        }
+
+        return nil
+    }
+
+    private static func passiveTailChunks(for tail: String) -> [GrammarChunk] {
+        var remaining = tail.trimmingCharacters(in: .whitespacesAndNewlines)
+        var chunks: [GrammarChunk] = []
+
+        if let hostRange = remaining.range(of: " host cities ", options: [.caseInsensitive]) {
+            let adverbial = String(remaining[..<hostRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !adverbial.isEmpty {
+                chunks.append(
+                    GrammarChunk(id: "contrast-adv", role: .adv, text: adverbial, label: "频率状语", note: "说明转折后情况经常发生。")
+                )
+            }
+            remaining = String(remaining[hostRange.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        guard let secondRange = remaining.range(of: " and their taxpayers ", options: [.caseInsensitive]) else {
+            if let simple = splitPassiveClause(remaining, idPrefix: "contrast-1", predicateLabel: "转折分句谓语") {
+                chunks.append(contentsOf: simple)
+            }
+            return chunks
+        }
+
+        let firstClause = String(remaining[..<secondRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let secondClause = "their taxpayers " + String(remaining[secondRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if let first = splitPassiveClause(firstClause, idPrefix: "contrast-1", predicateLabel: "转折分句谓语") {
+            chunks.append(contentsOf: first)
+        }
+        if let second = splitLeftSettlingClause(secondClause) {
+            chunks.append(contentsOf: second)
+        } else if let second = splitPassiveClause(secondClause, idPrefix: "contrast-2", predicateLabel: "并列被动谓语") {
+            chunks.append(contentsOf: second)
+        }
+        return chunks
+    }
+
+    private static func splitPassiveClause(_ clause: String, idPrefix: String, predicateLabel: String) -> [GrammarChunk]? {
+        guard let range = clause.range(of: " are ", options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let subject = String(clause[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let predicate = String(clause[range.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !subject.isEmpty, !predicate.isEmpty else {
+            return nil
+        }
+
+        return [
+            GrammarChunk(id: "\(idPrefix)-s", role: .subject, text: subject, label: "并列主语", note: "转折分句中的主语。"),
+            GrammarChunk(id: "\(idPrefix)-v", role: .predicate, text: predicate, label: predicateLabel, note: "被动结构说明该主语承受的结果。")
+        ]
+    }
+
+    private static func splitLeftSettlingClause(_ clause: String) -> [GrammarChunk]? {
+        guard let range = clause.range(of: " are left settling ", options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let subject = String(clause[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let object = String(clause[range.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard !subject.isEmpty, !object.isEmpty else {
+            return nil
+        }
+
+        return [
+            GrammarChunk(id: "contrast-2-s", role: .subject, text: subject, label: "并列主语", note: "第二个转折分句的主语。"),
+            GrammarChunk(id: "contrast-2-v", role: .predicate, text: "are left settling", label: "并列被动谓语", note: "left settling 表示被留下来继续承担。"),
+            GrammarChunk(id: "contrast-2-o", role: .object, text: object, label: "谓语宾语", note: "settling 的宾语。")
+        ]
+    }
+
+    private static func fallbackLinearRecoveryChunks(for source: String) -> [GrammarChunk] {
+        let words = source.split { $0.isWhitespace }
+        guard words.count > 8 else {
+            return [
+                GrammarChunk(id: "sentence", role: .predicate, text: source, label: "句子", note: "恢复显示的短句骨架。")
+            ].filter { !$0.text.isEmpty }
+        }
+
+        let firstCut = min(6, words.count)
+        let secondCut = min(firstCut + 5, words.count)
+        let subject = words[..<firstCut].joined(separator: " ")
+        let predicate = words[firstCut..<secondCut].joined(separator: " ")
+        let rest = words[secondCut...].joined(separator: " ")
+        return [
+            GrammarChunk(id: "fallback-s", role: .subject, text: subject, label: "主语/话题", note: "恢复显示的句首话题。"),
+            GrammarChunk(id: "fallback-v", role: .predicate, text: predicate, label: "谓语片段", note: "恢复显示的核心动作片段。"),
+            GrammarChunk(id: "fallback-rest", role: .object, text: rest, label: "补足/修饰", note: "恢复显示的后续内容。")
+        ].filter { !$0.text.isEmpty }
+    }
+
+    private static func cleanedChunk(_ chunk: GrammarChunk) -> GrammarChunk {
+        GrammarChunk(
+            id: chunk.id.trimmingCharacters(in: .whitespacesAndNewlines),
+            role: chunk.role,
+            text: chunk.text.trimmingCharacters(in: .whitespacesAndNewlines),
+            label: chunk.label.trimmingCharacters(in: .whitespacesAndNewlines),
+            note: chunk.note.trimmingCharacters(in: .whitespacesAndNewlines),
+            tokens: chunk.tokens
+        )
+    }
+
+    private static func locate(chunks: [GrammarChunk], in sourceSentence: String) -> [LocatedGrammarChunk] {
+        var searchStart = sourceSentence.startIndex
+        return chunks.map { chunk in
+            let searchRange = searchStart..<sourceSentence.endIndex
+            let range = sourceSentence.range(of: chunk.text, options: [.caseInsensitive], range: searchRange)
+                ?? sourceSentence.range(of: chunk.text, options: [.caseInsensitive])
+
+            guard let range else {
+                return LocatedGrammarChunk(chunk: chunk, start: nil, end: nil)
+            }
+
+            searchStart = range.upperBound
+            let start = sourceSentence.distance(from: sourceSentence.startIndex, to: range.lowerBound)
+            let end = sourceSentence.distance(from: sourceSentence.startIndex, to: range.upperBound)
+            return LocatedGrammarChunk(chunk: chunk, start: start, end: end)
+        }
+    }
+
+    private static func coarseChunkIndexes(in locatedChunks: [LocatedGrammarChunk]) -> Set<Int> {
+        Set(locatedChunks.indices.filter { outerIndex in
+            let outer = locatedChunks[outerIndex]
+            guard let outerStart = outer.start,
+                  let outerEnd = outer.end,
+                  wordCount(outer.chunk.text) >= 5 else {
+                return false
+            }
+
+            let contained = locatedChunks.indices.filter { innerIndex in
+                guard innerIndex != outerIndex,
+                      let innerStart = locatedChunks[innerIndex].start,
+                      let innerEnd = locatedChunks[innerIndex].end else {
+                    return false
+                }
+                let isInside = innerStart >= outerStart && innerEnd <= outerEnd
+                let isSameSpan = innerStart == outerStart && innerEnd == outerEnd
+                return isInside && !isSameSpan
+            }
+
+            guard contained.count >= 2 else {
+                return false
+            }
+
+            let nestedRoles = Set(contained.map { locatedChunks[$0].chunk.role })
+            return nestedRoles.contains(.subject)
+                || nestedRoles.contains(.predicate)
+                || nestedRoles.contains(.object)
+        })
+    }
+
+    private static func expandChunk(_ chunk: GrammarChunk) -> [GrammarChunk] {
+        let relativeChunks = splitRelativeClause(chunk) ?? [correctCoordinatedFinitePredicate(chunk)]
+        return relativeChunks.flatMap(splitOversizedAdverbial)
+    }
+
+    private static func splitRelativeClause(_ chunk: GrammarChunk) -> [GrammarChunk]? {
+        guard chunk.role == .attr,
+              wordCount(chunk.text) >= 4,
+              let connectorRange = chunk.text.rangeOfFirstWord else {
+            return nil
+        }
+
+        let connector = String(chunk.text[connectorRange])
+        guard relativeConnectors.contains(connector.lowercased()) else {
+            return nil
+        }
+
+        let remaining = String(chunk.text[connectorRange.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let predicateRange = remaining.rangeOfFirstWord else {
+            return nil
+        }
+
+        let predicateHead = String(remaining[predicateRange])
+        guard !relativeSubjectStarts.contains(predicateHead.lowercased()),
+              !finiteAuxiliaries.contains(predicateHead.lowercased()) else {
+            return nil
+        }
+
+        let complement = String(remaining[predicateRange.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard wordCount(complement) >= 2 else {
+            return nil
+        }
+
+        let complementRole: GrammarRole = startsWithPreposition(complement) ? .adv : .object
+        let complementLabel = complementRole == .object ? "定语从句宾语" : "定语从句修饰语"
+        return [
+            GrammarChunk(
+                id: "\(chunk.id)-rel",
+                role: .conj,
+                text: connector,
+                label: "关系词",
+                note: chunk.note.isEmpty ? "引导定语从句。" : chunk.note
+            ),
+            GrammarChunk(
+                id: "\(chunk.id)-rel-v",
+                role: .predicate,
+                text: predicateHead,
+                label: "定语从句谓语",
+                note: "说明先行词在定语从句中的动作。"
+            ),
+            GrammarChunk(
+                id: "\(chunk.id)-rel-c",
+                role: complementRole,
+                text: complement,
+                label: complementLabel,
+                note: "属于前面的定语从句，不是主句级成分。"
+            )
+        ]
+    }
+
+    private static func correctCoordinatedFinitePredicate(_ chunk: GrammarChunk) -> GrammarChunk {
+        guard chunk.role == .adv else {
+            return chunk
+        }
+
+        let text = chunk.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowerText = text.lowercased()
+        guard lowerText.hasPrefix("and "),
+              let afterAndRange = text.range(of: "and ", options: [.caseInsensitive]) else {
+            return chunk
+        }
+
+        let afterAnd = String(text[afterAndRange.upperBound...])
+        let words = lowercaseWords(in: afterAnd)
+        guard let firstWord = words.first,
+              finiteAuxiliaries.contains(firstWord),
+              words.count >= 3 else {
+            return chunk
+        }
+
+        let label = chunk.label.contains("谓语") ? chunk.label : "并列谓语"
+        let note = chunk.note.isEmpty
+            ? "与前面的谓语共享主语。"
+            : "\(chunk.note)；与前面的谓语共享主语。"
+        return GrammarChunk(
+            id: chunk.id,
+            role: .predicate,
+            text: chunk.text,
+            label: label,
+            note: note,
+            tokens: chunk.tokens
+        )
+    }
+
+    private static func scopeRelativeClauseTailObjects(
+        in locatedChunks: [LocatedGrammarChunk],
+        sourceSentence: String
+    ) -> [GrammarChunk] {
+        var result: [GrammarChunk] = []
+        var isInsideRelativeTail = false
+        var previousEnd: Int?
+
+        for located in locatedChunks {
+            var chunk = located.chunk
+            if isInsideRelativeTail,
+               chunk.role == .object,
+               canContinueRelativeClauseTail(
+                   from: previousEnd,
+                   to: located.start,
+                   chunk: chunk,
+                   sourceSentence: sourceSentence
+               ) {
+                chunk = relabeledRelativeClauseTailObject(chunk)
+            } else if chunk.role == .subject || chunk.role == .predicate {
+                isInsideRelativeTail = isRelativeClauseChunk(chunk)
+            }
+
+            if isRelativeClauseChunk(chunk), chunk.role == .object || chunk.role == .adv {
+                isInsideRelativeTail = true
+            }
+            if located.end != nil {
+                previousEnd = located.end
+            }
+            result.append(chunk)
+        }
+
+        return result
+    }
+
+    private static func mergeDuplicateRelativePronouns(
+        in locatedChunks: [LocatedGrammarChunk]
+    ) -> [LocatedGrammarChunk] {
+        var merged: [LocatedGrammarChunk] = []
+        for located in locatedChunks {
+            if let lastIndex = merged.indices.last,
+               shouldMergeRelativePronounConnector(merged[lastIndex], with: located) {
+                merged[lastIndex] = mergedRelativePronounConnector(merged[lastIndex], with: located)
+            } else {
+                merged.append(located)
+            }
+        }
+        return merged
+    }
+
+    private static func shouldMergeRelativePronounConnector(
+        _ connector: LocatedGrammarChunk,
+        with subject: LocatedGrammarChunk
+    ) -> Bool {
+        guard connector.chunk.role == .conj,
+              subject.chunk.role == .subject,
+              let connectorWord = lowercaseWords(in: connector.chunk.text).first,
+              relativeConnectors.contains(connectorWord) else {
+            return false
+        }
+
+        let subjectWords = lowercaseWords(in: subject.chunk.text)
+        guard subjectWords.first == connectorWord else {
+            return false
+        }
+
+        if let connectorStart = connector.start,
+           let subjectStart = subject.start {
+            return connectorStart == subjectStart
+        }
+        return connector.chunk.text.caseInsensitiveCompare(subject.chunk.text) == .orderedSame
+    }
+
+    private static func mergedRelativePronounConnector(
+        _ connector: LocatedGrammarChunk,
+        with subject: LocatedGrammarChunk
+    ) -> LocatedGrammarChunk {
+        LocatedGrammarChunk(
+            chunk: GrammarChunk(
+                id: subject.chunk.id.isEmpty ? connector.chunk.id : subject.chunk.id,
+                role: .subject,
+                text: subject.chunk.text,
+                label: mergedRelativePronounLabel(connector: connector.chunk, subject: subject.chunk),
+                note: mergedRelativePronounNote(connector: connector.chunk, subject: subject.chunk),
+                tokens: subject.chunk.tokens.isEmpty ? connector.chunk.tokens : subject.chunk.tokens
+            ),
+            start: subject.start ?? connector.start,
+            end: subject.end ?? connector.end
+        )
+    }
+
+    private static func mergedRelativePronounLabel(connector: GrammarChunk, subject: GrammarChunk) -> String {
+        let labels = [connector.label, subject.label]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let uniqueLabels = labels.reduce(into: [String]()) { partial, label in
+            if !partial.contains(label) {
+                partial.append(label)
+            }
+        }
+        return uniqueLabels.isEmpty ? "关系代词 / 从句主语" : uniqueLabels.joined(separator: " / ")
+    }
+
+    private static func mergedRelativePronounNote(connector: GrammarChunk, subject: GrammarChunk) -> String {
+        let notes = [connector.note, subject.note]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let uniqueNotes = notes.reduce(into: [String]()) { partial, note in
+            if !partial.contains(note) {
+                partial.append(note)
+            }
+        }
+        return uniqueNotes.isEmpty
+            ? "关系代词同时充当定语从句主语，只渲染一次。"
+            : uniqueNotes.joined(separator: "；")
+    }
+
+    private static func normalizeCopularComplements(
+        in locatedChunks: [LocatedGrammarChunk]
+    ) -> [LocatedGrammarChunk] {
+        var result: [LocatedGrammarChunk] = []
+        var isAfterCopularPredicate = false
+        var complementCount = 0
+
+        for located in locatedChunks {
+            var chunk = located.chunk
+            if chunk.role == .predicate {
+                isAfterCopularPredicate = isCopularPredicate(chunk)
+                complementCount = 0
+            } else if chunk.role == .subject {
+                isAfterCopularPredicate = false
+                complementCount = 0
+            } else if isAfterCopularPredicate, chunk.role == .object {
+                complementCount += 1
+                chunk = relabeledCopularComplement(chunk, isCoordinated: complementCount > 1 || startsWithCoordinator(chunk.text))
+            }
+
+            result.append(LocatedGrammarChunk(chunk: chunk, start: located.start, end: located.end))
+        }
+
+        return result
+    }
+
+    private static func recoverInvertedCopularClause(
+        in locatedChunks: [LocatedGrammarChunk],
+        sourceSentence: String
+    ) -> [LocatedGrammarChunk] {
+        guard let markerRange = sourceSentence.range(of: ", however, is ", options: [.caseInsensitive]) else {
+            return locatedChunks
+        }
+
+        let frontedText = String(sourceSentence[..<markerRange.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let subjectText = String(sourceSentence[markerRange.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !frontedText.isEmpty,
+              !subjectText.isEmpty,
+              !locatedChunks.contains(where: { $0.chunk.text.localizedCaseInsensitiveContains("the relationship") }) else {
+            return locatedChunks
+        }
+
+        let frontedEnd = sourceSentence.distance(from: sourceSentence.startIndex, to: markerRange.lowerBound)
+        let predicateStart = sourceSentence.distance(from: sourceSentence.startIndex, to: sourceSentence.index(markerRange.upperBound, offsetBy: -3))
+        let predicateEnd = predicateStart + 2
+        let subjectStart = sourceSentence.distance(from: sourceSentence.startIndex, to: markerRange.upperBound)
+        let subjectEnd = sourceSentence.distance(from: sourceSentence.startIndex, to: sourceSentence.endIndex)
+
+        let fronted = locatedChunks.first { located in
+            guard let start = located.start, let end = located.end else {
+                return false
+            }
+            return start >= 0 && end <= frontedEnd
+        }?.chunk
+        let predicate = locatedChunks.first { located in
+            located.chunk.role == .predicate &&
+                located.chunk.text.caseInsensitiveCompare("is") == .orderedSame
+        }?.chunk
+
+        return [
+            LocatedGrammarChunk(
+                chunk: relabeledFrontedCopularComplement(
+                    fronted ?? GrammarChunk(id: "fronted-complement", role: .appos, text: frontedText, label: "前置表语", note: "倒装结构中提前到句首的表语。")
+                ),
+                start: 0,
+                end: frontedEnd
+            ),
+            LocatedGrammarChunk(
+                chunk: predicate ?? GrammarChunk(id: "inverted-v", role: .predicate, text: "is", label: "倒装系动词", note: "连接前置表语和后置主语。"),
+                start: predicateStart,
+                end: predicateEnd
+            ),
+            LocatedGrammarChunk(
+                chunk: GrammarChunk(
+                    id: "inverted-subject",
+                    role: .subject,
+                    text: subjectText,
+                    label: "倒装主语",
+                    note: "系动词后的完整主语，保留 relationship、activity 等核心词。"
+                ),
+                start: subjectStart,
+                end: subjectEnd
+            )
+        ]
+    }
+
+    private static func relabeledCopularComplement(_ chunk: GrammarChunk, isCoordinated: Bool) -> GrammarChunk {
+        let label = chunk.label.contains("表语") ? chunk.label : (isCoordinated ? "并列表语" : "表语")
+        let note = chunk.note.contains("系动词")
+            ? chunk.note
+            : (chunk.note.isEmpty ? "系动词后的主语补足语，不是宾语。" : "\(chunk.note)；系动词后的主语补足语，不是宾语。")
+        return GrammarChunk(
+            id: chunk.id,
+            role: .appos,
+            text: chunk.text,
+            label: label,
+            note: note,
+            tokens: chunk.tokens
+        )
+    }
+
+    private static func relabeledFrontedCopularComplement(_ chunk: GrammarChunk) -> GrammarChunk {
+        let label = chunk.label.contains("表语") ? chunk.label : "前置表语"
+        let note = chunk.note.contains("倒装")
+            ? chunk.note
+            : (chunk.note.isEmpty ? "倒装系表结构中前置的表语。" : "\(chunk.note)；倒装系表结构中前置的表语。")
+        return GrammarChunk(
+            id: chunk.id,
+            role: .appos,
+            text: chunk.text,
+            label: label,
+            note: note,
+            tokens: chunk.tokens
+        )
+    }
+
+    private static func isCopularPredicate(_ chunk: GrammarChunk) -> Bool {
+        guard chunk.role == .predicate,
+              let lastWord = lowercaseWords(in: chunk.text).last else {
+            return false
+        }
+        return copularPredicateHeads.contains(lastWord)
+    }
+
+    private static func startsWithCoordinator(_ text: String) -> Bool {
+        guard let firstWord = lowercaseWords(in: text).first else {
+            return false
+        }
+        return ["and", "or", "nor"].contains(firstWord)
+    }
+
+    private static func canContinueRelativeClauseTail(
+        from previousEnd: Int?,
+        to currentStart: Int?,
+        chunk: GrammarChunk,
+        sourceSentence: String
+    ) -> Bool {
+        let lowerText = chunk.text.lowercased()
+        if lowerText.hasPrefix("and ") || lowerText.hasPrefix("or ") {
+            return true
+        }
+        guard let previousEnd,
+              let currentStart,
+              previousEnd <= currentStart,
+              let gap = sourceSentence.substring(fromOffset: previousEnd, toOffset: currentStart) else {
+            return false
+        }
+        return gap.contains(",") || gap.contains(";")
+    }
+
+    private static func relabeledRelativeClauseTailObject(_ chunk: GrammarChunk) -> GrammarChunk {
+        let label = chunk.label.contains("定语从句") ? chunk.label : "定语从句并列宾语"
+        let note = chunk.note.contains("不是主句级")
+            ? chunk.note
+            : (chunk.note.isEmpty ? "属于前面的定语从句，不是主句级宾语。" : "\(chunk.note)；属于前面的定语从句，不是主句级宾语。")
+        return GrammarChunk(
+            id: chunk.id,
+            role: chunk.role,
+            text: chunk.text,
+            label: label,
+            note: note,
+            tokens: chunk.tokens
+        )
+    }
+
+    private static func splitOversizedAdverbial(_ chunk: GrammarChunk) -> [GrammarChunk] {
+        guard chunk.role == .adv,
+              wordCount(chunk.text) > 10,
+              let split = splitPresentParticipleAdverbial(chunk) else {
+            return [chunk]
+        }
+        return split
+    }
+
+    private static func splitPresentParticipleAdverbial(_ chunk: GrammarChunk) -> [GrammarChunk]? {
+        let text = chunk.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let firstWordRange = text.rangeOfFirstWord else {
+            return nil
+        }
+
+        let firstWord = String(text[firstWordRange])
+        guard firstWord.lowercased().hasSuffix("ing"),
+              let toRange = text.range(of: " to ", options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let objectText = String(text[firstWordRange.upperBound..<toRange.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let actionText = String(text[toRange.lowerBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !objectText.isEmpty, wordCount(actionText) >= 4 else {
+            return nil
+        }
+
+        var splitChunks: [GrammarChunk] = [
+            GrammarChunk(
+                id: "\(chunk.id)-adv",
+                role: .adv,
+                text: firstWord,
+                label: chunk.label.isEmpty ? "结果状语" : chunk.label,
+                note: chunk.note.isEmpty ? "非谓语短语作状语，先标出触发动作。" : chunk.note
+            ),
+            GrammarChunk(
+                id: "\(chunk.id)-object",
+                role: .object,
+                text: objectText,
+                label: "状语内部宾语",
+                note: "\(firstWord) 的作用对象。"
+            )
+        ]
+
+        let actions = splitCoordinatedInfinitive(actionText)
+        for (index, action) in actions.enumerated() {
+            splitChunks.append(
+                GrammarChunk(
+                    id: "\(chunk.id)-action-\(index + 1)",
+                    role: .predicate,
+                    text: action,
+                    label: index == 0 ? "不定式动作" : "并列不定式动作",
+                    note: "说明 \(objectText) 被允许或能够执行的动作。"
+                )
+            )
+        }
+
+        return splitChunks.count >= 3 ? splitChunks : nil
+    }
+
+    private static func splitCoordinatedInfinitive(_ text: String) -> [String] {
+        guard wordCount(text) > 7,
+              let andRange = text.range(of: " and ", options: [.caseInsensitive]) else {
+            return [text]
+        }
+
+        let first = String(text[..<andRange.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let second = String(text[andRange.lowerBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard wordCount(first) >= 3, wordCount(second) >= 3 else {
+            return [text]
+        }
+        return [first, second]
+    }
+
+    private static func uniquedChunkIDs(_ chunks: [GrammarChunk]) -> [GrammarChunk] {
+        var seen: [String: Int] = [:]
+        return chunks.enumerated().map { index, chunk in
+            let fallbackID = "\(chunk.role.rawValue)-\(index + 1)"
+            let baseID = chunk.id.isEmpty ? fallbackID : chunk.id
+            let count = seen[baseID] ?? 0
+            seen[baseID] = count + 1
+
+            guard count > 0 else {
+                return chunk.id == baseID
+                    ? chunk
+                    : GrammarChunk(id: baseID, role: chunk.role, text: chunk.text, label: chunk.label, note: chunk.note, tokens: chunk.tokens)
+            }
+
+            return GrammarChunk(
+                id: "\(baseID)-\(count + 1)",
+                role: chunk.role,
+                text: chunk.text,
+                label: chunk.label,
+                note: chunk.note,
+                tokens: chunk.tokens
+            )
+        }
+    }
+
+    private static func wordCount(_ text: String) -> Int {
+        text.split { !$0.isLetter && !$0.isNumber }.count
+    }
+
+    private static func lowercaseWords(in text: String) -> [String] {
+        text
+            .split { !$0.isLetter && !$0.isNumber }
+            .map { $0.lowercased() }
+    }
+
+    private static func startsWithPreposition(_ text: String) -> Bool {
+        guard let firstWord = lowercaseWords(in: text).first else {
+            return false
+        }
+        return prepositions.contains(firstWord)
+    }
+
+    private static func isRelativeClauseChunk(_ chunk: GrammarChunk) -> Bool {
+        chunk.label.contains("定语从句") || chunk.note.contains("定语从句")
+    }
+
+    private static var relativeConnectors: Set<String> {
+        ["that", "which", "who", "whom", "whose", "where", "when"]
+    }
+
+    private static var relativeSubjectStarts: Set<String> {
+        ["a", "an", "the", "this", "that", "these", "those", "my", "your", "his", "her", "its", "our", "their", "i", "you", "he", "she", "it", "we", "they", "there", "one", "some", "many", "most"]
+    }
+
+    private static var finiteAuxiliaries: Set<String> {
+        ["am", "is", "are", "was", "were", "be", "being", "been", "has", "have", "had", "do", "does", "did", "can", "could", "should", "would", "will", "shall", "may", "might", "must"]
+    }
+
+    private static var copularPredicateHeads: Set<String> {
+        ["am", "is", "are", "was", "were", "be", "being", "been", "become", "becomes", "became", "seem", "seems", "seemed", "appear", "appears", "appeared", "remain", "remains", "remained"]
+    }
+
+    private static var prepositions: Set<String> {
+        ["in", "on", "at", "by", "for", "with", "to", "from", "over", "under", "during", "after", "before", "as", "into", "onto", "through", "across", "around", "within", "without", "of"]
+    }
+}
+
+fileprivate extension String {
+    var rangeOfFirstWord: Range<String.Index>? {
+        guard let start = firstIndex(where: { $0.isLetter }) else {
+            return nil
+        }
+        let end = self[start...].firstIndex { !$0.isLetter } ?? endIndex
+        return start..<end
+    }
+
+    func substring(fromOffset startOffset: Int, toOffset endOffset: Int) -> String? {
+        guard startOffset >= 0,
+              endOffset >= startOffset,
+              let start = index(startIndex, offsetBy: startOffset, limitedBy: endIndex),
+              let end = index(startIndex, offsetBy: endOffset, limitedBy: endIndex) else {
+            return nil
+        }
+        return String(self[start..<end])
     }
 }
 

@@ -6,12 +6,12 @@ import SwiftUI
 @MainActor
 final class LingobarController: NSObject, NSWindowDelegate {
     private static let setupPanelSize = NSSize(width: 720, height: 360)
-    private static let selectionPanelSize = NSSize(width: 720, height: 532)
+    private static let selectionPanelSize = NSSize(width: 720, height: 492)
     private static let grammarPanelSize = NSSize(width: 720, height: 812)
     private static let selectionLoadingPanelSize = NSSize(width: 720, height: 441)
     private static let inputEmptyPanelSize = NSSize(width: 720, height: 72)
     private static let inputLoadingPanelSize = NSSize(width: 720, height: 287)
-    private static let inputResultPanelSize = NSSize(width: 720, height: 377)
+    private static let inputResultPanelSize = NSSize(width: 720, height: 327)
     private static let savedPanelOriginXKey = "Lingobar.savedPanelOriginX"
     private static let savedPanelOriginYKey = "Lingobar.savedPanelOriginY"
 
@@ -440,7 +440,23 @@ final class LingobarController: NSObject, NSWindowDelegate {
             return
         }
         hide()
-        viewModel.reopenInlineSelection(selectedText)
+        switch LingobarRelaunchPlanner.plan(
+            snapshots: item.resultSnapshots,
+            sourceAction: item.action,
+            requestedAction: nil
+        ) {
+        case .openSnapshot(let snapshot):
+            viewModel.presentSnapshot(
+                sourceText: selectedText,
+                sourceAppName: item.source,
+                sourceAction: item.action,
+                resultSnapshot: snapshot.result,
+                grammarSnapshot: snapshot.grammarResult,
+                resultSnapshots: item.resultSnapshots
+            )
+        case .requestLLM:
+            viewModel.reopenInlineSelection(selectedText)
+        }
         let panel = ensurePanel()
         panel.setContentSize(contentSize)
         position(panel)

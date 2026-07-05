@@ -573,6 +573,8 @@ final class LingobarViewModel: ObservableObject {
     @Published var actions: [LanguageAction] = AppSettings.actionOrder
     private let store: PhraseStore
     private let historyStore: LingobarHistoryStore
+    private var currentHistoryRecord: LingobarHistoryRecord?
+    private var activeResultSnapshots: [String: LingobarStoredResultSnapshot] = [:]
     private var activeAIRequestID = UUID()
     private var grammarResultCache: [GrammarRequestKey: GrammarResult] = [:]
     private var grammarCacheKeys: [GrammarRequestKey] = []
@@ -591,6 +593,8 @@ final class LingobarViewModel: ObservableObject {
 
     func present(selection: String?, sourceAppName: String = "当前 App") {
         actions = AppSettings.actionOrder
+        currentHistoryRecord = nil
+        activeResultSnapshots = [:]
 
         if let selection, !selection.isEmpty {
             mode = .selection
@@ -618,6 +622,8 @@ final class LingobarViewModel: ObservableObject {
 
     func presentGrammarFixture(sourceAppName: String = "Lingobar") {
         actions = AppSettings.actionOrder
+        currentHistoryRecord = nil
+        activeResultSnapshots = [:]
         let grammar = GrammarResult.fixture(id: AppSettings.grammarFixtureID) ?? .mockupFixture
         mode = .selection
         selectionSource = sourceAppName
@@ -634,6 +640,8 @@ final class LingobarViewModel: ObservableObject {
 
     func presentSetupGate(_ setupGateStatus: SetupGateStatus) {
         actions = AppSettings.actionOrder
+        currentHistoryRecord = nil
+        activeResultSnapshots = [:]
         mode = .setup
         self.setupGateStatus = setupGateStatus
         showsResult = false
@@ -650,13 +658,18 @@ final class LingobarViewModel: ObservableObject {
         }
 
         if newAction == .collect {
-            saveCurrentPhrase()
-            status = "已收藏"
+            saveCurrentHistorySnapshot()
+            return
+        }
+
+        if let storedSnapshot = activeResultSnapshots[newAction.rawValue] {
+            applyStoredSnapshot(storedSnapshot, action: newAction, status: "已从快照打开")
             return
         }
 
         action = newAction
         grammarResult = nil
+        currentHistoryRecord = nil
 
         switch newAction {
         case .copy:
@@ -684,24 +697,92 @@ final class LingobarViewModel: ObservableObject {
         languageAction.isAvailable(for: activeText)
     }
 
+    func isActionHighlighted(_ languageAction: LanguageAction) -> Bool {
+        if languageAction == .collect {
+            return currentHistoryRecord?.isSaved == true
+        }
+        return action == languageAction
+    }
+
     func togglePinned() {
         isPinned.toggle()
         status = isPinned ? "已固定" : "已取消固定"
     }
 
-    func saveCurrentPhrase() {
+    @discardableResult
+    func saveCurrentPhrase() -> UUID? {
         let collectionTitle: String
         let note: String
+        let type: String
         if AppSettings.collectionTarget == .originalSelection {
             collectionTitle = activeText
             note = "来自原文"
+            type = "文本"
         } else {
             collectionTitle = result.defaultCollectionItem?.title ?? (result.defaultCollectionTitle.isEmpty ? activeText : result.defaultCollectionTitle)
             note = result.defaultCollectionItem?.note ?? result.summary
+            type = result.defaultCollectionItem?.type ?? "文本"
         }
-        let phrase = SavedPhrase(title: phraseTitle(from: collectionTitle), note: note)
+        return collectFragment(
+            LingobarCollectionFragment(
+                title: collectionTitle,
+                note: note,
+                type: type,
+                rows: result.rows
+            )
+        )
+    }
+
+    @discardableResult
+    func collectFragment(_ fragment: LingobarCollectionFragment) -> UUID? {
+        let title = phraseTitle(from: fragment.title)
+        guard !title.isEmpty else {
+            return nil
+        }
+        let snapshot = fragment.resultSnapshot(
+            action: action,
+            shortcut: shortcut(for: action)
+        )
+        let phrase = SavedPhrase(
+            title: title,
+            note: fragment.note,
+            type: fragment.type.isEmpty ? "文本" : fragment.type,
+            sourceText: activeText,
+            sourceAppName: activeSourceAppName,
+            sourceAction: action,
+            resultSnapshot: snapshot
+        )
         savedPhrases.insert(phrase, at: 0)
         try? store.save(savedPhrases)
+        status = "已收藏"
+        return phrase.id
+    }
+
+    func saveCurrentHistorySnapshot() {
+        guard let record = currentHistoryRecord ?? LingobarHistoryRecord.make(
+            action: action,
+            sourceText: activeText,
+            sourceAppName: activeSourceAppName,
+            result: result
+        ) else {
+            status = "暂无可保存内容"
+            return
+        }
+        var savedRecord = record
+        savedRecord.isSaved = true
+        if !activeResultSnapshots.isEmpty {
+            savedRecord.resultSnapshots.merge(activeResultSnapshots) { _, new in new }
+        }
+        do {
+            let savedRecords = try historyStore.saveOrAppend(savedRecord)
+            currentHistoryRecord = savedRecords.first { record in
+                record.id == savedRecord.id || record.sourceText == savedRecord.sourceText
+            } ?? savedRecord
+            status = "已保存"
+        } catch {
+            currentHistoryRecord = savedRecord
+            status = "保存失败"
+        }
     }
 
     func copyResult() {
@@ -743,18 +824,67 @@ final class LingobarViewModel: ObservableObject {
         present(selection: selectedText, sourceAppName: "Lingobar")
     }
 
-    func collectInlineSelection(_ text: String) {
+    func presentSnapshot(
+        sourceText: String,
+        sourceAppName: String,
+        sourceAction: LanguageAction?,
+        resultSnapshot: LingobarResult,
+        grammarSnapshot: GrammarResult? = nil,
+        resultSnapshots: [String: LingobarStoredResultSnapshot] = [:]
+    ) {
+        actions = AppSettings.actionOrder
+        activeAIRequestID = UUID()
+        mode = .selection
+        selectionSource = sourceAppName.isEmpty ? "Lingobar" : sourceAppName
+        selectedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        inputText = ""
+        action = sourceAction ?? LanguageAction.defaultSelectionAction(for: selectedText)
+        var snapshots = resultSnapshots
+        snapshots[action.rawValue] = LingobarStoredResultSnapshot(
+            result: resultSnapshot,
+            grammarResult: grammarSnapshot ?? resultSnapshots[action.rawValue]?.grammarResult
+        )
+        activeResultSnapshots = snapshots
+        grammarResult = action == .grammar ? activeResultSnapshots[action.rawValue]?.grammarResult : nil
+        result = resultSnapshot
+        showsResult = true
+        isLoading = false
+        loadingStartedAt = nil
+        currentHistoryRecord = nil
+        status = "已从快照打开"
+        onLayoutChanged?()
+    }
+
+    private func applyStoredSnapshot(
+        _ snapshot: LingobarStoredResultSnapshot,
+        action newAction: LanguageAction,
+        status message: String
+    ) {
+        activeAIRequestID = UUID()
+        action = newAction
+        grammarResult = newAction == .grammar ? snapshot.grammarResult : nil
+        result = snapshot.result
+        showsResult = true
+        isLoading = false
+        loadingStartedAt = nil
+        status = message
+        onLayoutChanged?()
+    }
+
+    @discardableResult
+    func collectInlineSelection(_ text: String) -> UUID? {
         let selectedText = normalizedInlineSelection(text)
         guard !selectedText.isEmpty else {
-            return
+            return nil
         }
-        let phrase = SavedPhrase(
-            title: phraseTitle(from: selectedText),
-            note: "来自 \(result.title) 内容区选中文本"
+        return collectFragment(
+            LingobarCollectionFragment(
+                title: selectedText,
+                note: "来自 \(result.title) 内容区选中文本",
+                type: "文本",
+                rows: [LingobarRow("选中文本", selectedText)]
+            )
         )
-        savedPhrases.insert(phrase, at: 0)
-        try? store.save(savedPhrases)
-        status = "已收藏选中文本"
     }
 
     func insertResult() {
@@ -765,6 +895,10 @@ final class LingobarViewModel: ObservableObject {
 
     private var activeText: String {
         mode == .selection ? selectedText : inputText
+    }
+
+    private var activeSourceAppName: String {
+        mode == .input ? "输入模式" : selectionSource
     }
 
     private func runAIIfAvailable(for action: LanguageAction, text: String) {
@@ -909,9 +1043,11 @@ final class LingobarViewModel: ObservableObject {
             return
         }
 
+        var completedGrammarResult: GrammarResult?
         switch decoded {
         case .grammar(let grammar):
             grammarResult = grammar
+            completedGrammarResult = grammar
             result = grammar.lingobarResult(shortcut: shortcut(for: action))
             if let grammarCacheKey {
                 rememberGrammarResult(grammar, for: grammarCacheKey)
@@ -930,7 +1066,8 @@ final class LingobarViewModel: ObservableObject {
             action: action,
             sourceText: historySourceText,
             sourceAppName: historySourceAppName,
-            result: result
+            result: result,
+            grammarSnapshot: completedGrammarResult
         )
     }
 
@@ -1034,19 +1171,28 @@ final class LingobarViewModel: ObservableObject {
         action: LanguageAction,
         sourceText: String,
         sourceAppName: String,
-        result: LingobarResult
+        result: LingobarResult,
+        grammarSnapshot: GrammarResult? = nil
     ) {
-        guard let record = LingobarHistoryRecord.make(
+        activeResultSnapshots[action.rawValue] = LingobarStoredResultSnapshot(
+            result: result,
+            grammarResult: grammarSnapshot
+        )
+        guard var record = LingobarHistoryRecord.make(
             action: action,
             sourceText: sourceText,
             sourceAppName: sourceAppName,
-            result: result
+            result: result,
+            grammarSnapshot: grammarSnapshot
         ) else {
             return
         }
-        let historyStore = historyStore
-        Task.detached(priority: .utility) {
-            _ = try? historyStore.append(record)
+        record.resultSnapshots.merge(activeResultSnapshots) { _, new in new }
+        if let records = try? historyStore.append(record),
+           let mergedRecord = records.first(where: { $0.sourceText == record.sourceText || $0.id == record.id }) {
+            currentHistoryRecord = mergedRecord
+        } else {
+            currentHistoryRecord = record
         }
     }
 

@@ -43,9 +43,7 @@ final class LingobarHubState: ObservableObject {
     @Published var selectedCollectionID: UUID?
     @Published var selectedHistoryID: UUID?
     @Published var collectionQuery = ""
-    @Published var historyQuery = ""
     @Published var collectionFilter = LingobarHubItemFilter.all
-    @Published var historyFilter = LingobarHubItemFilter.all
     @Published var selectedSettingsSectionID: LingobarSettingsSectionID = LingobarHubState.initialSettingsSectionID()
     @Published var settings = AppSettings.makeSettingsSnapshot()
     @Published var tokenDraft = ""
@@ -74,9 +72,7 @@ final class LingobarHubState: ObservableObject {
         switch selectedSection {
         case .collection:
             filteredCollectionItems.first { $0.id == selectedCollectionID } ?? filteredCollectionItems.first
-        case .history:
-            filteredHistoryItems.first { $0.id == selectedHistoryID } ?? filteredHistoryItems.first
-        case .settings:
+        case .history, .settings:
             nil
         }
     }
@@ -85,16 +81,8 @@ final class LingobarHubState: ObservableObject {
         filtered(collectionItems, filter: collectionFilter, query: collectionQuery)
     }
 
-    var filteredHistoryItems: [LingobarHubLibraryItem] {
-        filtered(historyItems, filter: historyFilter, query: historyQuery)
-    }
-
     var collectionTypeOptions: [LingobarHubItemFilter] {
         filterOptions(for: collectionItems)
-    }
-
-    var historyTypeOptions: [LingobarHubItemFilter] {
-        filterOptions(for: historyItems)
     }
 
     var trimmedTokenDraft: String {
@@ -135,11 +123,11 @@ final class LingobarHubState: ObservableObject {
             collectionItems = LingobarHubLibrary.collectionItems(from: phrases)
                 .sorted { $0.createdAt > $1.createdAt }
             historyItems = LingobarHubLibrary.historyItems(from: records)
-                .sorted { $0.createdAt > $1.createdAt }
-            if selectedCollectionID == nil {
+                .sorted { $0.updatedAt > $1.updatedAt }
+            if selectedCollectionID == nil || !collectionItems.contains(where: { $0.id == selectedCollectionID }) {
                 selectedCollectionID = collectionItems.first?.id
             }
-            if selectedHistoryID == nil {
+            if selectedHistoryID == nil || !historyItems.contains(where: { $0.id == selectedHistoryID }) {
                 selectedHistoryID = historyItems.first?.id
             }
         } catch {
@@ -186,33 +174,14 @@ final class LingobarHubState: ObservableObject {
         }
     }
 
-    func clearHistory() {
+    func saveHistoryItem(_ item: LingobarHubLibraryItem) {
         do {
-            try historyStore.clear()
-            selectedHistoryID = nil
+            _ = try historyStore.setSaved(id: item.id)
+            selectedHistoryID = item.id
             refreshLibrary()
-            flash("历史已清空")
+            flash("已保存")
         } catch {
-            flash("清空失败")
-        }
-    }
-
-    func saveHistoryItemToCollection(_ item: LingobarHubLibraryItem) {
-        do {
-            var phrases = try phraseStore.load()
-            let saved = SavedPhrase(
-                id: item.id,
-                title: item.visibleText.isEmpty ? item.title : item.visibleText,
-                note: item.note,
-                createdAt: Date()
-            )
-            phrases.removeAll { $0.id == saved.id }
-            phrases.insert(saved, at: 0)
-            try phraseStore.save(phrases)
-            refreshLibrary()
-            flash("已加入收藏")
-        } catch {
-            flash("收藏失败")
+            flash("保存失败")
         }
     }
 
@@ -415,6 +384,7 @@ struct LingobarHubView: View {
 
     private let sidebarWidth: CGFloat = 188
     private let detailWidth: CGFloat = 320
+    private let libraryRefreshTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
     private let permissionRefreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -467,6 +437,9 @@ struct LingobarHubView: View {
         .onAppear {
             state.refresh()
         }
+        .onReceive(libraryRefreshTimer) { _ in
+            state.refreshLibrary()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             state.refreshSettings()
         }
@@ -501,29 +474,14 @@ struct LingobarHubView: View {
                 onCollect: nil
             )
         case .history:
-            LibraryPane(
-                title: "历史",
-                subtitle: "最近的翻译、改写、语法和例句结果。",
-                query: $state.historyQuery,
-                selectedFilter: $state.historyFilter,
-                filters: state.historyTypeOptions,
-                items: state.filteredHistoryItems,
+            HubHistoryPane(
+                items: state.historyItems,
                 selectedID: state.selectedHistoryID,
-                emptyTitle: "暂无历史",
-                emptySubtitle: "完成一次 AI 动作后会自动记录。",
-                detailWidth: detailWidth,
                 onSelect: state.select,
                 onCopy: state.copy,
-                onDelete: state.delete,
-                onRelaunch: onRelaunch,
-                onCollect: state.saveHistoryItemToCollection,
-                trailingToolbar: AnyView(Group {
-                    if !state.historyItems.isEmpty {
-                        HubIconButton(systemName: "trash", help: "清空历史") {
-                            state.clearHistory()
-                        }
-                    }
-                })
+                onOpen: onRelaunch,
+                onSave: state.saveHistoryItem,
+                onDelete: state.delete
             )
         case .settings:
             HubSettingsPane(
@@ -657,6 +615,154 @@ private struct HubSidebarButton: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 2)
+    }
+}
+
+private struct HubHistoryPane: View {
+    var items: [LingobarHubLibraryItem]
+    var selectedID: UUID?
+    var onSelect: (LingobarHubLibraryItem) -> Void
+    var onCopy: (LingobarHubLibraryItem) -> Void
+    var onOpen: (LingobarHubLibraryItem) -> Void
+    var onSave: (LingobarHubLibraryItem) -> Void
+    var onDelete: (LingobarHubLibraryItem) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("历史")
+                        .font(.system(size: 23, weight: .bold))
+                        .foregroundStyle(HubColor.primaryText)
+                    Text("自动记录选中过的句子，最近 50 条完整快照。")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(HubColor.secondaryText)
+                }
+                Spacer()
+            }
+            .padding(.top, 16)
+            .padding(.horizontal, 18)
+
+            if items.isEmpty {
+                HubEmptyState(title: "暂无历史", subtitle: "完成一次 AI 动作后会自动记录。")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(items) { item in
+                            HubHistoryRow(
+                                item: item,
+                                isSelected: selectedID == item.id,
+                                onSelect: onSelect,
+                                onCopy: onCopy,
+                                onOpen: onOpen,
+                                onSave: onSave,
+                                onDelete: onDelete
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 18)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct HubHistoryRow: View {
+    var item: LingobarHubLibraryItem
+    var isSelected: Bool
+    var onSelect: (LingobarHubLibraryItem) -> Void
+    var onCopy: (LingobarHubLibraryItem) -> Void
+    var onOpen: (LingobarHubLibraryItem) -> Void
+    var onSave: (LingobarHubLibraryItem) -> Void
+    var onDelete: (LingobarHubLibraryItem) -> Void
+
+    private var displayTitle: String {
+        [
+            item.sourceText,
+            item.title,
+            item.visibleText
+        ]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? "历史记录"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    if item.isSaved {
+                        HubBadge(title: "已保存", tint: HubColor.ok)
+                    }
+                    Text(item.updatedAt.hubRelativeString)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(HubColor.tertiaryText)
+                    Text(item.source)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(HubColor.tertiaryText)
+                    Spacer(minLength: 8)
+                }
+
+                Text(displayTitle)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(HubColor.primaryText)
+                    .lineLimit(3)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onSelect(item)
+            }
+
+            HStack(spacing: 7) {
+                HubIconButton(systemName: "doc.on.doc", help: "复制") {
+                    onCopy(item)
+                }
+                HubIconButton(systemName: "arrow.up.forward.square", help: "打开完整快照") {
+                    onOpen(item)
+                }
+                HubIconButton(systemName: item.isSaved ? "bookmark.fill" : "bookmark", help: item.isSaved ? "已保存" : "保存") {
+                    onSave(item)
+                }
+                .disabled(item.isSaved)
+                HubIconButton(systemName: "trash", help: "删除") {
+                    onDelete(item)
+                }
+            }
+            .frame(minWidth: 124, alignment: .trailing)
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isSelected ? HubColor.selectedFill : HubColor.card)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(isSelected ? HubColor.accent.opacity(0.5) : HubColor.hairline, lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct HubHistoryBlock: View {
+    var title: String
+    var value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(HubColor.tertiaryText)
+            Text(value)
+                .font(.system(size: 12.5))
+                .foregroundStyle(HubColor.secondaryText)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -807,6 +913,9 @@ private struct HubLibraryCard: View {
                     if let action = item.action {
                         HubBadge(title: action.title, tint: HubColor.accent)
                     }
+                    if item.kind == .history, item.isSaved {
+                        HubBadge(title: "已保存", tint: HubColor.ok)
+                    }
                     Spacer(minLength: 8)
                     Text(item.createdAt.hubRelativeString)
                         .font(.system(size: 10, weight: .medium))
@@ -913,10 +1022,11 @@ private struct HubItemDetailPane: View {
                         Button {
                             onCollect(item)
                         } label: {
-                            Label("加入收藏", systemImage: "star")
+                            Label(item.isSaved ? "已保存" : "保存", systemImage: item.isSaved ? "bookmark.fill" : "bookmark")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(HubSecondaryButtonStyle())
+                        .disabled(item.isSaved)
                     }
                 }
                 .padding(.bottom, 14)

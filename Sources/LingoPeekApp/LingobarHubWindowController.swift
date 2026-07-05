@@ -13,8 +13,18 @@ final class LingobarHubWindowController {
         self.onRelaunch = onRelaunch
     }
 
-    func show(section: LingobarHubSection = .collection) {
+    func show(
+        section: LingobarHubSection = .collection,
+        selectedCollectionID: UUID? = nil,
+        selectedHistoryID: UUID? = nil
+    ) {
         state.selectedSection = section
+        if let selectedCollectionID {
+            state.collectionQuery = ""
+            state.collectionFilter = .all
+            state.selectedCollectionID = selectedCollectionID
+        }
+        state.selectedHistoryID = selectedHistoryID
         state.refresh()
         let window = ensureWindow()
         window.setContentSize(LingobarHubWindow.hubSize)

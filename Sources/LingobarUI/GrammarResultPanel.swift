@@ -3,6 +3,7 @@ import SwiftUI
 
 public struct GrammarResultPanel: View {
     public var result: GrammarResult
+    public var onCollect: ((LingobarCollectionFragment) -> Void)?
 
     @State private var selectedView: GrammarVizView
     @State private var hoveredRole: GrammarRole?
@@ -14,9 +15,11 @@ public struct GrammarResultPanel: View {
         result: GrammarResult,
         initialView: GrammarVizView = .annotated,
         initialDependencyHoveredChunkID: String? = nil,
-        initialDependencyHoveredDependencyID: String? = nil
+        initialDependencyHoveredDependencyID: String? = nil,
+        onCollect: ((LingobarCollectionFragment) -> Void)? = nil
     ) {
         self.result = result
+        self.onCollect = onCollect
         self._selectedView = State(initialValue: initialView)
         self.initialDependencyHoveredChunkID = initialDependencyHoveredChunkID
         self.initialDependencyHoveredDependencyID = initialDependencyHoveredDependencyID
@@ -182,16 +185,25 @@ public struct GrammarResultPanel: View {
 
             VStack(alignment: .leading, spacing: 9) {
                 ForEach(result.chunks) { chunk in
-                    GrammarChunkNote(
-                        chunk: chunk,
-                        isDimmed: hoveredRole != nil && hoveredRole != chunk.role,
-                        isOpen: openChunkID == chunk.id
+                    grammarCollectable(
+                        LingobarCollectionFragment(
+                            title: chunk.text,
+                            note: "\(GrammarAbbreviationGlossary.displayText(for: chunk.label))：\(chunk.note)",
+                            type: "句型",
+                            rows: [LingobarRow(GrammarAbbreviationGlossary.displayText(for: chunk.label), chunk.text)]
+                        )
                     ) {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            openChunkID = openChunkID == chunk.id ? nil : chunk.id
+                        GrammarChunkNote(
+                            chunk: chunk,
+                            isDimmed: hoveredRole != nil && hoveredRole != chunk.role,
+                            isOpen: openChunkID == chunk.id
+                        ) {
+                            withAnimation(.easeOut(duration: 0.18)) {
+                                openChunkID = openChunkID == chunk.id ? nil : chunk.id
+                            }
                         }
+                        .onHover { hoveredRole = $0 ? chunk.role : nil }
                     }
-                    .onHover { hoveredRole = $0 ? chunk.role : nil }
                 }
             }
             .padding(.top, 22)
@@ -299,17 +311,29 @@ public struct GrammarResultPanel: View {
     }
 
     private var patternSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("可复用句型")
-                .font(.system(size: 10.5, weight: .semibold))
-                .foregroundStyle(Color.lingoAccentText)
-                .textCase(.uppercase)
-            Text(result.pattern.en)
-                .font(.system(size: 14.5, weight: .medium, design: .monospaced))
-                .foregroundStyle(Color.lingoText)
-            Text(result.pattern.zh)
-                .font(.system(size: 12.5))
-                .foregroundStyle(Color.lingoMuted)
+        grammarCollectable(
+            LingobarCollectionFragment(
+                title: result.pattern.en,
+                note: result.pattern.zh,
+                type: "句型",
+                rows: [
+                    LingobarRow("句型", result.pattern.en),
+                    LingobarRow("说明", result.pattern.zh)
+                ]
+            )
+        ) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("可复用句型")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(Color.lingoAccentText)
+                    .textCase(.uppercase)
+                Text(result.pattern.en)
+                    .font(.system(size: 14.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Color.lingoText)
+                Text(result.pattern.zh)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.lingoMuted)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 13)
@@ -327,24 +351,46 @@ public struct GrammarResultPanel: View {
             VStack(alignment: .leading, spacing: 0) {
                 columnHead("link", "固定搭配")
                 ForEach(result.collocations) { collocation in
-                    GrammarCollocationCard(collocation: collocation)
+                    grammarCollectable(
+                        LingobarCollectionFragment(
+                            title: collocation.phrase,
+                            note: "\(collocation.zh)\n\(collocation.note)\n\(collocation.example)",
+                            type: "短语",
+                            rows: [
+                                LingobarRow("释义", collocation.zh),
+                                LingobarRow("说明", collocation.note),
+                                LingobarRow("例句", collocation.example)
+                            ]
+                        )
+                    ) {
+                        GrammarCollocationCard(collocation: collocation)
+                    }
                 }
 
                 columnHead("book.closed", "常见词组")
                     .padding(.top, 7)
                 GrammarWrapLayout(spacing: 7, rowSpacing: 7) {
                     ForEach(result.phrases) { phrase in
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(phrase.en)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Color.lingoText)
-                            Text(phrase.zh)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(Color.lingoSubtle)
+                        grammarCollectable(
+                            LingobarCollectionFragment(
+                                title: phrase.en,
+                                note: phrase.zh,
+                                type: "短语",
+                                rows: [LingobarRow("短语", phrase.en), LingobarRow("释义", phrase.zh)]
+                            )
+                        ) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(phrase.en)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Color.lingoText)
+                                Text(phrase.zh)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(Color.lingoSubtle)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                 }
             }
@@ -353,7 +399,16 @@ public struct GrammarResultPanel: View {
             VStack(alignment: .leading, spacing: 0) {
                 columnHead("lightbulb", "语法点")
                 ForEach(result.grammarPoints) { point in
-                    GrammarPointCard(point: point)
+                    grammarCollectable(
+                        LingobarCollectionFragment(
+                            title: point.title,
+                            note: point.body,
+                            type: "句型",
+                            rows: [LingobarRow(point.tag, point.body)]
+                        )
+                    ) {
+                        GrammarPointCard(point: point)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -372,6 +427,22 @@ public struct GrammarResultPanel: View {
                 .foregroundStyle(Color.lingoMuted)
         }
         .padding(.bottom, 10)
+    }
+
+    @ViewBuilder
+    private func grammarCollectable<Content: View>(
+        _ fragment: LingobarCollectionFragment,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        if let onCollect {
+            GrammarCollectableBlock(
+                fragment: fragment,
+                onCollect: onCollect,
+                content: content
+            )
+        } else {
+            content()
+        }
     }
 }
 
@@ -1073,35 +1144,89 @@ private struct GrammarPointCard: View {
     var point: GrammarPoint
 
     var body: some View {
-        HStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text(point.tag)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(point.color, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Text(point.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.lingoText)
+            }
+            Text(point.body)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.lingoMuted)
+                .lineSpacing(3)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 12)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .overlay(alignment: .leading) {
             Rectangle()
                 .fill(point.color)
                 .frame(width: 3)
-
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 8) {
-                    Text(point.tag)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(point.color, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                    Text(point.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.lingoText)
-                }
-                Text(point.body)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.lingoMuted)
-                    .lineSpacing(3)
-            }
-            .padding(.leading, 11)
-            .padding(.trailing, 12)
-            .padding(.vertical, 11)
         }
-        .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .padding(.bottom, 9)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct GrammarCollectableBlock<Content: View>: View {
+    var fragment: LingobarCollectionFragment
+    var onCollect: (LingobarCollectionFragment) -> Void
+    var content: Content
+
+    @State private var isHovered = false
+
+    init(
+        fragment: LingobarCollectionFragment,
+        onCollect: @escaping (LingobarCollectionFragment) -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.fragment = fragment
+        self.onCollect = onCollect
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ZStack {
+                if isHovered {
+                    Button {
+                        onCollect(fragment)
+                    } label: {
+                        Image(systemName: "star")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                            .grammarHoverChrome(
+                                fill: Color.lingoChip,
+                                hoverFill: Color.lingoChipHover,
+                                stroke: Color.lingoHairline,
+                                hoverStroke: Color.lingoAccent.opacity(0.5),
+                                cornerRadius: 7
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.lingoAccentText)
+                    .help("收藏")
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                }
+            }
+            .frame(width: 28, height: 28, alignment: .top)
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 }
 

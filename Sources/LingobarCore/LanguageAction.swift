@@ -48,7 +48,7 @@ public enum LanguageAction: String, CaseIterable, Identifiable, Codable, Sendabl
         case .grammar: "语法"
         case .rewrite: "改写"
         case .examples: "例句"
-        case .collect: "收藏"
+        case .collect: "保存"
         case .pronounce: "发音"
         }
     }
@@ -60,7 +60,7 @@ public enum LanguageAction: String, CaseIterable, Identifiable, Codable, Sendabl
         case .grammar: "point.3.connected.trianglepath.dotted"
         case .rewrite: "pencil"
         case .examples: "quote.opening"
-        case .collect: "star"
+        case .collect: "bookmark"
         case .pronounce: "speaker.wave.2"
         }
     }

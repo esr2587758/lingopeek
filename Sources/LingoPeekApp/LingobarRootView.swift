@@ -254,10 +254,6 @@ struct LingobarRootView: View {
         VStack(spacing: 0) {
             panelTitle("改写 · 自然英文", shortcut: viewModel.shortcut(for: viewModel.action))
             panelBody(height: 176)
-
-            if !viewModel.isLoading {
-                footer
-            }
         }
         .background(surfaceBackground)
         .clipShape(surfaceShape)
@@ -279,11 +275,12 @@ struct LingobarRootView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    GrammarResultPanel(result: grammarResult)
-
-                    if !viewModel.isLoading {
-                        footer
-                    }
+                    GrammarResultPanel(
+                        result: grammarResult,
+                        onCollect: { fragment in
+                            collect(fragment)
+                        }
+                    )
                 }
             }
         }
@@ -302,10 +299,6 @@ struct LingobarRootView: View {
 
             panelTitle(viewModel.result.title, shortcut: viewModel.shortcut(for: viewModel.action))
             panelBody(height: viewModel.mode == .selection ? 300 : 176)
-
-            if !viewModel.isLoading {
-                footer
-            }
         }
         .background(surfaceBackground)
         .clipShape(surfaceShape)
@@ -318,14 +311,15 @@ struct LingobarRootView: View {
         HStack(spacing: 6) {
             ForEach(viewModel.actions) { action in
                 let available = viewModel.isAvailable(action)
+                let highlighted = viewModel.isActionHighlighted(action)
                 Button {
                     viewModel.perform(action)
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: action.symbol)
+                        Image(systemName: actionSymbol(action, highlighted: highlighted))
                             .font(.system(size: 13, weight: .semibold))
                         Text(action.title)
-                            .font(.system(size: 13, weight: viewModel.action == action ? .semibold : .medium))
+                            .font(.system(size: 13, weight: highlighted ? .semibold : .medium))
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
@@ -342,6 +336,13 @@ struct LingobarRootView: View {
                 .disabled(!available)
                 .help(available ? action.title : "\(action.title)仅支持英文内容")
             }
+            Spacer(minLength: 8)
+            Text(viewModel.status)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.lingoSubtle)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -391,22 +392,6 @@ struct LingobarRootView: View {
         .frame(height: height)
     }
 
-    private var footer: some View {
-        HStack(spacing: 5) {
-            footerButton("复制", systemName: "doc.on.doc") {
-                viewModel.copyResult()
-            }
-            footerButton("收藏", systemName: "star") {
-                viewModel.perform(.collect)
-            }
-        }
-        .padding(.top, 8)
-        .padding(.horizontal, 14)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(dragSurface())
-    }
-
     private var firstChip: String {
         viewModel.result.chips.first ?? viewModel.result.title
     }
@@ -435,7 +420,7 @@ struct LingobarRootView: View {
                 activeResultTextSelection = nil
             },
             onCollect: { selectedText in
-                viewModel.collectInlineSelection(selectedText)
+                _ = viewModel.collectInlineSelection(selectedText)
                 activeResultTextSelection = nil
             }
         )
@@ -454,13 +439,13 @@ struct LingobarRootView: View {
             if viewModel.action == .grammar, viewModel.grammarResult != nil {
                 812
             } else {
-                viewModel.isLoading ? 441 : 480
+                viewModel.isLoading ? 441 : 440
             }
         case .input:
             if viewModel.isLoading {
                 287
             } else {
-                viewModel.showsResult ? 377 : 72
+                viewModel.showsResult ? 327 : 72
             }
         }
     }
@@ -492,21 +477,46 @@ struct LingobarRootView: View {
         }
     }
 
+    private func collect(_ fragment: LingobarCollectionFragment) {
+        _ = viewModel.collectFragment(fragment)
+        activeResultTextSelection = nil
+    }
+
+    private func collectableBlock<Content: View>(
+        _ fragment: LingobarCollectionFragment,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        CollectableResultBlock(
+            fragment: fragment,
+            onCollect: collect,
+            content: content
+        )
+    }
+
     @ViewBuilder
     private var resultBody: some View {
         switch viewModel.action {
         case .translate:
             VStack(spacing: 0) {
                 if translationVariantRows.isEmpty {
-                    selectableText(
-                        viewModel.result.summary,
-                        id: "translate-summary",
-                        size: 16,
-                        color: .lingoTextColor,
-                        lineSpacing: 4
-                    )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
+                    collectableBlock(
+                        LingobarCollectionFragment(
+                            title: viewModel.result.summary,
+                            note: viewModel.result.title,
+                            type: "文本",
+                            rows: [LingobarRow("翻译", viewModel.result.summary)]
+                        )
+                    ) {
+                        selectableText(
+                            viewModel.result.summary,
+                            id: "translate-summary",
+                            size: 16,
+                            color: .lingoTextColor,
+                            lineSpacing: 4
+                        )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
+                    }
                 } else {
                     ForEach(translationVariantRows, id: \.label) { row in
                         translationVariant(row)
@@ -548,21 +558,30 @@ struct LingobarRootView: View {
                 }
             }
         case .rewrite:
-            selectableText(
-                viewModel.result.summary,
-                id: "rewrite-summary",
-                size: 16,
-                weight: .medium,
-                color: .lingoTextColor,
-                lineSpacing: 4
-            )
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.lingoAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.lingoHairline, lineWidth: 1)
+            collectableBlock(
+                LingobarCollectionFragment(
+                    title: viewModel.result.summary,
+                    note: "主改写",
+                    type: "英文",
+                    rows: [LingobarRow("主改写", viewModel.result.summary)]
                 )
+            ) {
+                selectableText(
+                    viewModel.result.summary,
+                    id: "rewrite-summary",
+                    size: 16,
+                    weight: .medium,
+                    color: .lingoTextColor,
+                    lineSpacing: 4
+                )
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.lingoAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.lingoHairline, lineWidth: 1)
+                    )
+            }
             VStack(spacing: 0) {
                 ForEach(viewModel.result.rows, id: \.label) { row in
                     rewriteVariant(row)
@@ -581,26 +600,36 @@ struct LingobarRootView: View {
                 }
             }
         case .pronounce:
-            HStack(spacing: 14) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .background(Color.lingoAccent, in: Circle())
-                VStack(alignment: .leading, spacing: 4) {
-                    selectableText(
-                        viewModel.result.defaultCollectionTitle.isEmpty ? firstChip : viewModel.result.defaultCollectionTitle,
-                        id: "pronounce-title",
-                        size: 19,
-                        weight: .semibold,
-                        color: .lingoTextColor
-                    )
-                    selectableText(
-                        viewModel.result.summary,
-                        id: "pronounce-summary",
-                        size: 14,
-                        color: .lingoAccentTextColor
-                    )
+            let pronounceTitle = viewModel.result.defaultCollectionTitle.isEmpty ? firstChip : viewModel.result.defaultCollectionTitle
+            collectableBlock(
+                LingobarCollectionFragment(
+                    title: pronounceTitle,
+                    note: viewModel.result.summary,
+                    type: "文本",
+                    rows: [LingobarRow("发音", viewModel.result.summary)]
+                )
+            ) {
+                HStack(spacing: 14) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .background(Color.lingoAccent, in: Circle())
+                    VStack(alignment: .leading, spacing: 4) {
+                        selectableText(
+                            pronounceTitle,
+                            id: "pronounce-title",
+                            size: 19,
+                            weight: .semibold,
+                            color: .lingoTextColor
+                        )
+                        selectableText(
+                            viewModel.result.summary,
+                            id: "pronounce-summary",
+                            size: 14,
+                            color: .lingoAccentTextColor
+                        )
+                    }
                 }
             }
             VStack(spacing: 0) {
@@ -620,19 +649,28 @@ struct LingobarRootView: View {
     }
 
     private func resultRow(_ row: LingobarRow) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(row.label)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.lingoAccentText)
-                .frame(width: 68, alignment: .leading)
-            selectableText(
-                row.value,
-                id: "row-\(row.label)",
-                size: 12,
-                color: .lingoMutedColor,
-                lineSpacing: 2
+        collectableBlock(
+            LingobarCollectionFragment(
+                title: row.value,
+                note: row.label,
+                type: "文本",
+                rows: [row]
             )
-                .frame(maxWidth: .infinity, alignment: .leading)
+        ) {
+            HStack(alignment: .top, spacing: 12) {
+                Text(row.label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.lingoAccentText)
+                    .frame(width: 68, alignment: .leading)
+                selectableText(
+                    row.value,
+                    id: "row-\(row.label)",
+                    size: 12,
+                    color: .lingoMutedColor,
+                    lineSpacing: 2
+                )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.vertical, 8)
         .overlay(alignment: .top) {
@@ -643,17 +681,26 @@ struct LingobarRootView: View {
     }
 
     private func keyCard(title: String, detail: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            selectableText(
-                title,
-                id: "key-card-title",
-                size: 14,
-                weight: .semibold,
-                color: .lingoAccentTextColor
+        collectableBlock(
+            LingobarCollectionFragment(
+                title: title,
+                note: detail,
+                type: "句型",
+                rows: [LingobarRow(detail, title)]
             )
-            Text(detail)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.lingoMuted)
+        ) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                selectableText(
+                    title,
+                    id: "key-card-title",
+                    size: 14,
+                    weight: .semibold,
+                    color: .lingoAccentTextColor
+                )
+                Text(detail)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.lingoMuted)
+            }
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
@@ -662,22 +709,31 @@ struct LingobarRootView: View {
     }
 
     private func grammarBlock(_ row: LingobarRow) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(row.label)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.lingoAccentText)
-                .frame(width: 56, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                selectableText(
-                    row.value,
-                    id: "grammar-\(row.label)",
-                    size: 13.5,
-                    weight: .medium,
-                    color: .lingoTextColor
-                )
-                Text("语法结构")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.lingoSubtle)
+        collectableBlock(
+            LingobarCollectionFragment(
+                title: row.value,
+                note: row.label,
+                type: "句型",
+                rows: [row]
+            )
+        ) {
+            HStack(alignment: .top, spacing: 10) {
+                Text(row.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.lingoAccentText)
+                    .frame(width: 56, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    selectableText(
+                        row.value,
+                        id: "grammar-\(row.label)",
+                        size: 13.5,
+                        weight: .medium,
+                        color: .lingoTextColor
+                    )
+                    Text("语法结构")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.lingoSubtle)
+                }
             }
         }
         .padding(.vertical, 7)
@@ -689,20 +745,29 @@ struct LingobarRootView: View {
     }
 
     private func rewriteVariant(_ row: LingobarRow) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(row.label)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.lingoAccentText)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            selectableText(
-                row.value,
-                id: "rewrite-\(row.label)",
-                size: 14,
-                color: .lingoMutedColor,
-                lineSpacing: 2
+        collectableBlock(
+            LingobarCollectionFragment(
+                title: row.value,
+                note: row.label,
+                type: "英文",
+                rows: [row]
             )
+        ) {
+            HStack(alignment: .top, spacing: 10) {
+                Text(row.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.lingoAccentText)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                selectableText(
+                    row.value,
+                    id: "rewrite-\(row.label)",
+                    size: 14,
+                    color: .lingoMutedColor,
+                    lineSpacing: 2
+                )
+            }
         }
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -714,21 +779,30 @@ struct LingobarRootView: View {
     }
 
     private func translationVariant(_ row: LingobarRow) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(row.label)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.lingoAccentText)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(Color.lingoAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            selectableText(
-                row.value,
-                id: "translate-\(row.label)",
-                size: 15,
-                color: .lingoTextColor,
-                lineSpacing: 3
+        collectableBlock(
+            LingobarCollectionFragment(
+                title: row.value,
+                note: row.label,
+                type: "文本",
+                rows: [row]
             )
-                .frame(maxWidth: .infinity, alignment: .leading)
+        ) {
+            HStack(alignment: .top, spacing: 10) {
+                Text(row.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.lingoAccentText)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.lingoAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                selectableText(
+                    row.value,
+                    id: "translate-\(row.label)",
+                    size: 15,
+                    color: .lingoTextColor,
+                    lineSpacing: 3
+                )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -740,19 +814,28 @@ struct LingobarRootView: View {
     }
 
     private func exampleItem(index: Int, text: String, id: String) -> some View {
-        HStack(alignment: .top, spacing: 9) {
-            Text("\(index)")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.lingoSubtle)
-                .frame(width: 18, height: 18)
-                .background(Color.lingoChip, in: Circle())
-            selectableText(
-                text,
-                id: id,
-                size: 14,
-                color: .lingoTextColor,
-                lineSpacing: 2
+        collectableBlock(
+            LingobarCollectionFragment(
+                title: text,
+                note: "例句 \(index)",
+                type: "例句",
+                rows: [LingobarRow("例句 \(index)", text)]
             )
+        ) {
+            HStack(alignment: .top, spacing: 9) {
+                Text("\(index)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.lingoSubtle)
+                    .frame(width: 18, height: 18)
+                    .background(Color.lingoChip, in: Circle())
+                selectableText(
+                    text,
+                    id: id,
+                    size: 14,
+                    color: .lingoTextColor,
+                    lineSpacing: 2
+                )
+            }
         }
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -896,29 +979,33 @@ struct LingobarRootView: View {
         guard available else {
             return Color.lingoSubtle.opacity(0.55)
         }
-        return viewModel.action == action ? Color.lingoAccentText : Color.lingoMuted
+        return viewModel.isActionHighlighted(action) ? Color.lingoAccentText : Color.lingoMuted
     }
 
     private func actionFill(_ action: LanguageAction, available: Bool) -> Color {
         guard available else {
             return Color.clear
         }
-        return viewModel.action == action ? Color.lingoAccentWeak : Color.clear
+        return viewModel.isActionHighlighted(action) ? Color.lingoAccentWeak : Color.clear
     }
 
     private func actionHoverFill(_ action: LanguageAction, available: Bool) -> Color {
         guard available else {
             return Color.clear
         }
-        return viewModel.action == action ? Color.lingoAccentWeak : Color.lingoChip
+        return viewModel.isActionHighlighted(action) ? Color.lingoAccentWeak : Color.lingoChip
     }
 
     private func actionStroke(_ action: LanguageAction, available: Bool) -> Color {
-        viewModel.action == action || !available ? Color.clear : Color.lingoHairline
+        viewModel.isActionHighlighted(action) || !available ? Color.clear : Color.lingoHairline
     }
 
     private func actionHoverStroke(_ action: LanguageAction, available: Bool) -> Color {
-        viewModel.action == action || !available ? Color.clear : Color.lingoHairline
+        viewModel.isActionHighlighted(action) || !available ? Color.clear : Color.lingoHairline
+    }
+
+    private func actionSymbol(_ action: LanguageAction, highlighted: Bool) -> String {
+        action == .collect && highlighted ? "bookmark.fill" : action.symbol
     }
 
     private func iconButton(
@@ -1119,6 +1206,59 @@ private struct ResultTextSelection: Equatable {
     var anchor: CGPoint
 }
 
+private struct CollectableResultBlock<Content: View>: View {
+    var fragment: LingobarCollectionFragment
+    var onCollect: (LingobarCollectionFragment) -> Void
+    var content: Content
+
+    @State private var isHovered = false
+
+    init(
+        fragment: LingobarCollectionFragment,
+        onCollect: @escaping (LingobarCollectionFragment) -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.fragment = fragment
+        self.onCollect = onCollect
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ZStack {
+                if isHovered {
+                    Button {
+                        onCollect(fragment)
+                    } label: {
+                        Image(systemName: "star")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                            .hoverChrome(
+                                fill: Color.lingoGlass2,
+                                hoverFill: Color.lingoChipHover,
+                                stroke: Color.lingoHairline,
+                                hoverStroke: Color.lingoAccent.opacity(0.5),
+                                cornerRadius: 7
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.lingoAccentText)
+                    .help("收藏")
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                }
+            }
+            .frame(width: 28, height: 28, alignment: .top)
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+}
+
 private struct SelectableResultText: View {
     var sourceID: String
     var text: String
@@ -1180,7 +1320,7 @@ private struct SelectableResultText: View {
         let toolbarWidth: CGFloat = 86
         let toolbarHeight: CGFloat = 30
         let preferredX = anchor.x + toolbarWidth / 2 + 8
-        let preferredY = anchor.y
+        let preferredY = anchor.y + toolbarHeight / 2 + 10
         return CGPoint(
             x: min(max(preferredX, toolbarWidth / 2), max(toolbarWidth / 2, size.width - toolbarWidth / 2)),
             y: min(max(preferredY, toolbarHeight / 2), max(toolbarHeight / 2, size.height - toolbarHeight / 2))

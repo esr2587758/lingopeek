@@ -17,7 +17,7 @@ public struct LocalLanguageEngine: Sendable {
                 summary: source,
                 rows: [
                     LingobarRow("选区", "保留原文，方便复制到笔记、聊天或文档。"),
-                    LingobarRow("下一步", "可继续翻译、语法分析或收藏为短句。")
+                    LingobarRow("下一步", "可继续翻译、语法分析、保存历史或收藏片段。")
                 ],
                 sideTitle: "可继续处理",
                 chips: ["翻译", "语法", "生成例句"],
@@ -59,15 +59,15 @@ public struct LocalLanguageEngine: Sendable {
             )
         case .collect:
             return LingobarResult(
-                title: "收藏",
+                title: "保存",
                 shortcut: action.shortcut,
-                summary: "已收藏：learning object。这个表达适合描述可被拆解、标注、复用的一段语言材料。",
+                summary: "已保存当前历史记录，后续不会被自动过期清理。",
                 rows: [
-                    LingobarRow("标签", "product framing, language learning"),
-                    LingobarRow("复习", "明天提醒一次，三天后再次出现。")
+                    LingobarRow("历史", "当前完整面板已保留。"),
+                    LingobarRow("收藏", "精选片段请使用内容块右上角星标。")
                 ],
-                sideTitle: "本地短句库",
-                chips: ["learning object", "selection-first", "language layer"],
+                sideTitle: "历史保留",
+                chips: ["历史", "保存", "不过期"],
                 moreActionTitle: action.moreActionTitle,
                 defaultCollectionTitle: source
             )

@@ -16,9 +16,13 @@ public struct LingobarHubLibraryItem: Identifiable, Equatable, Sendable {
     public var itemType: String
     public var source: String
     public var createdAt: Date
+    public var updatedAt: Date
     public var action: LanguageAction?
     public var copyText: String
     public var sourceText: String
+    public var resultSnapshot: LingobarResult?
+    public var resultSnapshots: [String: LingobarStoredResultSnapshot]
+    public var isSaved: Bool
 
     public init(
         id: UUID,
@@ -29,9 +33,13 @@ public struct LingobarHubLibraryItem: Identifiable, Equatable, Sendable {
         itemType: String,
         source: String,
         createdAt: Date,
+        updatedAt: Date? = nil,
         action: LanguageAction?,
         copyText: String,
-        sourceText: String
+        sourceText: String,
+        resultSnapshot: LingobarResult? = nil,
+        resultSnapshots: [String: LingobarStoredResultSnapshot] = [:],
+        isSaved: Bool = false
     ) {
         self.id = id
         self.kind = kind
@@ -41,9 +49,13 @@ public struct LingobarHubLibraryItem: Identifiable, Equatable, Sendable {
         self.itemType = itemType
         self.source = source
         self.createdAt = createdAt
+        self.updatedAt = updatedAt ?? createdAt
         self.action = action
         self.copyText = copyText
         self.sourceText = sourceText
+        self.resultSnapshot = resultSnapshot
+        self.resultSnapshots = resultSnapshots
+        self.isSaved = isSaved
     }
 }
 
@@ -56,31 +68,46 @@ public enum LingobarHubLibrary {
                 title: phrase.title,
                 visibleText: phrase.title,
                 note: phrase.note,
-                itemType: "文本",
-                source: "Lingobar",
+                itemType: phrase.type,
+                source: phrase.sourceAppName,
                 createdAt: phrase.createdAt,
-                action: nil,
+                action: phrase.sourceAction,
                 copyText: phrase.title,
-                sourceText: phrase.title
+                sourceText: phrase.sourceText.isEmpty ? phrase.title : phrase.sourceText,
+                resultSnapshot: phrase.resultSnapshot,
+                resultSnapshots: phrase.resultSnapshot.map { snapshot in
+                    [LingobarHubLibrary.snapshotKey(for: phrase.sourceAction): LingobarStoredResultSnapshot(result: snapshot)]
+                } ?? [:]
             )
         }
     }
 
     public static func historyItems(from records: [LingobarHistoryRecord]) -> [LingobarHubLibraryItem] {
         records.map { record in
-            LingobarHubLibraryItem(
+            let historyTitle = record.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? record.visibleText
+                : record.sourceText
+            return LingobarHubLibraryItem(
                 id: record.id,
                 kind: .history,
-                title: record.visibleText,
-                visibleText: record.visibleText,
+                title: historyTitle,
+                visibleText: historyTitle,
                 note: record.note,
                 itemType: record.itemType,
                 source: record.sourceAppName,
                 createdAt: record.createdAt,
+                updatedAt: record.updatedAt,
                 action: record.action,
                 copyText: record.copyText,
-                sourceText: record.sourceText
+                sourceText: record.sourceText,
+                resultSnapshot: record.resultSnapshot,
+                resultSnapshots: record.resultSnapshots,
+                isSaved: record.isSaved
             )
         }
+    }
+
+    private static func snapshotKey(for action: LanguageAction?) -> String {
+        (action ?? .translate).rawValue
     }
 }

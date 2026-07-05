@@ -21,7 +21,7 @@ func checkLocalLanguageEngine() throws {
     let engine = LocalLanguageEngine()
 
     try check(
-        LanguageAction.selectionActions.map(\.title) == ["翻译", "语法", "改写", "例句", "收藏", "发音"],
+        LanguageAction.selectionActions.map(\.title) == ["翻译", "语法", "改写", "例句", "保存", "发音"],
         "selection actions should use canonical Lingobar order and vocabulary"
     )
     try check(
@@ -62,7 +62,7 @@ func checkLocalLanguageEngine() throws {
 
     try check(engine.result(for: .grammar, text: "The findings call into question old assumptions.").title == "语法", "grammar title should match")
     try check(engine.result(for: .rewrite, text: "我觉得这个方案风险有点高").title == "改写", "rewrite title should match")
-    try check(engine.result(for: .collect, text: "call into question").title == "收藏", "collect title should match")
+    try check(engine.result(for: .collect, text: "call into question").title == "保存", "save title should match")
 
     try check(engine.result(for: .grammar, text: "The findings call into question old assumptions.").moreActionTitle == "继续拆解", "grammar more action should be contextual")
     try check(engine.result(for: .rewrite, text: "我觉得这个方案风险有点高").moreActionTitle == "更多版本", "rewrite more action should be contextual")
@@ -922,6 +922,8 @@ func checkLingobarHistoryStore() throws {
     let fileURL = directory.appending(path: "history.json")
     let store = LingobarHistoryStore(fileURL: fileURL, limit: 2)
 
+    try check(LingobarHistoryLimits.defaultRecordLimit == 50, "default history cap should keep the 50 newest expiring records")
+
     let missingRecords = try store.load()
     try check(missingRecords.isEmpty, "missing history.json should load empty")
 
@@ -968,6 +970,8 @@ func checkLingobarHistoryStore() throws {
     try check(reloaded == capped, "reload should preserve capped history order and fields")
     try check(reloaded.map(\.createdAt) == [thirdDate, secondDate], "reload should preserve createdAt dates")
     try check(reloaded.map(\.sourceAppName) == ["Pages", "Notes"], "reload should preserve source app labels")
+    try check(reloaded[0].resultSnapshot.defaultCollectionItem?.type == "英文", "history should persist the full result snapshot")
+    try check(reloaded[0].snapshot(for: .rewrite)?.defaultCollectionItem?.type == "英文", "history should index the latest snapshot by action")
 
     let afterDelete = try store.delete(id: second.id)
     try check(afterDelete.map(\.id) == [third.id], "delete should remove the matching history UUID")
@@ -979,9 +983,88 @@ func checkLingobarHistoryStore() throws {
     let saveCapped = try store.load()
     try check(saveCapped.map(\.id) == [first.id, second.id], "save should enforce the configured history cap")
 
+    var savedFirst = first
+    savedFirst.isSaved = true
+    try store.save([third, second, savedFirst])
+    let savedBeyondCap = try store.load()
+    try check(savedBeyondCap.map(\.id) == [third.id, second.id, first.id], "saved history should not expire when the unsaved cap is reached")
+    let unsavedAgain = try store.setSaved(id: first.id, isSaved: false)
+    try check(unsavedAgain.map(\.id) == [third.id, second.id], "unmarking saved history should make it expire under the cap")
+
     try store.clear()
     let clearedRecords = try store.load()
     try check(clearedRecords.isEmpty, "clear should persist an empty history list")
+
+    let sharedTranslate = try makeHistoryRecord(
+        id: UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!,
+        action: .translate,
+        sourceText: " shared source ",
+        sourceAppName: "Safari",
+        visibleText: "shared translation",
+        note: "translation note",
+        itemType: "翻译",
+        createdAt: firstDate
+    )
+    let sharedRewrite = try makeHistoryRecord(
+        id: UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")!,
+        action: .rewrite,
+        sourceText: "shared source",
+        sourceAppName: "Safari",
+        visibleText: "shared rewrite",
+        note: "rewrite note",
+        itemType: "改写",
+        createdAt: secondDate
+    )
+    _ = try store.append(sharedTranslate)
+    let mergedShared = try store.append(sharedRewrite)
+    try check(mergedShared.count == 1, "history should merge repeated LLM actions for the same selected sentence")
+    try check(mergedShared[0].sourceText == "shared source", "merged history should keep the selected sentence as the source text")
+    try check(mergedShared[0].action == .rewrite, "merged history should expose the latest action")
+    try check(mergedShared[0].resultSnapshot == sharedRewrite.resultSnapshot, "merged history should use the latest action as the primary restorable snapshot")
+    try check(mergedShared[0].snapshot(for: .translate) == sharedTranslate.resultSnapshot, "merged history should keep the translate snapshot")
+    try check(mergedShared[0].snapshot(for: .rewrite) == sharedRewrite.resultSnapshot, "merged history should keep the rewrite snapshot")
+    try check(mergedShared[0].resultSnapshots.keys.sorted() == ["rewrite", "translate"], "merged history should encode a full action-keyed snapshot map")
+
+    try store.save([sharedRewrite, sharedTranslate])
+    let coalescedLegacyShape = try store.load()
+    try check(coalescedLegacyShape.count == 1, "loading existing per-action history should coalesce records for the same selected sentence")
+    try check(coalescedLegacyShape[0].resultSnapshot == sharedRewrite.resultSnapshot, "coalesced load should keep the newest stored row as the primary snapshot")
+    try check(coalescedLegacyShape[0].snapshot(for: .translate) == sharedTranslate.resultSnapshot, "coalesced load should retain older action snapshots")
+
+    try store.clear()
+    _ = try store.saveOrAppend(first)
+    _ = try store.saveOrAppend(first)
+    let upsertedSavedRecords = try store.load()
+    try check(upsertedSavedRecords.count == 1, "saving history should update the same record instead of duplicating it")
+    try check(upsertedSavedRecords[0].isSaved, "saving history should mark the record as non-expiring")
+    _ = try store.append(first)
+    let appendAfterSaveRecords = try store.load()
+    try check(appendAfterSaveRecords.count == 1, "late history append should not duplicate a saved record with the same id")
+    try check(appendAfterSaveRecords[0].isSaved, "late history append should preserve the saved state")
+
+    let legacyFileURL = directory.appending(path: "legacy-history.json")
+    let legacyJSON = """
+    [
+      {
+        "id": "88888888-8888-8888-8888-888888888888",
+        "action": "translate",
+        "itemType": "短语",
+        "visibleText": "legacy phrase",
+        "copyText": "legacy phrase",
+        "note": "legacy note",
+        "sourceText": "legacy source",
+        "sourceAppName": "Safari",
+        "createdAt": "2024-03-09T16:05:00Z"
+      }
+    ]
+    """
+    try Data(legacyJSON.utf8).write(to: legacyFileURL, options: [.atomic])
+    let legacyRecords = try LingobarHistoryStore(fileURL: legacyFileURL).load()
+    try check(legacyRecords.count == 1, "legacy compact history records should decode")
+    try check(legacyRecords[0].itemType == "短语", "legacy history should preserve item type")
+    try check(!legacyRecords[0].isSaved, "legacy history should default to expiring")
+    try check(legacyRecords[0].resultSnapshot.defaultCollectionItem?.title == "legacy phrase", "legacy history should synthesize a restorable snapshot")
+    try check(legacyRecords[0].snapshot(for: .translate)?.defaultCollectionItem?.title == "legacy phrase", "legacy history should synthesize an action-keyed snapshot for old compact records")
 
     let corruptFileURL = directory.appending(path: "corrupt-history.json")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -1041,6 +1124,8 @@ func checkLingobarHistoryRecordBuilderPrivacy() throws {
     try check(record.copyText == "reusable phrase", "history builder should use DefaultCollectionItem title for copy text")
     try check(record.note == "collection note", "history builder should use DefaultCollectionItem note")
     try check(record.itemType == "短语", "history builder should use DefaultCollectionItem type")
+    try check(record.resultSnapshot == reusableResult, "history builder should preserve the complete Lingobar result snapshot")
+    try check(record.snapshot(for: .translate) == reusableResult, "history builder should index the complete result snapshot by action")
 
     let fallbackResult = LingobarResult(
         title: "发音",
@@ -1119,6 +1204,19 @@ func checkLingobarHubLibraryItems() throws {
         id: phraseID,
         title: "selection-first",
         note: "以选区为入口。",
+        type: "短语",
+        sourceText: "Selection-first interaction",
+        sourceAppName: "Safari",
+        sourceAction: .translate,
+        resultSnapshot: LingobarResult(
+            title: "翻译",
+            shortcut: "⌘1",
+            summary: "以选区为入口。",
+            rows: [LingobarRow("短语", "selection-first")],
+            sideTitle: "后续动作",
+            chips: ["selection-first"],
+            defaultCollectionItem: DefaultCollectionItem(title: "selection-first", note: "以选区为入口。", type: "短语")
+        ),
         createdAt: phraseDate
     )
     let collectionItems = LingobarHubLibrary.collectionItems(from: [phrase])
@@ -1131,8 +1229,11 @@ func checkLingobarHubLibraryItems() throws {
     try check(collectionItem.note == phrase.note, "collection item should preserve SavedPhrase note")
     try check(collectionItem.copyText == phrase.title, "collection item copy text should equal title")
     try check(collectionItem.kind == .collection, "collection item kind should be collection")
-    try check(collectionItem.source == "Lingobar", "collection item source should default to Lingobar")
-    try check(collectionItem.itemType == "文本", "collection item type should default to text")
+    try check(collectionItem.source == "Safari", "collection item source should preserve source app")
+    try check(collectionItem.itemType == "短语", "collection item type should preserve SavedPhrase type")
+    try check(collectionItem.sourceText == "Selection-first interaction", "collection item should preserve source text snapshot")
+    try check(collectionItem.action == .translate, "collection item should preserve source action")
+    try check(collectionItem.resultSnapshot == phrase.resultSnapshot, "collection item should preserve the result snapshot")
 
     let historyDate = Date(timeIntervalSince1970: 1_710_000_300)
     let history = try makeHistoryRecord(
@@ -1156,7 +1257,78 @@ func checkLingobarHubLibraryItems() throws {
     try check(historyItem.source == "Safari", "history item should preserve source app")
     try check(historyItem.createdAt == historyDate, "history item should preserve created date")
     try check(historyItem.sourceText == "call into question", "history item should preserve source text")
+    try check(historyItem.title == "call into question", "history item title should be the selected sentence, not a derived action result")
     try check(historyItem.copyText == "The report calls the timeline into question.", "history item should preserve copy text")
+    try check(historyItem.resultSnapshot == history.resultSnapshot, "history item should preserve result snapshot")
+    try check(historyItem.resultSnapshots["examples"]?.result == history.resultSnapshot, "history item should preserve the full action-keyed snapshot map")
+}
+
+func checkLingobarRelaunchPlanner() throws {
+    let snapshot = LingobarResult(
+        title: "例句",
+        shortcut: "⌘4",
+        summary: "The report calls the timeline into question.",
+        rows: [LingobarRow("例句", "The report calls the timeline into question.")],
+        sideTitle: "后续动作",
+        chips: ["call into question"],
+        moreActionTitle: "更多例句",
+        defaultCollectionItem: DefaultCollectionItem(
+            title: "The report calls the timeline into question.",
+            note: "可迁移例句",
+            type: "例句"
+        )
+    )
+
+    try check(
+        LingobarRelaunchPlanner.plan(snapshot: snapshot, sourceAction: .examples, requestedAction: nil) == .openSnapshot(LingobarStoredResultSnapshot(result: snapshot)),
+        "relaunch should use the saved snapshot by default"
+    )
+    try check(
+        LingobarRelaunchPlanner.plan(snapshot: snapshot, sourceAction: .examples, requestedAction: .examples) == .openSnapshot(LingobarStoredResultSnapshot(result: snapshot)),
+        "relaunch should use the snapshot when requesting the original action"
+    )
+    try check(
+        LingobarRelaunchPlanner.plan(snapshot: snapshot, sourceAction: .examples, requestedAction: .grammar) == .requestLLM(.grammar),
+        "relaunch should request AI only when switching actions"
+    )
+    try check(
+        LingobarRelaunchPlanner.plan(snapshot: nil, sourceAction: .rewrite, requestedAction: nil) == .requestLLM(.rewrite),
+        "relaunch should request AI when no snapshot is available"
+    )
+
+    let translationSnapshot = LingobarStoredResultSnapshot(
+        result: LingobarResult(
+            title: "翻译",
+            shortcut: "⌘1",
+            summary: "译文",
+            rows: [LingobarRow("通用", "译文")],
+            sideTitle: "后续动作",
+            chips: []
+        )
+    )
+    let grammarSnapshot = LingobarStoredResultSnapshot(
+        result: LingobarResult(
+            title: "语法",
+            shortcut: "⌘2",
+            summary: "语法快照",
+            rows: [LingobarRow("句型", "SVO")],
+            sideTitle: "后续动作",
+            chips: []
+        ),
+        grammarResult: .mockupFixture
+    )
+    let snapshots = [
+        LanguageAction.translate.rawValue: translationSnapshot,
+        LanguageAction.grammar.rawValue: grammarSnapshot
+    ]
+    try check(
+        LingobarRelaunchPlanner.plan(snapshots: snapshots, sourceAction: .translate, requestedAction: .grammar) == .openSnapshot(grammarSnapshot),
+        "relaunch should restore a requested action from the aggregate snapshot map when present"
+    )
+    try check(
+        LingobarRelaunchPlanner.plan(snapshots: snapshots, sourceAction: .translate, requestedAction: .rewrite) == .requestLLM(.rewrite),
+        "relaunch should call AI only when the requested action is missing from the aggregate snapshot map"
+    )
 }
 
 func makeHistoryRecord(
@@ -1262,8 +1434,8 @@ func checkLingobarViewModelHistoryRecordingSourceGate() throws {
 
     let helper = try sourceRegion(source, from: "private func recordCompletedHistory", to: "private func systemPrompt")
     try check(helper.contains("LingobarHistoryRecord.make"), "recording helper should build a compact history record")
-    try check(helper.contains("Task.detached(priority: .utility)"), "recording helper should write history off the main actor")
-    try check(helper.contains("_ = try? historyStore.append(record)"), "recording helper should append through the injected history store non-fatally")
+    try check(!helper.contains("Task.detached(priority: .utility)"), "history recording should persist immediately for fast Hub visibility")
+    try check(helper.contains("historyStore.append(record)"), "recording helper should append through the injected history store immediately")
     try check(
         helper.doesNotContainAny([
             "AppSettings",
@@ -1412,15 +1584,66 @@ func checkPhraseStore() throws {
         .appending(path: "LingoPeekChecks-\(UUID().uuidString)", directoryHint: .isDirectory)
     let fileURL = directory.appending(path: "phrases.json")
     let store = PhraseStore(fileURL: fileURL)
+    let firstDate = Date(timeIntervalSince1970: 1_710_000_400)
+    let secondDate = Date(timeIntervalSince1970: 1_710_000_401)
+    let snapshot = LingobarResult(
+        title: "例句",
+        shortcut: "⌘4",
+        summary: "The report calls the timeline into question.",
+        rows: [LingobarRow("例句", "The report calls the timeline into question.")],
+        sideTitle: "后续动作",
+        chips: ["call into question"],
+        moreActionTitle: "更多例句",
+        defaultCollectionItem: DefaultCollectionItem(
+            title: "The report calls the timeline into question.",
+            note: "可迁移例句",
+            type: "例句"
+        )
+    )
     let phrases = [
-        SavedPhrase(title: "selection-first", note: "以选区为入口。"),
-        SavedPhrase(title: "learning object", note: "可拆解、可复用。")
+        SavedPhrase(
+            title: "selection-first",
+            note: "以选区为入口。",
+            type: "短语",
+            sourceText: "Selection-first interaction",
+            sourceAppName: "Safari",
+            sourceAction: .translate,
+            resultSnapshot: snapshot,
+            createdAt: firstDate
+        ),
+        SavedPhrase(
+            title: "learning object",
+            note: "可拆解、可复用。",
+            type: "文本",
+            sourceText: "learning object",
+            sourceAppName: "Lingobar",
+            sourceAction: .examples,
+            resultSnapshot: snapshot,
+            createdAt: secondDate
+        )
     ]
 
     try store.save(phrases)
     let loaded = try store.load()
-    try check(loaded.map(\.title) == phrases.map(\.title), "phrase titles should persist")
-    try check(loaded.map(\.note) == phrases.map(\.note), "phrase notes should persist")
+    try check(loaded == phrases, "saved phrases should persist type, source snapshot, action, and result snapshot")
+
+    let legacyFileURL = directory.appending(path: "legacy-phrases.json")
+    let legacyJSON = """
+    [
+      {
+        "title": "legacy phrase",
+        "note": "old compact card"
+      }
+    ]
+    """
+    try Data(legacyJSON.utf8).write(to: legacyFileURL, options: [.atomic])
+    let legacy = try PhraseStore(fileURL: legacyFileURL).load()
+    try check(legacy.count == 1, "legacy title/note phrase files should decode")
+    try check(legacy[0].title == "legacy phrase", "legacy phrase title should decode")
+    try check(legacy[0].note == "old compact card", "legacy phrase note should decode")
+    try check(legacy[0].type == "文本", "legacy phrase type should default to 文本")
+    try check(legacy[0].sourceAppName == "Lingobar", "legacy phrase source should default to Lingobar")
+    try check(legacy[0].resultSnapshot == nil, "legacy phrase should not invent a result snapshot")
 }
 
 func checkLingobarHubShellSourceGate() throws {
@@ -1469,6 +1692,11 @@ func checkLingobarHubShellSourceGate() throws {
         "Hub permissions section should poll system Accessibility status while visible"
     )
     try check(
+        viewSource.contains("libraryRefreshTimer = Timer.publish(every: 5") &&
+            viewSource.contains("state.refreshLibrary()"),
+        "Hub should refresh collection and history state every five seconds while open"
+    )
+    try check(
         settingsViewSource.contains("NSApplication.didBecomeActiveNotification") && settingsViewSource.contains("refreshSettings()"),
         "legacy Settings scene should refresh external permission state when the app becomes active"
     )
@@ -1497,6 +1725,27 @@ func checkLingobarHubShellSourceGate() throws {
     try check(viewSource.contains("LingobarHistoryStore.defaultStore()"), "Hub history should use the real history store")
     try check(viewSource.contains("LingobarHubLibrary.collectionItems"), "Hub should map saved phrases through the shared library adapter")
     try check(viewSource.contains("LingobarHubLibrary.historyItems"), "Hub should map history records through the shared library adapter")
+    let hubContentSwitch = try sourceRegion(viewSource, from: "private var content: some View", to: "private struct HubSidebar")
+    let historyContent = try sourceRegion(hubContentSwitch, from: "case .history:", to: "case .settings:")
+    try check(historyContent.contains("HubHistoryPane("), "Hub history should use a dedicated flat history list")
+    try check(historyContent.contains("onSelect: state.select"), "Hub history should wire row selection into Hub state")
+    try check(!historyContent.contains("onClear"), "Hub history should not expose a top-level clear-all action")
+    try check(!historyContent.contains("LibraryPane("), "Hub history should not reuse the collection library pane")
+    try check(!historyContent.contains("historyTypeOptions"), "Hub history should not expose collection-style type filters")
+    try check(!historyContent.contains("HubSearchField("), "Hub history should render as a flat list without collection search controls")
+    let historyRow = try sourceRegion(viewSource, from: "private struct HubHistoryRow", to: "private struct HubHistoryBlock")
+    try check(historyRow.contains("var onSelect: (LingobarHubLibraryItem) -> Void"), "Hub history rows should accept a selection callback")
+    try check(historyRow.contains(".contentShape(") && historyRow.contains(".onTapGesture"), "Hub history rows should be selectable by clicking the row body")
+    try check(historyRow.contains(".textSelection(.enabled)"), "Hub history selected sentence should be selectable text")
+    try check(!historyRow.contains("item.resultSnapshot?.rows"), "Hub history rows should not render full result snapshot rows inline")
+    try check(!historyRow.contains("HubHistoryBlock("), "Hub history rows should keep the visible list to the selected sentence")
+    try check(historyRow.contains("HStack(spacing: 7)"), "Hub history row actions should be horizontal to keep rows compact")
+    try check(!historyRow.contains("VStack(spacing: 7)"), "Hub history row actions should not be stacked vertically")
+    try check(historyRow.contains("\"doc.on.doc\""), "Hub history rows should expose a copy action")
+    try check(historyRow.contains("\"arrow.up.forward.square\""), "Hub history rows should expose a trailing button to open the full snapshot")
+    try check(historyRow.contains("\"bookmark\""), "Hub history rows should expose a trailing save button")
+    try check(historyRow.contains("\"trash\""), "Hub history rows should expose a trailing delete button")
+    try check(!viewSource.contains("\"清空历史\""), "Hub should not render a dangerous clear-all history button")
     try check(controllerSource.contains("hubWindowController.show(section: .settings)"), "settings entry points should open the Hub settings section")
     try check(controllerSource.contains("appActivationObserver"), "controller should observe app activation for external setup state changes")
     try check(controllerSource.contains("private func refreshRuntimeSettings()"), "controller should centralize runtime settings refresh")
@@ -1509,6 +1758,42 @@ func checkLingobarHubShellSourceGate() throws {
     try check(!controllerSource.contains("settingsWindowController.show()"), "old settings window should not remain the active settings route")
     try check(appDelegateSource.contains("LINGOPEEK_OPEN_HUB"), "app launch should support deterministic Hub UI smoke tests")
     try check(appDelegateSource.contains("LINGOPEEK_OPEN_HUB_SECTION"), "Hub launch should support deterministic section routing")
+
+    let rootViewSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarRootView.swift"),
+        encoding: .utf8
+    )
+    let viewModelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift"),
+        encoding: .utf8
+    )
+    let actionBar = try sourceRegion(rootViewSource, from: "private var actionBar: some View", to: "private func panelTitle")
+    try check(actionBar.contains("viewModel.status"), "Lingobar action bar should render status feedback for save actions")
+    try check(actionBar.contains("viewModel.isActionHighlighted(action)"), "Lingobar action bar should let saved state highlight the save button")
+    let collectableResultBlock = try sourceRegion(rootViewSource, from: "private struct CollectableResultBlock", to: "private struct SelectableResultText")
+    try check(collectableResultBlock.contains("HStack(alignment: .top"), "result collect affordances should live in a trailing layout slot")
+    try check(!collectableResultBlock.contains("ZStack(alignment: .topTrailing)"), "result collect affordances should not overlay the content's top-right corner")
+    try check(collectableResultBlock.contains(".frame(width: 28"), "result collect affordances should reserve a stable trailing action slot")
+    let selectableText = try sourceRegion(rootViewSource, from: "private struct SelectableResultText", to: "private struct InlineSelectionToolbar")
+    try check(selectableText.contains("anchor.y + toolbarHeight / 2 + 10"), "inline selection toolbar should appear below the selected text instead of colliding with trailing actions")
+    let grammarPanelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingobarUI/GrammarResultPanel.swift"),
+        encoding: .utf8
+    )
+    let grammarCollectableBlock = try sourceRegion(grammarPanelSource, from: "private struct GrammarCollectableBlock", to: "private struct GrammarWrapLayout")
+    try check(grammarCollectableBlock.contains("HStack(alignment: .top"), "grammar collect affordances should live in a trailing layout slot")
+    try check(!grammarCollectableBlock.contains("ZStack(alignment: .topTrailing)"), "grammar collect affordances should not overlay speaker buttons or grammar cards")
+    try check(grammarPanelSource.contains("fixedSize(horizontal: false, vertical: true)"), "grammar point cards should use content-driven height")
+    let grammarPointCard = try sourceRegion(grammarPanelSource, from: "private struct GrammarPointCard", to: "private struct GrammarCollectableBlock")
+    try check(grammarPointCard.contains(".overlay(alignment: .leading)"), "grammar point accent bars should not participate in height negotiation")
+    let saveHelper = try sourceRegion(
+        viewModelSource,
+        from: "func saveCurrentHistorySnapshot",
+        to: "func copyResult"
+    )
+    try check(viewModelSource.contains("currentHistoryRecord?.isSaved == true"), "save button highlighting should be based on the current saved history state")
+    try check(saveHelper.contains("let savedRecords = try historyStore.saveOrAppend(savedRecord)"), "saving from the main panel should read back saved history state")
+    try check(saveHelper.contains("currentHistoryRecord = savedRecords.first"), "saving from the main panel should refresh the current saved record immediately")
 }
 
 func checkSelectionPermissionSourceGate() throws {
@@ -1569,6 +1854,7 @@ do {
     try checkLingobarHistoryStore()
     try checkLingobarHistoryRecordBuilderPrivacy()
     try checkLingobarHubLibraryItems()
+    try checkLingobarRelaunchPlanner()
     try checkLingobarViewModelHistoryRecordingSourceGate()
     try checkGrammarStagedDecodingRecoverySourceGate()
     try checkGrammarAbbreviationDisplaySourceGate()

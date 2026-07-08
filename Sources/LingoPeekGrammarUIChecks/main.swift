@@ -83,6 +83,11 @@ struct LingoPeekGrammarUIChecks {
                 print("Wrote grammar passive-contrast recovery regression screenshot to \(screenshotURL.path)")
                 return
             }
+            if let screenshotDirectory = requestedIssue8RecoveryScreenshotDirectory() {
+                try exportIssue8RecoveryRegressionScreenshots(to: screenshotDirectory)
+                print("Wrote grammar issue 8 recovery regression screenshots to \(screenshotDirectory.path)")
+                return
+            }
 
             try check(
                 GrammarVizView.allCases.map(\.rawValue) == ["annotated", "dependency", "tree", "trunk", "tense", "order"],
@@ -107,6 +112,7 @@ struct LingoPeekGrammarUIChecks {
             try assertInvertedCopularRegressionRenders()
             try assertLongSchemaRecoveryRegressionRenders()
             try assertPassiveContrastRecoveryRegressionRenders()
+            try assertIssue8RecoveryRegressionRenders()
 
             if shouldBenchmark {
                 try await runBenchmarks()
@@ -772,6 +778,79 @@ struct LingoPeekGrammarUIChecks {
         )
     }
 
+    @MainActor
+    private static func assertIssue8RecoveryRegressionRenders() throws {
+        for fixture in try issue8RecoveryRegressionFixtures().map(\.result) {
+            let image = try renderImage(for: fixture, tab: .annotated)
+            try check(image.width >= 700, "issue 8 recovery regression should render at panel width")
+            try check(image.height > 260, "issue 8 recovery regression should render real content")
+            try check(visiblePixelCount(in: image) > 800, "issue 8 recovery regression should not be blank")
+        }
+    }
+
+    @MainActor
+    private static func exportIssue8RecoveryRegressionScreenshots(to directory: URL) throws {
+        for fixture in try issue8RecoveryRegressionFixtures() {
+            let image = try renderImage(for: fixture.result, tab: .annotated)
+            let focusedRect = CGRect(x: 0, y: 0, width: image.width, height: min(image.height, 760))
+            try writePNG(image.cropping(to: focusedRect) ?? image, to: directory.appending(path: fixture.filename))
+        }
+    }
+
+    private static func issue8RecoveryRegressionFixtures() throws -> [(filename: String, result: GrammarResult)] {
+        let sharkSource = "As the shark reaches proximity to its prey, it tunes into electric signals that ensure a precise strike on its target; this sense is so strong that the shark even attacks blind by letting its eyes recede for protection."
+        let sharkChunks = GrammarResult.recoveryChunks(for: sharkSource)
+        try check(sharkChunks.contains { $0.text == "As the shark reaches proximity to its prey" && $0.role == .adv }, "issue 8 shark fixture should include the as time clause")
+        try check(sharkChunks.contains { $0.text == "tunes into" && $0.role == .predicate }, "issue 8 shark fixture should include the first main predicate")
+        try check(sharkChunks.contains { $0.text == "so strong" && $0.role == .appos }, "issue 8 shark fixture should include the so ... that complement")
+        try check(sharkChunks.contains { $0.text == "even attacks blind" && $0.role == .predicate }, "issue 8 shark fixture should include the result predicate")
+        let shark = regressionGrammarResult(
+            source: sharkSource,
+            chineseMeaning: "当鲨鱼接近猎物时，它会捕捉电信号以精准攻击；这种感知非常强，以至于鲨鱼甚至会为保护眼睛而盲攻。",
+            analysisScopeNote: "回归用例：AI 首次未返回 JSON 时，应恢复 as 时间从句、分号连接和 so ... that 结果分句。",
+            chunks: sharkChunks,
+            pattern: GrammarPattern(en: "As-clause, S V O; S is so C that S V", zh: "as 时间从句 + 主句；so ... that 结果分句")
+        )
+
+        let concernSource = "Another major concern is that when civic infrastructure developments are undertaken in preparation for hosting the Olympics, these benefits accrue to a single metropolitan centre with the exception of some outlying areas that may get some revamped sports facilities."
+        let concernChunks = GrammarResult.recoveryChunks(for: concernSource)
+        try check(concernChunks.contains { $0.text == "Another major concern" && $0.role == .subject }, "issue 8 concern fixture should include the copular subject")
+        try check(concernChunks.contains { $0.text == "when" && $0.role == .conj }, "issue 8 concern fixture should include the when connector")
+        try check(concernChunks.contains { $0.text == "civic infrastructure developments" && $0.role == .subject }, "issue 8 concern fixture should include the when-clause subject")
+        try check(concernChunks.contains { $0.text == "are undertaken" && $0.role == .predicate }, "issue 8 concern fixture should include the when-clause predicate")
+        try check(concernChunks.contains { $0.text == "these benefits" && $0.role == .subject }, "issue 8 concern fixture should include the content subject")
+        try check(concernChunks.contains { $0.text == "that may get some revamped sports facilities" && $0.role == .attr }, "issue 8 concern fixture should include the relative clause")
+        let concern = regressionGrammarResult(
+            source: concernSource,
+            chineseMeaning: "另一个主要担忧是：为举办奥运而进行市政基础设施建设时，这些收益通常集中到一个大都市中心，少数外围区域除外。",
+            analysisScopeNote: "回归用例：AI 首次未返回 JSON 时，应恢复 is that 内容从句、嵌套 when 从句和定语从句。",
+            chunks: concernChunks,
+            pattern: GrammarPattern(en: "S is that when-clause, S V O with exception that ...", zh: "主句 + that 内容从句，内含 when 时间从句和定语从句")
+        )
+
+        let hawkingSource = "World-renowned astrophysicist Stephen Hawking believes that once spaceships can exceed the speed of light, humans could feasibly travel millions of years into the future in order to repopulate earth in the event of a forthcoming apocalypse."
+        let hawkingChunks = GrammarResult.recoveryChunks(for: hawkingSource)
+        try check(hawkingChunks.contains { $0.text == "World-renowned astrophysicist Stephen Hawking" && $0.role == .subject }, "issue 8 Hawking fixture should include the reporting subject")
+        try check(hawkingChunks.contains { $0.text == "once" && $0.role == .conj }, "issue 8 Hawking fixture should include the once connector")
+        try check(hawkingChunks.contains { $0.text == "spaceships" && $0.role == .subject }, "issue 8 Hawking fixture should include the once-clause subject")
+        try check(hawkingChunks.contains { $0.text == "can exceed" && $0.role == .predicate }, "issue 8 Hawking fixture should include the once-clause predicate")
+        try check(hawkingChunks.contains { $0.text == "could feasibly travel" && $0.role == .predicate }, "issue 8 Hawking fixture should include the embedded predicate")
+        try check(hawkingChunks.contains { $0.text == "in order to repopulate earth" && $0.role == .adv }, "issue 8 Hawking fixture should include the purpose phrase")
+        let hawking = regressionGrammarResult(
+            source: hawkingSource,
+            chineseMeaning: "世界知名天体物理学家 Stephen Hawking 认为，一旦飞船能超过光速，人类就可能前往数百万年后的未来，以便在灾难来临时重新繁衍地球。",
+            analysisScopeNote: "回归用例：AI 首次未返回 JSON 时，应恢复 believes that 宾语从句、once 条件从句和 in order to 目的状语。",
+            chunks: hawkingChunks,
+            pattern: GrammarPattern(en: "S believes that once-clause, S could V in order to ...", zh: "主语认为：once 条件下，嵌入主语可执行目的动作")
+        )
+
+        return [
+            ("issue-8-shark-semicolon-fixed.png", shark),
+            ("issue-8-concern-content-fixed.png", concern),
+            ("issue-8-hawking-belief-fixed.png", hawking)
+        ]
+    }
+
     private static func regressionGrammarResult(
         source: String,
         chineseMeaning: String,
@@ -1311,6 +1390,14 @@ struct LingoPeekGrammarUIChecks {
             return nil
         }
         return URL(fileURLWithPath: CommandLine.arguments[index + 1])
+    }
+
+    private static func requestedIssue8RecoveryScreenshotDirectory() -> URL? {
+        guard let index = CommandLine.arguments.firstIndex(of: "--write-issue-8-recovery-screenshots"),
+              CommandLine.arguments.indices.contains(index + 1) else {
+            return nil
+        }
+        return URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true)
     }
 
     private static func writePNG(_ image: CGImage, to url: URL) throws {

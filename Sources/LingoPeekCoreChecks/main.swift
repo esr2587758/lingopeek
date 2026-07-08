@@ -900,6 +900,135 @@ func checkGrammarChunkNormalization() throws {
         olympicBidRecovery.first { $0.text == "the debt" }?.role == .object,
         "Olympic bid schema recovery should identify the settling object"
     )
+
+    let sharkSenseSource = "As the shark reaches proximity to its prey, it tunes into electric signals that ensure a precise strike on its target; this sense is so strong that the shark even attacks blind by letting its eyes recede for protection."
+    let sharkSenseRecovery = GrammarResult.recoveryChunks(for: sharkSenseSource)
+    try check(
+        sharkSenseRecovery.first { $0.text == "As the shark reaches proximity to its prey" }?.role == .adv,
+        "shark sense schema recovery should identify the as time clause"
+    )
+    try check(
+        sharkSenseRecovery.first { $0.text == "it" }?.role == .subject,
+        "shark sense schema recovery should identify the first main-clause subject"
+    )
+    try check(
+        sharkSenseRecovery.first { $0.text == "tunes into" }?.role == .predicate,
+        "shark sense schema recovery should identify the first main-clause predicate"
+    )
+    try check(
+        sharkSenseRecovery.first { $0.text == "electric signals" }?.role == .object,
+        "shark sense schema recovery should identify the signal object before the relative clause"
+    )
+    try check(
+        sharkSenseRecovery.first { $0.text == "that" }?.role == .conj,
+        "shark sense schema recovery should split the relative connector"
+    )
+    try check(
+        sharkSenseRecovery.first { $0.text == "so strong" }?.role == .appos,
+        "shark sense schema recovery should identify the so ... that degree complement"
+    )
+    try check(
+        sharkSenseRecovery.first { $0.text == "the shark" }?.role == .subject,
+        "shark sense schema recovery should identify the result-clause subject"
+    )
+    try check(
+        sharkSenseRecovery.first { $0.text == "even attacks blind" }?.role == .predicate,
+        "shark sense schema recovery should identify the result-clause predicate"
+    )
+
+    let olympicConcernSource = "Another major concern is that when civic infrastructure developments are undertaken in preparation for hosting the Olympics, these benefits accrue to a single metropolitan centre with the exception of some outlying areas that may get some revamped sports facilities."
+    let olympicConcernRecovery = GrammarResult.recoveryChunks(for: olympicConcernSource)
+    try check(
+        olympicConcernRecovery.first { $0.text == "Another major concern" }?.role == .subject,
+        "concern schema recovery should identify the copular subject"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "is" }?.role == .predicate,
+        "concern schema recovery should identify the copular predicate"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "that" }?.role == .conj,
+        "concern schema recovery should identify the content-clause connector"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "when" }?.role == .conj,
+        "concern schema recovery should identify the embedded when connector"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "civic infrastructure developments" }?.role == .subject,
+        "concern schema recovery should identify the embedded when-clause subject"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "are undertaken" }?.role == .predicate,
+        "concern schema recovery should identify the embedded when-clause passive predicate"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "in preparation for hosting the Olympics" }?.role == .adv,
+        "concern schema recovery should identify the embedded when-clause preparation phrase"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "these benefits" }?.role == .subject,
+        "concern schema recovery should identify the content-clause subject"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "accrue to" }?.role == .predicate,
+        "concern schema recovery should identify the content-clause predicate"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "with the exception of some outlying areas" }?.role == .adv,
+        "concern schema recovery should identify the exception phrase"
+    )
+    try check(
+        olympicConcernRecovery.first { $0.text == "that may get some revamped sports facilities" }?.role == .attr,
+        "concern schema recovery should preserve the outlying-areas relative clause"
+    )
+
+    let hawkingSource = "World-renowned astrophysicist Stephen Hawking believes that once spaceships can exceed the speed of light, humans could feasibly travel millions of years into the future in order to repopulate earth in the event of a forthcoming apocalypse."
+    let hawkingRecovery = GrammarResult.recoveryChunks(for: hawkingSource)
+    try check(
+        hawkingRecovery.first { $0.text == "World-renowned astrophysicist Stephen Hawking" }?.role == .subject,
+        "Hawking schema recovery should identify the reporting subject"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "believes" }?.role == .predicate,
+        "Hawking schema recovery should identify the reporting predicate"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "that" }?.role == .conj,
+        "Hawking schema recovery should identify the object-clause connector"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "once" }?.role == .conj,
+        "Hawking schema recovery should identify the once connector"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "spaceships" }?.role == .subject,
+        "Hawking schema recovery should identify the once-clause subject"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "can exceed" }?.role == .predicate,
+        "Hawking schema recovery should identify the once-clause predicate"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "the speed of light" }?.role == .object,
+        "Hawking schema recovery should identify the once-clause object"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "humans" }?.role == .subject,
+        "Hawking schema recovery should identify the embedded-clause subject"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "could feasibly travel" }?.role == .predicate,
+        "Hawking schema recovery should identify the embedded-clause predicate"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "in order to repopulate earth" }?.role == .adv,
+        "Hawking schema recovery should identify the purpose phrase"
+    )
+    try check(
+        hawkingRecovery.first { $0.text == "in the event of a forthcoming apocalypse" }?.role == .adv,
+        "Hawking schema recovery should identify the condition phrase"
+    )
 }
 
 func checkLanguageActionCodable() throws {
@@ -1770,6 +1899,22 @@ func checkLingobarHubShellSourceGate() throws {
     let actionBar = try sourceRegion(rootViewSource, from: "private var actionBar: some View", to: "private func panelTitle")
     try check(actionBar.contains("viewModel.status"), "Lingobar action bar should render status feedback for save actions")
     try check(actionBar.contains("viewModel.isActionHighlighted(action)"), "Lingobar action bar should let saved state highlight the save button")
+    try check(
+        actionBar.contains("viewModel.recentCollectedPhraseID") &&
+            actionBar.contains("onOpenCollection(collectedPhraseID)"),
+        "Lingobar action bar should expose a clickable handoff to the newly collected Hub card"
+    )
+    try check(
+        controllerSource.contains("onOpenCollection:") &&
+            controllerSource.contains("hubWindowController.show(section: .collection, selectedCollectionID: collectedPhraseID)"),
+        "collection success handoff should open Hub collection with the new phrase selected"
+    )
+    let collectFragmentHelper = try sourceRegion(viewModelSource, from: "func collectFragment", to: "func saveCurrentHistorySnapshot")
+    try check(
+        viewModelSource.contains("@Published var recentCollectedPhraseID: UUID?") &&
+            collectFragmentHelper.contains("recentCollectedPhraseID = phrase.id"),
+        "view model should publish the newest collected phrase id for the Hub handoff"
+    )
     let collectableResultBlock = try sourceRegion(rootViewSource, from: "private struct CollectableResultBlock", to: "private struct SelectableResultText")
     try check(collectableResultBlock.contains("HStack(alignment: .top"), "result collect affordances should live in a trailing layout slot")
     try check(!collectableResultBlock.contains("ZStack(alignment: .topTrailing)"), "result collect affordances should not overlay the content's top-right corner")
@@ -1794,6 +1939,82 @@ func checkLingobarHubShellSourceGate() throws {
     try check(viewModelSource.contains("currentHistoryRecord?.isSaved == true"), "save button highlighting should be based on the current saved history state")
     try check(saveHelper.contains("let savedRecords = try historyStore.saveOrAppend(savedRecord)"), "saving from the main panel should read back saved history state")
     try check(saveHelper.contains("currentHistoryRecord = savedRecords.first"), "saving from the main panel should refresh the current saved record immediately")
+}
+
+func checkLingobarInputModeIssue9SourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let rootViewSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarRootView.swift"),
+        encoding: .utf8
+    )
+    let viewModelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift"),
+        encoding: .utf8
+    )
+
+    let submitInput = try sourceRegion(viewModelSource, from: "func submitInput()", to: "func isAvailable")
+    try check(
+        submitInput.contains("let submittedText = inputText.trimmingCharacters(in: .whitespacesAndNewlines)"),
+        "input submit should capture the current trimmed input before routing to rewrite"
+    )
+    try check(submitInput.contains("activeResultSnapshots = [:]"), "input submit should clear stale rewrite snapshots before a new request")
+    try check(submitInput.contains("currentHistoryRecord = nil"), "input submit should detach the previous result's saved-history state")
+    try check(submitInput.contains("perform(.rewrite)"), "input submit should always route non-empty input to rewrite")
+
+    let inputPill = try sourceRegion(rootViewSource, from: "private var inputPill", to: "private var inputPlaceholder")
+    try check(
+        inputPill.contains(".frame(maxWidth: .infinity, alignment: .topLeading)") &&
+            inputPill.contains(".frame(height: 46, alignment: .topLeading)"),
+        "input field should use a stable available-width frame instead of resizing while typing"
+    )
+    try check(!inputPill.contains("inputFieldWidth"), "input pill should not depend on per-keystroke measured text width")
+    try check(!rootViewSource.contains("private var inputFieldWidth"), "input width measurement helper should be removed to avoid horizontal jitter")
+
+    let inputResultPanel = try sourceRegion(rootViewSource, from: "private var inputResultPanel", to: "private func resultPanel")
+    try check(
+        inputResultPanel.contains("panelBody(height: 296, scrolls: false)"),
+        "input results should use the non-scrolling panel body for normal rewrite output"
+    )
+    let controllerSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarController.swift"),
+        encoding: .utf8
+    )
+    try check(
+        controllerSource.contains("inputResultPanelSize = NSSize(width: 720, height: 420)") &&
+            rootViewSource.contains("viewModel.showsResult ? 420 : 72"),
+        "input result panel height should fit normal rewrite rows without a scrollbar"
+    )
+
+    let resultBody = try sourceRegion(rootViewSource, from: "private var resultBody", to: "private func resultRow")
+    try check(
+        resultBody.contains("rewritePrimaryText") &&
+            resultBody.contains("rewriteVariantRows"),
+        "rewrite input mode should promote the primary rewrite and keep variants separate"
+    )
+    let rewritePrimaryHelpers = try sourceRegion(rootViewSource, from: "private var rewritePrimaryCard", to: "private func translationVariant")
+    try check(
+        rewritePrimaryHelpers.contains("rewriteSummaryLooksLikeMetaText") &&
+            rewritePrimaryHelpers.contains("containsCJKCharacters(viewModel.result.summary)") &&
+            rewritePrimaryHelpers.contains("isRewritePrimaryLabel"),
+        "rewrite UI should avoid showing AI meta summaries as the highlighted result"
+    )
+
+    let panelBody = try sourceRegion(rootViewSource, from: "private func panelBody", to: "private var firstChip")
+    try check(panelBody.contains("scrolls: Bool = true"), "selection panels should keep scroll support as the default")
+    try check(
+        panelBody.contains("if scrolls") && panelBody.contains("ScrollView") && panelBody.contains("panelBodyContent"),
+        "panel body should have explicit scroll and non-scroll rendering paths"
+    )
+
+    let inputTextView = try sourceRegion(rootViewSource, from: "private struct LingobarInputTextView", to: "private final class LingobarInputNSTextView")
+    try check(
+        inputTextView.contains("guard textView.string.isEmpty else"),
+        "input text centering should not keep recalculating vertical inset for non-empty text"
+    )
+    try check(
+        inputTextView.contains("NSSize(width: 0, height: 12)"),
+        "non-empty input should keep a stable text inset while the user types"
+    )
 }
 
 func checkSelectionPermissionSourceGate() throws {
@@ -1861,6 +2082,7 @@ do {
     try checkSelectionPermissionSourceGate()
     try checkPhraseStore()
     try checkLingobarHubShellSourceGate()
+    try checkLingobarInputModeIssue9SourceGate()
     print("LingoPeekCoreChecks passed")
 } catch {
     fputs("LingoPeekCoreChecks failed: \(error)\n", stderr)

@@ -10,6 +10,7 @@ struct LingobarRootView: View {
     var onClose: () -> Void = {}
     var onOpenSettings: () -> Void = {}
     var onOpenAccessibility: () -> Void = {}
+    var onOpenCollection: (UUID) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -192,9 +193,9 @@ struct LingobarRootView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .frame(width: inputFieldWidth, height: 46, alignment: .topLeading)
-
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(height: 46, alignment: .topLeading)
+            .layoutPriority(1)
 
             HStack(spacing: 6) {
                 inputIconButton(systemName: "mic", highlighted: false, dimmed: false, help: "语音输入") {
@@ -239,21 +240,10 @@ struct LingobarRootView: View {
         "输入中文 / 英文 / 粗糙想法，按 ↩ 改写成自然英文"
     }
 
-    private var inputFieldWidth: CGFloat {
-        let text = viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayText = text.isEmpty ? inputPlaceholder : text
-        let measuredWidth = (displayText as NSString).boundingRect(
-            with: NSSize(width: 540, height: 80),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: NSFont.systemFont(ofSize: 15)]
-        ).width
-        return min(max(ceil(measuredWidth) + 8, 160), 540)
-    }
-
     private var inputResultPanel: some View {
         VStack(spacing: 0) {
             panelTitle("改写 · 自然英文", shortcut: viewModel.shortcut(for: viewModel.action))
-            panelBody(height: 176)
+            panelBody(height: 296, scrolls: false)
         }
         .background(surfaceBackground)
         .clipShape(surfaceShape)
@@ -337,12 +327,40 @@ struct LingobarRootView: View {
                 .help(available ? action.title : "\(action.title)仅支持英文内容")
             }
             Spacer(minLength: 8)
-            Text(viewModel.status)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.lingoSubtle)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .minimumScaleFactor(0.85)
+            if let collectedPhraseID = viewModel.recentCollectedPhraseID {
+                Button {
+                    onOpenCollection(collectedPhraseID)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(viewModel.status)
+                        Text("查看")
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.system(size: 10.5, weight: .semibold))
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(Color.lingoAccentText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .hoverChrome(
+                        fill: Color.lingoAccent.opacity(0.10),
+                        hoverFill: Color.lingoAccent.opacity(0.16),
+                        stroke: Color.lingoAccent.opacity(0.24),
+                        hoverStroke: Color.lingoAccent.opacity(0.40),
+                        cornerRadius: 7
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("查看收藏")
+            } else {
+                Text(viewModel.status)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.lingoSubtle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .minimumScaleFactor(0.85)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -374,22 +392,34 @@ struct LingobarRootView: View {
         .textSelection(.enabled)
     }
 
-    private func panelBody(height: CGFloat) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if viewModel.isLoading {
-                    loadingBody
-                } else {
-                    resultBody
+    private func panelBody(height: CGFloat, scrolls: Bool = true) -> some View {
+        Group {
+            if scrolls {
+                ScrollView {
+                    panelBodyContent
                 }
+            } else {
+                panelBodyContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .clipped()
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 6)
-            .padding(.bottom, 14)
-            .textSelection(.enabled)
         }
         .frame(minHeight: 176)
         .frame(height: height)
+    }
+
+    private var panelBodyContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if viewModel.isLoading {
+                loadingBody
+            } else {
+                resultBody
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 6)
+        .padding(.bottom, 14)
+        .textSelection(.enabled)
     }
 
     private var firstChip: String {
@@ -445,7 +475,7 @@ struct LingobarRootView: View {
             if viewModel.isLoading {
                 287
             } else {
-                viewModel.showsResult ? 327 : 72
+                viewModel.showsResult ? 420 : 72
             }
         }
     }
@@ -560,30 +590,16 @@ struct LingobarRootView: View {
         case .rewrite:
             collectableBlock(
                 LingobarCollectionFragment(
-                    title: viewModel.result.summary,
+                    title: rewritePrimaryText,
                     note: "主改写",
                     type: "英文",
-                    rows: [LingobarRow("主改写", viewModel.result.summary)]
+                    rows: [LingobarRow("主改写", rewritePrimaryText)]
                 )
             ) {
-                selectableText(
-                    viewModel.result.summary,
-                    id: "rewrite-summary",
-                    size: 16,
-                    weight: .medium,
-                    color: .lingoTextColor,
-                    lineSpacing: 4
-                )
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.lingoAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.lingoHairline, lineWidth: 1)
-                    )
+                rewritePrimaryCard
             }
             VStack(spacing: 0) {
-                ForEach(viewModel.result.rows, id: \.label) { row in
+                ForEach(rewriteVariantRows, id: \.label) { row in
                     rewriteVariant(row)
                 }
             }
@@ -757,25 +773,93 @@ struct LingobarRootView: View {
                 Text(row.label)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.lingoAccentText)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .frame(width: 52, alignment: .leading)
                 selectableText(
                     row.value,
                     id: "rewrite-\(row.label)",
-                    size: 14,
+                    size: 13.5,
                     color: .lingoMutedColor,
                     lineSpacing: 2
                 )
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.lingoHairline)
                 .frame(height: 1)
         }
+    }
+
+    private var rewritePrimaryCard: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("推荐")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(Color.lingoAccentText)
+            selectableText(
+                rewritePrimaryText,
+                id: "rewrite-summary",
+                size: 15,
+                weight: .semibold,
+                color: .lingoTextColor,
+                lineSpacing: 3
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.lingoAccent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.lingoHairline, lineWidth: 1)
+        )
+    }
+
+    private var rewritePrimaryText: String {
+        if let primaryRow = rewritePrimaryRow {
+            return primaryRow.value
+        }
+        if rewriteSummaryLooksLikeMetaText, let firstRow = viewModel.result.rows.first {
+            return firstRow.value
+        }
+        return viewModel.result.summary
+    }
+
+    private var rewriteVariantRows: [LingobarRow] {
+        let primary = rewritePrimaryRow ?? (rewriteSummaryLooksLikeMetaText ? viewModel.result.rows.first : nil)
+        return viewModel.result.rows.filter { row in
+            guard let primary else {
+                return row.value != viewModel.result.summary
+            }
+            return row.label != primary.label && row.value != primary.value
+        }
+    }
+
+    private var rewritePrimaryRow: LingobarRow? {
+        viewModel.result.rows.first { row in
+            isRewritePrimaryLabel(row.label)
+        }
+    }
+
+    private var rewriteSummaryLooksLikeMetaText: Bool {
+        containsCJKCharacters(viewModel.result.summary) && !viewModel.result.rows.isEmpty
+    }
+
+    private func isRewritePrimaryLabel(_ label: String) -> Bool {
+        let normalizedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalizedLabel.contains("主要") ||
+            normalizedLabel.contains("主改写") ||
+            normalizedLabel.contains("主版本") ||
+            normalizedLabel.contains("primary") ||
+            normalizedLabel.contains("main") ||
+            normalizedLabel.contains("natural")
+    }
+
+    private func containsCJKCharacters(_ text: String) -> Bool {
+        text.range(of: "\\p{Han}", options: .regularExpression) != nil
     }
 
     private func translationVariant(_ row: LingobarRow) -> some View {
@@ -1690,6 +1774,13 @@ private struct LingobarInputTextView: NSViewRepresentable {
 
         func centerText(in textView: NSTextView) {
             guard !isCenteringText, textView.bounds.height > 0 else {
+                return
+            }
+            let stableInset = NSSize(width: 0, height: 12)
+            guard textView.string.isEmpty else {
+                if textView.textContainerInset != stableInset {
+                    textView.textContainerInset = stableInset
+                }
                 return
             }
             guard let layoutManager = textView.layoutManager,

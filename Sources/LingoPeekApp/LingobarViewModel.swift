@@ -427,6 +427,17 @@ private struct GrammarSpineCompletion: Decodable, Sendable {
         } else if source.range(of: ", but ", options: [.caseInsensitive]) != nil {
             patternText = "Passive main clause, but coordinated passive clauses"
             patternZh = "被动主句后接转折并列被动分句"
+        } else if source.contains(";"),
+                  source.range(of: " so ", options: [.caseInsensitive]) != nil,
+                  source.range(of: " that ", options: [.caseInsensitive]) != nil {
+            patternText = "As-clause + main clause; so ... that result clause"
+            patternZh = "as 时间从句 + 主句；so ... that 结果分句"
+        } else if source.range(of: " is that ", options: [.caseInsensitive]) != nil {
+            patternText = "S is that when-clause, content clause"
+            patternZh = "主语 + is that 内容从句，内含 when 时间从句"
+        } else if source.range(of: " believes that ", options: [.caseInsensitive]) != nil {
+            patternText = "S believes that once-clause, purpose clause"
+            patternZh = "主语 + believes that 宾语从句，内含 once 条件和目的状语"
         } else {
             patternText = "S + V + complements/modifiers"
             patternZh = "主语 + 谓语 + 补足/修饰成分"
@@ -568,6 +579,7 @@ final class LingobarViewModel: ObservableObject {
     @Published var selectionSource = "当前 App"
     @Published var setupGateStatus = AppSettings.setupGateStatus
     @Published var loadingStartedAt: Date?
+    @Published var recentCollectedPhraseID: UUID?
     var onLayoutChanged: (() -> Void)?
 
     @Published var actions: [LanguageAction] = AppSettings.actionOrder
@@ -595,6 +607,7 @@ final class LingobarViewModel: ObservableObject {
         actions = AppSettings.actionOrder
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
+        recentCollectedPhraseID = nil
 
         if let selection, !selection.isEmpty {
             mode = .selection
@@ -624,6 +637,7 @@ final class LingobarViewModel: ObservableObject {
         actions = AppSettings.actionOrder
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
+        recentCollectedPhraseID = nil
         let grammar = GrammarResult.fixture(id: AppSettings.grammarFixtureID) ?? .mockupFixture
         mode = .selection
         selectionSource = sourceAppName
@@ -642,6 +656,7 @@ final class LingobarViewModel: ObservableObject {
         actions = AppSettings.actionOrder
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
+        recentCollectedPhraseID = nil
         mode = .setup
         self.setupGateStatus = setupGateStatus
         showsResult = false
@@ -658,10 +673,12 @@ final class LingobarViewModel: ObservableObject {
         }
 
         if newAction == .collect {
+            recentCollectedPhraseID = nil
             saveCurrentHistorySnapshot()
             return
         }
 
+        recentCollectedPhraseID = nil
         if let storedSnapshot = activeResultSnapshots[newAction.rawValue] {
             applyStoredSnapshot(storedSnapshot, action: newAction, status: "已从快照打开")
             return
@@ -686,10 +703,17 @@ final class LingobarViewModel: ObservableObject {
 
     func submitInput() {
         mode = .input
-        guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let submittedText = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !submittedText.isEmpty else {
             status = "请输入内容"
             return
         }
+        inputText = submittedText
+        activeAIRequestID = UUID()
+        activeResultSnapshots = [:]
+        currentHistoryRecord = nil
+        grammarResult = nil
+        recentCollectedPhraseID = nil
         perform(.rewrite)
     }
 
@@ -754,6 +778,7 @@ final class LingobarViewModel: ObservableObject {
         )
         savedPhrases.insert(phrase, at: 0)
         try? store.save(savedPhrases)
+        recentCollectedPhraseID = phrase.id
         status = "已收藏"
         return phrase.id
     }
@@ -765,9 +790,11 @@ final class LingobarViewModel: ObservableObject {
             sourceAppName: activeSourceAppName,
             result: result
         ) else {
+            recentCollectedPhraseID = nil
             status = "暂无可保存内容"
             return
         }
+        recentCollectedPhraseID = nil
         var savedRecord = record
         savedRecord.isSaved = true
         if !activeResultSnapshots.isEmpty {
@@ -786,6 +813,7 @@ final class LingobarViewModel: ObservableObject {
     }
 
     func copyResult() {
+        recentCollectedPhraseID = nil
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(result.summary, forType: .string)
         status = "已复制"
@@ -796,6 +824,7 @@ final class LingobarViewModel: ObservableObject {
         guard !selectedText.isEmpty else {
             return
         }
+        recentCollectedPhraseID = nil
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(selectedText, forType: .string)
         status = "已复制选中文本"
@@ -845,6 +874,7 @@ final class LingobarViewModel: ObservableObject {
             grammarResult: grammarSnapshot ?? resultSnapshots[action.rawValue]?.grammarResult
         )
         activeResultSnapshots = snapshots
+        recentCollectedPhraseID = nil
         grammarResult = action == .grammar ? activeResultSnapshots[action.rawValue]?.grammarResult : nil
         result = resultSnapshot
         showsResult = true

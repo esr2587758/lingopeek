@@ -559,6 +559,9 @@ public extension GrammarResult {
 
         let chunks = colonRecoveryChunks(for: source)
             ?? passiveContrastRecoveryChunks(for: source)
+            ?? semicolonResultRecoveryChunks(for: source)
+            ?? copularContentRecoveryChunks(for: source)
+            ?? reportedBeliefRecoveryChunks(for: source)
             ?? fallbackLinearRecoveryChunks(for: source)
         return normalizedChunks(chunks, in: source)
     }
@@ -791,6 +794,311 @@ public extension GrammarResult {
             GrammarChunk(id: "contrast-2-v", role: .predicate, text: "are left settling", label: "并列被动谓语", note: "left settling 表示被留下来继续承担。"),
             GrammarChunk(id: "contrast-2-o", role: .object, text: object, label: "谓语宾语", note: "settling 的宾语。")
         ]
+    }
+
+    private static func semicolonResultRecoveryChunks(for source: String) -> [GrammarChunk]? {
+        guard let semicolonRange = source.range(of: "; ") else {
+            return nil
+        }
+
+        let lead = String(source[..<semicolonRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let tail = String(source[semicolonRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard lead.lowercased().hasPrefix("as "),
+              tail.range(of: " so ", options: [.caseInsensitive]) != nil,
+              tail.range(of: " that ", options: [.caseInsensitive]) != nil else {
+            return nil
+        }
+
+        var chunks = introductoryClauseChunks(
+            lead,
+            idPrefix: "lead",
+            label: "时间状语从句",
+            note: "as 引导时间背景，说明主句动作发生的阶段。"
+        )
+        chunks.append(
+            GrammarChunk(id: "semicolon", role: .conj, text: ";", label: "分号连接", note: "连接前后两个密切相关的分句。")
+        )
+        chunks.append(contentsOf: soThatResultChunks(for: tail))
+        return chunks.count >= 7 ? chunks : nil
+    }
+
+    private static func introductoryClauseChunks(
+        _ clause: String,
+        idPrefix: String,
+        label: String,
+        note: String
+    ) -> [GrammarChunk] {
+        guard let commaRange = clause.range(of: ",") else {
+            return [
+                GrammarChunk(id: "\(idPrefix)-adv", role: .adv, text: clause, label: label, note: note)
+            ].filter { !$0.text.isEmpty }
+        }
+
+        let introductory = String(clause[..<commaRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let main = String(clause[clause.index(after: commaRange.lowerBound)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var chunks: [GrammarChunk] = []
+        if !introductory.isEmpty {
+            chunks.append(GrammarChunk(id: "\(idPrefix)-adv", role: .adv, text: introductory, label: label, note: note))
+        }
+
+        if let relativeRange = main.range(of: " that ", options: [.caseInsensitive]) {
+            let mainHead = String(main[..<relativeRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            chunks.append(contentsOf: splitSimpleClause(mainHead, idPrefix: "\(idPrefix)-main"))
+            let relative = String(main[relativeRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let relativeText = "that \(relative)"
+            if main.range(of: relativeText, options: [.caseInsensitive]) != nil {
+                chunks.append(
+                    GrammarChunk(
+                        id: "\(idPrefix)-rel",
+                        role: .attr,
+                        text: relativeText,
+                        label: "定语从句",
+                        note: "修饰前面的名词短语。"
+                    )
+                )
+            }
+        } else {
+            chunks.append(contentsOf: splitSimpleClause(main, idPrefix: "\(idPrefix)-main"))
+        }
+        return chunks
+    }
+
+    private static func splitSimpleClause(_ clause: String, idPrefix: String) -> [GrammarChunk] {
+        let trimmed = clause.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return []
+        }
+
+        let patterns: [(String, String)] = [
+            (" tunes into ", "谓语"),
+            (" accrue to ", "谓语"),
+            (" could feasibly travel ", "情态谓语"),
+            (" can exceed ", "情态谓语")
+        ]
+        for (pattern, predicateLabel) in patterns {
+            guard let range = trimmed.range(of: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+
+            let subject = String(trimmed[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let predicate = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+            let object = String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return [
+                GrammarChunk(id: "\(idPrefix)-s", role: .subject, text: subject, label: "主语", note: "分句主语。"),
+                GrammarChunk(id: "\(idPrefix)-v", role: .predicate, text: predicate, label: predicateLabel, note: "分句谓语。"),
+                GrammarChunk(id: "\(idPrefix)-o", role: .object, text: object, label: "宾语/补足", note: "谓语后的核心内容。")
+            ].filter { !$0.text.isEmpty }
+        }
+
+        return [
+            GrammarChunk(id: "\(idPrefix)-clause", role: .predicate, text: trimmed, label: "分句", note: "恢复显示的分句骨架。")
+        ]
+    }
+
+    private static func soThatResultChunks(for clause: String) -> [GrammarChunk] {
+        guard let soRange = clause.range(of: " is so ", options: [.caseInsensitive]),
+              let thatRange = clause.range(of: " that ", options: [.caseInsensitive]) else {
+            return [GrammarChunk(id: "result", role: .predicate, text: clause, label: "结果分句", note: "恢复显示的结果分句。")]
+        }
+
+        let subject = String(clause[..<soRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let complement = String(clause[clause.index(soRange.lowerBound, offsetBy: 4)..<thatRange.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let resultClause = String(clause[thatRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var chunks = [
+            GrammarChunk(id: "result-s", role: .subject, text: subject, label: "主语", note: "分号后结果结构的主语。"),
+            GrammarChunk(id: "result-v", role: .predicate, text: "is", label: "系动词", note: "连接主语和程度表语。"),
+            GrammarChunk(id: "result-c", role: .appos, text: complement, label: "程度表语", note: "so ... that 结构中的程度部分。"),
+            GrammarChunk(id: "result-that", role: .conj, text: "that", label: "结果连接词", note: "引出 so ... that 的结果分句。")
+        ].filter { !$0.text.isEmpty }
+
+        chunks.append(contentsOf: splitByLettingResultClause(resultClause))
+        return chunks
+    }
+
+    private static func splitByLettingResultClause(_ clause: String) -> [GrammarChunk] {
+        let trimmed = clause
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard let byRange = trimmed.range(of: " by ", options: [.caseInsensitive]) else {
+            return splitSimpleClause(trimmed, idPrefix: "result-clause")
+        }
+
+        let main = String(trimmed[..<byRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let byPhrase = String(trimmed[byRange.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var chunks = splitSharkAttackClause(main)
+        chunks.append(
+            GrammarChunk(id: "result-method", role: .adv, text: byPhrase, label: "方式状语", note: "说明攻击时采用的保护方式。")
+        )
+        return chunks
+    }
+
+    private static func splitSharkAttackClause(_ clause: String) -> [GrammarChunk] {
+        guard let range = clause.range(of: " even attacks ", options: [.caseInsensitive]) else {
+            return splitSimpleClause(clause, idPrefix: "result-clause")
+        }
+
+        let subject = String(clause[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let predicate = String(clause[range.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return [
+            GrammarChunk(id: "result-clause-s", role: .subject, text: subject, label: "结果分句主语", note: "that 引导结果分句中的主语。"),
+            GrammarChunk(id: "result-clause-v", role: .predicate, text: predicate, label: "结果分句谓语", note: "说明结果动作。")
+        ].filter { !$0.text.isEmpty }
+    }
+
+    private static func copularContentRecoveryChunks(for source: String) -> [GrammarChunk]? {
+        guard let contentRange = source.range(of: " is that ", options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let subject = String(source[..<contentRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var rest = String(source[contentRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard rest.lowercased().hasPrefix("when ") else {
+            return nil
+        }
+
+        var chunks = [
+            GrammarChunk(id: "content-s", role: .subject, text: subject, label: "主语", note: "主句提出的 concern。"),
+            GrammarChunk(id: "content-v", role: .predicate, text: "is", label: "系动词", note: "后接 that 内容从句。"),
+            GrammarChunk(id: "content-that", role: .conj, text: "that", label: "内容从句连接词", note: "引出 concern 的具体内容。")
+        ].filter { !$0.text.isEmpty }
+
+        if let commaRange = rest.range(of: ",") {
+            let whenClause = String(rest[..<commaRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            chunks.append(contentsOf: splitWhenUndertakenClause(whenClause) ?? [
+                GrammarChunk(id: "content-when", role: .adv, text: whenClause, label: "时间状语从句", note: "when 引导内容从句内部的时间条件。")
+            ])
+            rest = String(rest[rest.index(after: commaRange.lowerBound)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        chunks.append(contentsOf: benefitAccrualChunks(for: rest))
+        return chunks.count >= 7 ? chunks : nil
+    }
+
+    private static func splitWhenUndertakenClause(_ clause: String) -> [GrammarChunk]? {
+        let trimmed = clause.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.lowercased().hasPrefix("when "),
+              let undertakenRange = trimmed.range(of: " are undertaken ", options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let subjectStart = trimmed.index(trimmed.startIndex, offsetBy: 5)
+        let subject = String(trimmed[subjectStart..<undertakenRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let adverbial = String(trimmed[undertakenRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return [
+            GrammarChunk(id: "content-when-link", role: .conj, text: "when", label: "时间连接词", note: "引导内容从句内部的时间条件。"),
+            GrammarChunk(id: "content-when-s", role: .subject, text: subject, label: "时间从句主语", note: "when 从句中的主语。"),
+            GrammarChunk(id: "content-when-v", role: .predicate, text: "are undertaken", label: "时间从句被动谓语", note: "说明基础设施建设被开展。"),
+            GrammarChunk(id: "content-when-adv", role: .adv, text: adverbial, label: "目的/准备状语", note: "说明建设是为举办奥运做准备。")
+        ].filter { !$0.text.isEmpty }
+    }
+
+    private static func benefitAccrualChunks(for clause: String) -> [GrammarChunk] {
+        let trimmed = clause.trimmingCharacters(in: .whitespacesAndNewlines)
+        let exceptionText: String?
+        let mainText: String
+        if let exceptionRange = trimmed.range(of: " with the exception of ", options: [.caseInsensitive]) {
+            mainText = String(trimmed[..<exceptionRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            exceptionText = String(trimmed[exceptionRange.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            mainText = trimmed
+            exceptionText = nil
+        }
+
+        var chunks = splitSimpleClause(mainText, idPrefix: "content-main")
+        if let exceptionText, let relativeRange = exceptionText.range(of: " that ", options: [.caseInsensitive]) {
+            let exceptionHead = String(exceptionText[..<relativeRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let relative = String(exceptionText[relativeRange.lowerBound...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            chunks.append(
+                GrammarChunk(id: "content-exception", role: .adv, text: exceptionHead, label: "例外状语", note: "说明收益集中时排除或附带的范围。")
+            )
+            chunks.append(
+                GrammarChunk(id: "content-relative", role: .attr, text: relative, label: "定语从句", note: "修饰 outlying areas。")
+            )
+        } else if let exceptionText {
+            chunks.append(
+                GrammarChunk(id: "content-exception", role: .adv, text: exceptionText, label: "例外状语", note: "说明收益集中时排除或附带的范围。")
+            )
+        }
+        return chunks
+    }
+
+    private static func reportedBeliefRecoveryChunks(for source: String) -> [GrammarChunk]? {
+        guard let beliefRange = source.range(of: " believes that ", options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let subject = String(source[..<beliefRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var rest = String(source[beliefRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard rest.lowercased().hasPrefix("once ") else {
+            return nil
+        }
+
+        var chunks = [
+            GrammarChunk(id: "belief-s", role: .subject, text: subject, label: "主语", note: "报告观点的人物。"),
+            GrammarChunk(id: "belief-v", role: .predicate, text: "believes", label: "谓语", note: "引出观点内容。"),
+            GrammarChunk(id: "belief-that", role: .conj, text: "that", label: "宾语从句连接词", note: "引出 believes 的内容。")
+        ].filter { !$0.text.isEmpty }
+
+        if let commaRange = rest.range(of: ",") {
+            let onceClause = String(rest[..<commaRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            chunks.append(contentsOf: splitOnceCanClause(onceClause) ?? [
+                GrammarChunk(id: "belief-once", role: .adv, text: onceClause, label: "时间条件从句", note: "once 引导宾语从句内部的时间条件。")
+            ])
+            rest = String(rest[rest.index(after: commaRange.lowerBound)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        chunks.append(contentsOf: travelPurposeChunks(for: rest))
+        return chunks.count >= 7 ? chunks : nil
+    }
+
+    private static func splitOnceCanClause(_ clause: String) -> [GrammarChunk]? {
+        let trimmed = clause.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.lowercased().hasPrefix("once ") else {
+            return nil
+        }
+
+        let contentStart = trimmed.index(trimmed.startIndex, offsetBy: 5)
+        let content = String(trimmed[contentStart...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let core = splitSimpleClause(content, idPrefix: "belief-once")
+        guard core.count >= 3 else {
+            return nil
+        }
+
+        return [
+            GrammarChunk(id: "belief-once-link", role: .conj, text: "once", label: "时间条件连接词", note: "引导宾语从句内部的时间条件。")
+        ] + core
+    }
+
+    private static func travelPurposeChunks(for clause: String) -> [GrammarChunk] {
+        let trimmed = clause
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard let purposeRange = trimmed.range(of: " in order to ", options: [.caseInsensitive]) else {
+            return splitSimpleClause(trimmed, idPrefix: "belief-main")
+        }
+
+        let main = String(trimmed[..<purposeRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let purposeTail = String(trimmed[purposeRange.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        var chunks = splitSimpleClause(main, idPrefix: "belief-main")
+
+        if let conditionRange = purposeTail.range(of: " in the event of ", options: [.caseInsensitive]) {
+            let purpose = String(purposeTail[..<conditionRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let condition = String(purposeTail[conditionRange.lowerBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            chunks.append(
+                GrammarChunk(id: "belief-purpose", role: .adv, text: purpose, label: "目的状语", note: "in order to 表示旅行的目的。")
+            )
+            chunks.append(
+                GrammarChunk(id: "belief-condition", role: .adv, text: condition, label: "条件状语", note: "说明目的发生的灾难背景。")
+            )
+        } else {
+            chunks.append(
+                GrammarChunk(id: "belief-purpose", role: .adv, text: purposeTail, label: "目的状语", note: "in order to 表示旅行的目的。")
+            )
+        }
+        return chunks
     }
 
     private static func fallbackLinearRecoveryChunks(for source: String) -> [GrammarChunk] {

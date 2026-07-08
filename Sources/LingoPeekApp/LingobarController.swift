@@ -11,7 +11,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
     private static let selectionLoadingPanelSize = NSSize(width: 720, height: 441)
     private static let inputEmptyPanelSize = NSSize(width: 720, height: 72)
     private static let inputLoadingPanelSize = NSSize(width: 720, height: 287)
-    private static let inputResultPanelSize = NSSize(width: 720, height: 327)
+    private static let inputResultPanelSize = NSSize(width: 720, height: 420)
     private static let savedPanelOriginXKey = "Lingobar.savedPanelOriginX"
     private static let savedPanelOriginYKey = "Lingobar.savedPanelOriginY"
 
@@ -275,6 +275,10 @@ final class LingobarController: NSObject, NSWindowDelegate {
                 onOpenAccessibility: { [weak self] in
                     Self.openAccessibilitySettings()
                     self?.refreshRuntimeSettings()
+                },
+                onOpenCollection: { [weak self] collectedPhraseID in
+                    self?.hide()
+                    self?.hubWindowController.show(section: .collection, selectedCollectionID: collectedPhraseID)
                 }
             )
         )

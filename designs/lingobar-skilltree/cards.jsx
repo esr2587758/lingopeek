@@ -3,13 +3,16 @@ const { useState, useMemo, useRef } = React;
 
 // ---------- 双半球放射布局：根居中，词法占左 180°、句法占右 180°，各 50% ----------
 // 两大支柱各分一个半圆，无论节点多少都严格对半；支柱在半圆外缘作弧形标签。
-const BASE_R = 26; // 六边形基准半径
-// 大小按遇到频次：高频节点更大 —— 让高频盲区又大又红，自然抓住注意力
+const BASE_R = 19; // 六边形基准半径
+// 大小按遇到频次：高频节点更大 —— 让高频盲区又大又红，自然抓住注意力（幅度克制，避免密侧相撞）
 function sizeOf(n) {
-  if (n.depth === 0) return BASE_R + 10;
+  if (n.depth === 0) return 32;      // 根
+  if (n.pillar) return 27;           // 支柱枢纽
   const t = Math.min(1, (n.met || 0) / 40); // 0..1
-  return BASE_R * (0.62 + 0.55 * t); // ~16..30
+  return BASE_R * (0.72 + 0.34 * t); // ~14..19
 }
+// 纯放射树（dendrogram）：每片叶子在半球内占等宽角度槽，父节点居中于子节点——
+// 天然零重叠、零缠绕，不再做碰撞松弛（松弛正是之前结块的元凶）。
 function layoutRadial(nodes) {
   const byId = {}; nodes.forEach((n) => (byId[n.id] = { ...n, children: [] }));
   let root = null;
@@ -18,53 +21,45 @@ function layoutRadial(nodes) {
   // 两大支柱：morph=左半球, syntax=右半球
   const pillars = root.children.map((c) => byId[c.id]).filter((c) => c.pillar);
 
-  const leaves = (node) => {
-    if (node.children.length === 0) return (node._leaves = 1);
-    return (node._leaves = node.children.reduce((s, c) => s + leaves(c), 0));
-  };
-  leaves(root);
+  // 各深度半径（同心环）——外环拉大间距，缓解密侧（词法34叶）拥挤
+  const RING = [0, 122, 292, 428, 560];
+  const radiusAt = (d) => RING[d] != null ? RING[d] : RING[RING.length - 1] + (d - RING.length + 1) * 100;
 
-  const RING = [0, 150, 250, 340];
-  const radiusAt = (d) => RING[d] != null ? RING[d] : RING[RING.length - 1] + (d - RING.length + 1) * 95;
-
-  // 在给定角度扇区内递归铺开子树（叶子数决定角宽）
-  const assign = (node, depth, a0, a1) => {
-    node.depth = depth;
-    node.angle = (a0 + a1) / 2;
-    node.radius = radiusAt(depth);
-    const wsum = node.children.reduce((s, c) => s + c._leaves, 0) || 1;
-    let cur = a0;
-    node.children.forEach((c) => {
-      const span = (a1 - a0) * (c._leaves / wsum);
-      const pad = Math.min(span * 0.05, 0.04);
-      assign(c, depth + 1, cur + pad, cur + span - pad);
-      cur += span;
-    });
-  };
-
-  // 根在中心（深度0）；两支柱降为“子类的父”，但支柱自身放在深度1的半径上、位于各半球中线
-  root.depth = 0; root.angle = 0; root.radius = 0;
   // 坐标映射 x=cos(angle-PI/2): angle=PI/2→右, 3PI/2→左。
-  // 左半球(词法, x<0): 角度 [PI, 2PI], 中线 3PI/2=正左；右半球(句法, x>0): [0, PI], 中线 PI/2=正右。
-  const G = 0.14; // 中线两侧留白，避免贴着分隔线
+  // 左半球(词法, x<0): [PI, 2PI], 中线 3PI/2=正左；右半球(句法, x>0): [0, PI], 中线 PI/2=正右。
+  const G = 0.16; // 中线两侧留白
   const HEMI = { morph: [Math.PI + G, Math.PI * 2 - G], syntax: [G, Math.PI - G] };
+
+  root.depth = 0; root.angle = 0; root.radius = 0;
+
+  // 每个半球：按 DFS 顺序给叶子等宽角度槽；内部节点角度 = 子节点角度范围的中点
+  let slot;
+  const place = (node, depth, span) => {
+    node.depth = depth;
+    node.radius = radiusAt(depth);
+    if (node.children.length === 0) {
+      node.angle = span[0] + (slot + 0.5) * span[2];
+      slot += 1;
+    } else {
+      node.children.forEach((c) => place(c, depth + 1, span));
+      node.angle = (node.children[0].angle + node.children[node.children.length - 1].angle) / 2;
+    }
+  };
+
+  const countLeaves = (node) => node.children.length === 0 ? 1 : node.children.reduce((s, c) => s + countLeaves(c), 0);
+
   pillars.forEach((p) => {
-    const [a0, a1] = HEMI[p.id] || [-Math.PI / 2, Math.PI / 2];
-    // 支柱本体落在半球中线、第一环稍内侧
-    p.depth = 1; p.angle = (a0 + a1) / 2; p.radius = radiusAt(1) - 40; p._pillar = p.id;
-    // 支柱的孩子（各门类）从第二环起，铺满该半球扇区
-    const wsum = p.children.reduce((s, c) => s + c._leaves, 0) || 1;
-    let cur = a0;
-    p.children.forEach((c) => {
-      c._pillar = p.id;
-      const span = (a1 - a0) * (c._leaves / wsum);
-      const pad = Math.min(span * 0.05, 0.05);
-      assign(c, 2, cur + pad, cur + span - pad);
-      // 门类及其子树都标记所属半球
-      const mark = (nd) => { nd._pillar = p.id; nd.children.forEach(mark); };
-      mark(c);
-      cur += span;
-    });
+    const [a0, a1] = HEMI[p.id];
+    const nLeaves = countLeaves(p);
+    const step = (a1 - a0) / nLeaves;
+    slot = 0;
+    // 支柱本体：深度 1，落在半球中线内侧
+    p.depth = 1; p.radius = radiusAt(1); p._pillar = p.id;
+    // 门类从深度 2 起铺开
+    p.children.forEach((c) => { const mark = (nd) => { nd._pillar = p.id; nd.children.forEach(mark); }; mark(c); });
+    p.children.forEach((c) => place(c, 2, [a0, a1, step]));
+    // 支柱角度 = 其门类角度范围中点（贴合半球中线）
+    p.angle = (p.children[0].angle + p.children[p.children.length - 1].angle) / 2;
   });
 
   const flat = Object.values(byId);
@@ -74,26 +69,7 @@ function layoutRadial(nodes) {
     n._r = sizeOf(n);
   });
 
-  // 碰撞松弛（考虑各自半径，避免大节点重叠）
-  for (let iter = 0; iter < 90; iter++) {
-    let moved = false;
-    for (let i = 0; i < flat.length; i++) for (let j = i + 1; j < flat.length; j++) {
-      const a = flat[i], b = flat[j];
-      if (a.depth === 0 || b.depth === 0) continue;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const d = Math.hypot(dx, dy) || 0.01;
-      const mind = a._r + b._r + 10;
-      if (d < mind) {
-        const push = (mind - d) / 2, ux = dx / d, uy = dy / d;
-        a.x -= ux * push * 0.5; a.y -= uy * push * 0.5;
-        b.x += ux * push * 0.5; b.y += uy * push * 0.5;
-        moved = true;
-      }
-    }
-    if (!moved) break;
-  }
-
-  // 半球标签：各支柱的门类角度范围
+  // 半球标签
   const sectors = pillars.map((p) => {
     const [a0, a1] = HEMI[p.id];
     return { id: p.id, label: p.label, cat: p.cat, a0, a1, side: p.id === "morph" ? "L" : "R" };
@@ -112,6 +88,17 @@ function hexPoints(cx, cy, r) {
     pts.push(`${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`);
   }
   return pts.join(" ");
+}
+
+// 放射式连线：先沿父角度向外走到中间半径，再平滑摆到子角度——形成柔和的放射曲线
+function radialLink(from, to, C) {
+  const pt = (ang, rad) => [C + Math.cos(ang - Math.PI / 2) * rad, C + Math.sin(ang - Math.PI / 2) * rad];
+  const rMid = (from.radius + to.radius) / 2;
+  const [x1, y1] = pt(from.angle, from.radius);
+  const [cx1, cy1] = pt(from.angle, rMid); // 控制点1：父角度、中间半径
+  const [cx2, cy2] = pt(to.angle, rMid);   // 控制点2：子角度、中间半径
+  const [x2, y2] = pt(to.angle, to.radius);
+  return `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${cx1.toFixed(1)} ${cy1.toFixed(1)}, ${cx2.toFixed(1)} ${cy2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
 }
 
 // ---------- 概览 ----------
@@ -139,8 +126,8 @@ function StateLegend() {
 // ---------- 星座画布 ----------
 function Constellation({ onPick, picked }) {
   const { nodes, edges, extent, depthMax, sectors } = useMemo(() => layoutRadial(TREE), []);
-  const R = 30, PAD = 50;
-  const RING_R = [0, 150, 250, 340];
+  const R = 30, PAD = 54;
+  const RING_R = [0, 122, 292, 428, 560];
   const VB = (extent + PAD) * 2;
   const C = VB / 2; // 中心
   const [zoom, setZoom] = useState(1);
@@ -195,16 +182,16 @@ function Constellation({ onPick, picked }) {
           {RING_R.slice(1).map((r, i) => (
             <circle key={i} cx={C} cy={C} r={r} fill="none" stroke="rgba(255,255,255,.05)" strokeDasharray="2 6" />
           ))}
-          {/* 连线（能量流） */}
+          {/* 连线（放射曲线：沿半径外扩、角度平滑过渡，dendrogram 风格） */}
           {edges.map(({ from, to }, i) => {
-            const x1 = px(from), y1 = py(from), x2 = px(to), y2 = py(to);
             const locked = stateOf(to) === "locked";
             const col = CATS[to.cat].color;
+            const d = radialLink(from, to, C);
             return (
               <g key={i}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} className="sk-edge" data-locked={locked || undefined}
+                <path d={d} className="sk-edge" data-locked={locked || undefined} fill="none"
                   stroke={locked ? "rgba(255,255,255,.07)" : col} strokeOpacity={locked ? 1 : .32} />
-                {!locked && <line x1={x1} y1={y1} x2={x2} y2={y2} className="sk-edge-flow" stroke={col} />}
+                {!locked && <path d={d} className="sk-edge-flow" fill="none" stroke={col} />}
               </g>
             );
           })}

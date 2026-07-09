@@ -35,7 +35,7 @@ jobs:
           test -n "$SPARKLE_PRIVATE_ED_KEY" || { echo "Missing SPARKLE_PRIVATE_ED_KEY secret"; exit 1; }
 
       - name: Run core checks
-        run: swift run LingoPeekCoreChecks
+        run: scripts/run_core_checks.sh
 
       - name: Package app
         env:

@@ -1,0 +1,81 @@
+name: Release macOS App
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-app-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build Sparkle release
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Validate Sparkle secrets
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          test -n "$SPARKLE_PUBLIC_ED_KEY" || { echo "Missing SPARKLE_PUBLIC_ED_KEY secret"; exit 1; }
+          test -n "$SPARKLE_PRIVATE_ED_KEY" || { echo "Missing SPARKLE_PRIVATE_ED_KEY secret"; exit 1; }
+
+      - name: Run core checks
+        run: swift run LingoPeekCoreChecks
+
+      - name: Package app
+        env:
+          APP_VERSION: ${{ github.ref_name }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_FEED_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
+        run: |
+          APP_VERSION="${APP_VERSION#v}" scripts/package_app.sh
+
+      - name: Write release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "# LingoPeek ${VERSION}"
+            echo
+            echo "Build ${GITHUB_RUN_NUMBER} from ${GITHUB_SHA}."
+          } > dist/release-notes.md
+
+      - name: Generate Sparkle appcast
+        env:
+          APP_VERSION: ${{ github.ref_name }}
+          DOWNLOAD_URL_PREFIX: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+          PRODUCT_LINK: https://github.com/${{ github.repository }}
+          RELEASE_NOTES_FILE: dist/release-notes.md
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          APP_VERSION="${APP_VERSION#v}" scripts/create_appcast.sh
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/LingoPeek.zip dist/appcast.xml --clobber
+            gh release edit "$GITHUB_REF_NAME" --title "LingoPeek ${VERSION}" --notes-file dist/release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" dist/LingoPeek.zip dist/appcast.xml \
+              --title "LingoPeek ${VERSION}" \
+              --notes-file dist/release-notes.md \
+              --verify-tag
+          fi

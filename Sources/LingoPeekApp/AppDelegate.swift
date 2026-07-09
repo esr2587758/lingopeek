@@ -2,6 +2,7 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: LingobarController?
+    private var appUpdater: AppUpdater?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["LINGOPEEK_UI_TEST_RESET_SETTINGS"] == "1" {
@@ -22,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? LingobarHubSection.settings
             : (openHubOnLaunch ? (hubLaunchSection ?? .collection) : nil)
         NSApp.setActivationPolicy(openSettingsOnLaunch || openHubOnLaunch || uiTestMode ? .regular : .accessory)
-        controller = LingobarController()
+        let appUpdater = AppUpdater()
+        self.appUpdater = appUpdater
+        controller = LingobarController(appUpdater: appUpdater)
         controller?.start(openSettingsOnLaunch: openSettingsOnLaunch, openHubOnLaunch: launchHubSection)
     }
 

@@ -35,6 +35,38 @@ scripts/package_app.sh
 
 The package is written to `dist/LingoPeek.zip`. GitHub Actions runs the same packaging script on every push and uploads the zip from the workflow run's artifacts. This package is ad-hoc signed, which costs nothing and fixes local bundle integrity checks, but it is not Apple Developer ID signed or notarized.
 
+## Updates
+
+LingoPeek uses Sparkle 2 for direct-download macOS updates. Local packages embed Sparkle but do not enable update checks unless `SPARKLE_PUBLIC_ED_KEY` is provided:
+
+```sh
+SPARKLE_PUBLIC_ED_KEY="..." scripts/package_app.sh
+```
+
+The default feed URL is:
+
+```text
+https://github.com/esr2587758/lingopeek/releases/latest/download/appcast.xml
+```
+
+Generate Sparkle keys once after resolving packages:
+
+```sh
+swift package resolve
+.build/artifacts/sparkle/Sparkle/bin/generate_keys
+```
+
+Copy the printed public key into the GitHub secret `SPARKLE_PUBLIC_ED_KEY`, and export/back up the private key into `SPARKLE_PRIVATE_ED_KEY`. Keep the private key secret; it signs every update archive.
+
+To publish an auto-update release, push a version tag:
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The `Release macOS App` workflow builds `dist/LingoPeek.zip`, generates a signed Sparkle `appcast.xml`, and uploads both files to the matching GitHub Release. Installed apps read the stable `releases/latest/download/appcast.xml` feed, then Sparkle downloads and installs the matching `LingoPeek.zip`.
+
 If macOS blocks a downloaded artifact on first launch, remove the download quarantine from the extracted app and then open it again:
 
 ```sh

@@ -15,17 +15,25 @@ let package = Package(
         .library(name: "LingobarUI", targets: ["LingobarUI"]),
         .library(name: "LingobarCore", targets: ["LingobarCore"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
+    ],
     targets: [
         .target(name: "LingobarCore"),
         .executableTarget(
             name: "LingoPeekApp",
-            dependencies: ["LingobarCore", "LingobarUI"],
+            dependencies: [
+                "LingobarCore",
+                "LingobarUI",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("Carbon"),
                 .linkedFramework("Security"),
-                .linkedFramework("SwiftUI")
+                .linkedFramework("SwiftUI"),
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]
         ),
         .executableTarget(

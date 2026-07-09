@@ -28,10 +28,12 @@ final class LingobarController: NSObject, NSWindowDelegate {
     private var appActivationObserver: NSObjectProtocol?
     private var registeredHotKey: LingobarHotKey?
     private var isPositioningProgrammatically = false
+    private let appUpdater: AppUpdater?
 
-    override init() {
+    init(appUpdater: AppUpdater? = nil) {
         let viewModel = LingobarViewModel()
         self.viewModel = viewModel
+        self.appUpdater = appUpdater
         super.init()
         viewModel.onLayoutChanged = { [weak self] in
             self?.resizePanelForCurrentState()
@@ -212,9 +214,14 @@ final class LingobarController: NSObject, NSWindowDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Open Lingobar Hub", action: #selector(showHubFromMenu), keyEquivalent: "h"))
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettingsFromMenu), keyEquivalent: ","))
+        if let checkForUpdatesItem = appUpdater?.makeCheckForUpdatesMenuItem() {
+            menu.addItem(checkForUpdatesItem)
+        }
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit LingoPeek", action: #selector(quitFromMenu), keyEquivalent: "q"))
-        menu.items.forEach { $0.target = self }
+        menu.items
+            .filter { $0.action != nil && $0.target == nil }
+            .forEach { $0.target = self }
         item.menu = menu
         statusItem = item
     }

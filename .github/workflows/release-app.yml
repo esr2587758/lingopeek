@@ -47,17 +47,42 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/lingopeek-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
           P12_PATH="$RUNNER_TEMP/lingopeek-signing.p12"
+          CERT_PATH="$RUNNER_TEMP/lingopeek-signing.cer"
 
           printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | /usr/bin/base64 -D > "$P12_PATH"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign >/dev/null
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F "$MACOS_SIGN_IDENTITY"
+
+          security find-certificate -a -p "$KEYCHAIN_PATH" > "$CERT_PATH"
+          if [[ ! -s "$CERT_PATH" ]]; then
+            echo "No certificate was found in the imported p12. Export the item from Keychain Access > My Certificates so the p12 includes both certificate and private key."
+            exit 1
+          fi
+          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$CERT_PATH"
+
+          IDENTITY_LIST="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true)"
+          echo "$IDENTITY_LIST"
+
+          if [[ -n "$MACOS_SIGN_IDENTITY" ]] && grep -F "\"$MACOS_SIGN_IDENTITY\"" <<< "$IDENTITY_LIST" >/dev/null; then
+            SIGN_IDENTITY="$MACOS_SIGN_IDENTITY"
+          else
+            SIGN_IDENTITY="$(awk -F '"' '/"/ { print $2; exit }' <<< "$IDENTITY_LIST")"
+          fi
+
+          if [[ -z "$SIGN_IDENTITY" ]]; then
+            echo "No valid code signing identity was found after importing the p12."
+            echo "Re-export from Keychain Access > My Certificates, selecting the certificate row with its private key expanded underneath."
+            exit 1
+          fi
+
+          echo "Using signing identity: $SIGN_IDENTITY"
+          echo "SIGN_IDENTITY=$SIGN_IDENTITY" >> "$GITHUB_ENV"
 
       - name: Run core checks
         run: scripts/run_core_checks.sh
@@ -66,7 +91,6 @@ jobs:
         env:
           APP_VERSION: ${{ github.ref_name }}
           BUILD_NUMBER: ${{ github.run_number }}
-          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
           SPARKLE_FEED_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
         run: |

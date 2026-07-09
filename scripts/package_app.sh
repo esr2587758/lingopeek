@@ -9,6 +9,7 @@ APP_VERSION="${APP_VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 CONFIGURATION="${CONFIGURATION:-release}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+CODESIGN_TIMESTAMP="${CODESIGN_TIMESTAMP:-none}"
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
 SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://github.com/esr2587758/lingopeek/releases/latest/download/appcast.xml}"
 SPARKLE_ENABLE_AUTOMATIC_CHECKS="${SPARKLE_ENABLE_AUTOMATIC_CHECKS:-true}"
@@ -128,7 +129,11 @@ fi
 plutil -lint "$INFO_PLIST"
 
 echo "Signing $APP_BUNDLE..."
-codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
+codesign_args=(--force --deep --sign "$SIGN_IDENTITY")
+if [[ -n "$CODESIGN_TIMESTAMP" ]]; then
+  codesign_args+=(--timestamp="$CODESIGN_TIMESTAMP")
+fi
+codesign "${codesign_args[@]}" "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 echo "Creating $ZIP_PATH..."

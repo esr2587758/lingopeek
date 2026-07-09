@@ -56,13 +56,16 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
 
+          echo "Imported certificates:"
+          security find-certificate -a -Z "$KEYCHAIN_PATH" | awk '/SHA-1 hash:/ { print "  " $0 }'
+
           IDENTITY_LIST="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true)"
           if ! grep -q '"' <<< "$IDENTITY_LIST"; then
             IDENTITY_LIST="$(security find-identity -v "$KEYCHAIN_PATH" || true)"
           fi
           echo "$IDENTITY_LIST"
 
-          if [[ -n "$MACOS_SIGN_IDENTITY" ]] && grep -F "$MACOS_SIGN_IDENTITY" <<< "$IDENTITY_LIST" >/dev/null; then
+          if [[ -n "$MACOS_SIGN_IDENTITY" ]]; then
             SIGN_IDENTITY="$MACOS_SIGN_IDENTITY"
           else
             SIGN_IDENTITY="$(awk '/"/ { print $2; exit }' <<< "$IDENTITY_LIST")"
@@ -70,11 +73,16 @@ jobs:
 
           if [[ -z "$SIGN_IDENTITY" ]]; then
             echo "No valid code signing identity was found after importing the p12."
+            echo "For self-signed certificates, set MACOS_SIGN_IDENTITY to the certificate SHA-1 hash."
             echo "Re-export from Keychain Access > My Certificates, selecting the certificate row with its private key expanded underneath."
             exit 1
           fi
 
           echo "Using signing identity: $SIGN_IDENTITY"
+          SMOKE_BIN="$RUNNER_TEMP/codesign-smoke"
+          cp /bin/echo "$SMOKE_BIN"
+          codesign --force --sign "$SIGN_IDENTITY" --timestamp=none "$SMOKE_BIN"
+          codesign --display --verbose=2 "$SMOKE_BIN"
           echo "SIGN_IDENTITY=$SIGN_IDENTITY" >> "$GITHUB_ENV"
 
       - name: Run core checks

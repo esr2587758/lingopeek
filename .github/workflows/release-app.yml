@@ -42,37 +42,30 @@ jobs:
         run: |
           test -n "$MACOS_CERTIFICATE_P12_BASE64" || { echo "Missing MACOS_CERTIFICATE_P12_BASE64 secret"; exit 1; }
           test -n "$MACOS_CERTIFICATE_PASSWORD" || { echo "Missing MACOS_CERTIFICATE_PASSWORD secret"; exit 1; }
-          test -n "$MACOS_SIGN_IDENTITY" || { echo "Missing MACOS_SIGN_IDENTITY secret"; exit 1; }
 
           KEYCHAIN_PATH="$RUNNER_TEMP/lingopeek-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(uuidgen)"
           P12_PATH="$RUNNER_TEMP/lingopeek-signing.p12"
-          CERT_PATH="$RUNNER_TEMP/lingopeek-signing.cer"
 
           printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | /usr/bin/base64 -D > "$P12_PATH"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign >/dev/null
+          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -T /usr/bin/codesign -T /usr/bin/security >/dev/null
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-          security find-certificate -a -p "$KEYCHAIN_PATH" > "$CERT_PATH"
-          if [[ ! -s "$CERT_PATH" ]]; then
-            echo "No certificate was found in the imported p12. Export the item from Keychain Access > My Certificates so the p12 includes both certificate and private key."
-            exit 1
-          fi
-          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$CERT_PATH"
 
           IDENTITY_LIST="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true)"
+          if ! grep -q '"' <<< "$IDENTITY_LIST"; then
+            IDENTITY_LIST="$(security find-identity -v "$KEYCHAIN_PATH" || true)"
+          fi
           echo "$IDENTITY_LIST"
 
-          if [[ -n "$MACOS_SIGN_IDENTITY" ]] && grep -F "\"$MACOS_SIGN_IDENTITY\"" <<< "$IDENTITY_LIST" >/dev/null; then
+          if [[ -n "$MACOS_SIGN_IDENTITY" ]] && grep -F "$MACOS_SIGN_IDENTITY" <<< "$IDENTITY_LIST" >/dev/null; then
             SIGN_IDENTITY="$MACOS_SIGN_IDENTITY"
           else
-            SIGN_IDENTITY="$(awk -F '"' '/"/ { print $2; exit }' <<< "$IDENTITY_LIST")"
+            SIGN_IDENTITY="$(awk '/"/ { print $2; exit }' <<< "$IDENTITY_LIST")"
           fi
 
           if [[ -z "$SIGN_IDENTITY" ]]; then

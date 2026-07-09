@@ -34,6 +34,31 @@ jobs:
           test -n "$SPARKLE_PUBLIC_ED_KEY" || { echo "Missing SPARKLE_PUBLIC_ED_KEY secret"; exit 1; }
           test -n "$SPARKLE_PRIVATE_ED_KEY" || { echo "Missing SPARKLE_PRIVATE_ED_KEY secret"; exit 1; }
 
+      - name: Import signing certificate
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          test -n "$MACOS_CERTIFICATE_P12_BASE64" || { echo "Missing MACOS_CERTIFICATE_P12_BASE64 secret"; exit 1; }
+          test -n "$MACOS_CERTIFICATE_PASSWORD" || { echo "Missing MACOS_CERTIFICATE_PASSWORD secret"; exit 1; }
+          test -n "$MACOS_SIGN_IDENTITY" || { echo "Missing MACOS_SIGN_IDENTITY secret"; exit 1; }
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/lingopeek-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          P12_PATH="$RUNNER_TEMP/lingopeek-signing.p12"
+
+          printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | /usr/bin/base64 -D > "$P12_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F "$MACOS_SIGN_IDENTITY"
+
       - name: Run core checks
         run: scripts/run_core_checks.sh
 
@@ -41,6 +66,7 @@ jobs:
         env:
           APP_VERSION: ${{ github.ref_name }}
           BUILD_NUMBER: ${{ github.run_number }}
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
           SPARKLE_FEED_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
         run: |

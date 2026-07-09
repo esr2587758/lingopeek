@@ -1797,6 +1797,10 @@ func checkLingobarHubShellSourceGate() throws {
         contentsOf: root.appending(path: "Sources/LingoPeekApp/SettingsView.swift"),
         encoding: .utf8
     )
+    let appVersionSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/AppVersion.swift"),
+        encoding: .utf8
+    )
 
     try check(windowSource.contains("LingobarHubWindowController"), "native Hub should have a window controller")
     try check(windowSource.contains("static let hubSize = NSSize(width: 920, height: 624)"), "Hub window should match the reference 920x624 frame")
@@ -1808,6 +1812,17 @@ func checkLingobarHubShellSourceGate() throws {
     try check(viewSource.contains("\"收藏\"") && viewSource.contains("\"历史\"") && viewSource.contains("\"设置\""), "Hub navigation should use the requested Chinese labels")
     try check(viewSource.contains("\"已就绪\"") && viewSource.contains("\"需完成必填项\""), "Hub footer should reflect setup readiness")
     try check(viewSource.contains("HubSettingsSubnavButton"), "Hub settings should use the reference-style horizontal subnav")
+    try check(
+        appVersionSource.contains("CFBundleShortVersionString") &&
+            appVersionSource.contains("CFBundleVersion"),
+        "app version helper should read release metadata from the bundle Info.plist"
+    )
+    try check(
+        viewSource.contains("AppVersion.displayString") &&
+            settingsViewSource.contains("AppVersion.displayString"),
+        "Hub and legacy Settings about sections should show the real packaged app version"
+    )
+    try check(!settingsViewSource.contains("版本 0.1.0"), "about section should not hard-code the prototype version")
     try check(viewSource.contains("ScrollView(.horizontal, showsIndicators: false)"), "Hub settings subnav should remain horizontal")
     try check(viewSource.contains("LINGOPEEK_OPEN_HUB_SETTINGS_SECTION"), "Hub settings should support deterministic subsection launch")
     try check(

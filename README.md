@@ -65,6 +65,12 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
+The packaged app version comes from the tag: `v0.2.0` becomes `CFBundleShortVersionString=0.2.0`, and the GitHub Actions run number becomes `CFBundleVersion`. For local packages, pass them explicitly:
+
+```sh
+APP_VERSION=0.2.0 BUILD_NUMBER=1 scripts/package_app.sh
+```
+
 The `Release macOS App` workflow builds `dist/LingoPeek.zip`, generates a signed Sparkle `appcast.xml`, and uploads both files to the matching GitHub Release. Installed apps read the stable `releases/latest/download/appcast.xml` feed, then Sparkle downloads and installs the matching `LingoPeek.zip`.
 
 If macOS blocks a downloaded artifact on first launch, remove the download quarantine from the extracted app and then open it again:

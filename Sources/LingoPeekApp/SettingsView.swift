@@ -616,7 +616,7 @@ struct SettingsView: View {
                 Text("Lingobar")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(SettingsColor.text)
-                Text("版本 0.1.0 (MVP 原型)")
+                Text("版本 \(AppVersion.displayString)")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(SettingsColor.text3)
                 Text("选区优先的英语阅读、表达与记忆工具。")

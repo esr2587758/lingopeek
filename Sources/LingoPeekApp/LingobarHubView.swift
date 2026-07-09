@@ -1496,6 +1496,9 @@ private struct AboutSettingsSection: View {
                         Text("收藏、历史与设置")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(HubColor.secondaryText)
+                        Text("版本 \(AppVersion.displayString)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(HubColor.tertiaryText)
                     }
                 }
                 Text("面向划词优先工作流的 macOS 原生 Hub。")

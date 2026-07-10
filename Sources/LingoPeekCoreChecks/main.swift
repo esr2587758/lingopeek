@@ -1956,6 +1956,24 @@ func checkLingobarHubShellSourceGate() throws {
     try check(saveHelper.contains("currentHistoryRecord = savedRecords.first"), "saving from the main panel should refresh the current saved record immediately")
 }
 
+func checkLingobarPanelSpaceBehaviorSourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let controllerSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarController.swift"),
+        encoding: .utf8
+    )
+    let panelSetup = try sourceRegion(controllerSource, from: "private func ensurePanel()", to: "private var contentSize")
+
+    try check(
+        panelSetup.contains(".moveToActiveSpace"),
+        "Lingobar panel should move to the active Space only when shown"
+    )
+    try check(
+        !panelSetup.contains(".canJoinAllSpaces"),
+        "Lingobar panel should not join all Spaces because grammar expansion must not jump back to the selected-text desktop"
+    )
+}
+
 func checkLingobarInputModeIssue9SourceGate() throws {
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let rootViewSource = try String(
@@ -2012,6 +2030,20 @@ func checkLingobarInputModeIssue9SourceGate() throws {
             rewritePrimaryHelpers.contains("containsCJKCharacters(viewModel.result.summary)") &&
             rewritePrimaryHelpers.contains("isRewritePrimaryLabel"),
         "rewrite UI should avoid showing AI meta summaries as the highlighted result"
+    )
+    let rewritePrompt = try sourceRegion(viewModelSource, from: "case .rewrite:", to: "case .grammar:")
+    try check(
+        rewritePrompt.contains("summary, every rows[].value, and defaultCollectionItem.title MUST be English-only") &&
+            rewritePrompt.contains("do not answer the user's question") &&
+            rewritePrompt.contains("Do not include Chinese characters in summary, rows[].value, or defaultCollectionItem.title"),
+        "rewrite prompt should force English-only rewrite values instead of answering or translating into Chinese"
+    )
+    let structuredDecoder = try sourceRegion(viewModelSource, from: "private static func decodeStructured", to: "private static func makePartialGrammar")
+    try check(
+        structuredDecoder.contains("validateStructuredResult(result, action: action)") &&
+            structuredDecoder.contains("Rewrite response values must be English-only") &&
+            structuredDecoder.contains("containsCJKCharacters"),
+        "rewrite decoder should reject Chinese content values before they reach the UI"
     )
 
     let panelBody = try sourceRegion(rootViewSource, from: "private func panelBody", to: "private var firstChip")
@@ -2097,6 +2129,7 @@ do {
     try checkSelectionPermissionSourceGate()
     try checkPhraseStore()
     try checkLingobarHubShellSourceGate()
+    try checkLingobarPanelSpaceBehaviorSourceGate()
     try checkLingobarInputModeIssue9SourceGate()
     print("LingoPeekCoreChecks passed")
 } catch {

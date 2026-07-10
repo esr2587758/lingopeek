@@ -1,10 +1,13 @@
 .DS_Store
 
 .omx/
+.codex/
+.ui-test-artifacts/
 
 .build/
 .swiftpm/
 dist/
+designs/**/_preview.png
 
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcworkspace/xcuserdata/

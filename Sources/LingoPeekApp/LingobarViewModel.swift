@@ -30,7 +30,7 @@ private enum LingobarAICompletionDecoder {
             }
             return .grammar(try JSONDecoder().decode(GrammarResult.self, from: data))
         }
-        return .structured(try await decodeStructured(aiClient: aiClient, system: system, user: user))
+        return .structured(try await decodeStructured(action: action, aiClient: aiClient, system: system, user: user))
     }
 
     static func decodeGrammar(
@@ -144,6 +144,7 @@ private enum LingobarAICompletionDecoder {
     }
 
     private static func decodeStructured(
+        action: LanguageAction,
         aiClient: OpenAICompatibleClient,
         system: String,
         user: String
@@ -158,7 +159,9 @@ private enum LingobarAICompletionDecoder {
                 let request = attempt == 0 ? user : user + retrySuffix
                 let completion = try await aiClient.complete(system: system, user: request)
                 let json = try StructuredJSONExtractor.extractObject(from: completion)
-                return try JSONDecoder().decode(StructuredLingobarResult.self, from: Data(json.utf8))
+                let result = try JSONDecoder().decode(StructuredLingobarResult.self, from: Data(json.utf8))
+                try validateStructuredResult(result, action: action)
+                return result
             } catch {
                 lastError = error
                 if attempt == 0 {
@@ -167,6 +170,30 @@ private enum LingobarAICompletionDecoder {
             }
         }
         throw lastError ?? DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "AI response could not be decoded"))
+    }
+
+    private static func validateStructuredResult(_ result: StructuredLingobarResult, action: LanguageAction) throws {
+        guard action == .rewrite else {
+            return
+        }
+
+        let values = [result.summary, result.defaultCollectionItem.title] + result.rows.map(\.value)
+        guard values.contains(where: containsCJKCharacters) else {
+            return
+        }
+
+        throw DecodingError.dataCorrupted(
+            .init(
+                codingPath: [],
+                debugDescription: "Rewrite response values must be English-only."
+            )
+        )
+    }
+
+    private static func containsCJKCharacters(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(Int(scalar.value))
+        }
     }
 
     private static func makePartialGrammar(from spine: GrammarSpineCompletion) -> GrammarResult {
@@ -1244,7 +1271,21 @@ final class LingobarViewModel: ObservableObject {
             \(schema)
             """
         case .rewrite:
-            "You are Lingobar. Rewrite the user's text into one primary natural English version and a few variants: casual, formal, concise, and idiomatic. \(schema)"
+            """
+            You are Lingobar, a precise English rewriting assistant.
+            Rewrite the user's text into natural English. Preserve the user's meaning; do not answer the user's question, evaluate their idea, add new advice, or translate into Chinese.
+            Output language rules:
+            - summary, every rows[].value, and defaultCollectionItem.title MUST be English-only.
+            - Do not include Chinese characters in summary, rows[].value, or defaultCollectionItem.title.
+            - UI labels may be Chinese.
+            For rows, return these labels exactly and in order:
+            1. 主要版本: the best natural English rewrite.
+            2. 随意: a casual version.
+            3. 正式: a formal version.
+            4. 简洁: a concise version.
+            5. 地道: an idiomatic version.
+            \(schema)
+            """
         case .grammar:
             "Grammar uses staged prompts in LingobarAICompletionDecoder."
         case .examples:

@@ -12,6 +12,9 @@ final class LingobarController: NSObject, NSWindowDelegate {
     private static let inputEmptyPanelSize = NSSize(width: 720, height: 72)
     private static let inputLoadingPanelSize = NSSize(width: 720, height: 287)
     private static let inputResultPanelSize = NSSize(width: 720, height: 420)
+    private static let followUpPaneWidth: CGFloat = 420
+    private static let followUpGap: CGFloat = 14
+    private static let followUpMinimumHeight: CGFloat = 500
     private static let savedPanelOriginXKey = "Lingobar.savedPanelOriginX"
     private static let savedPanelOriginYKey = "Lingobar.savedPanelOriginY"
 
@@ -295,7 +298,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
     }
 
     private var contentSize: NSSize {
-        switch viewModel.mode {
+        let baseSize = switch viewModel.mode {
         case .setup:
             Self.setupPanelSize
         case .selection:
@@ -313,6 +316,13 @@ final class LingobarController: NSObject, NSWindowDelegate {
                 viewModel.showsResult ? Self.inputResultPanelSize : Self.inputEmptyPanelSize
             }
         }
+        guard viewModel.isFollowUpOpen else {
+            return baseSize
+        }
+        return NSSize(
+            width: baseSize.width + Self.followUpGap + Self.followUpPaneWidth,
+            height: max(baseSize.height, Self.followUpMinimumHeight)
+        )
     }
 
     private func resizePanelForCurrentState() {

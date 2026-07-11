@@ -2005,8 +2005,9 @@ func checkLingobarInputModeIssue9SourceGate() throws {
 
     let inputResultPanel = try sourceRegion(rootViewSource, from: "private var inputResultPanel", to: "private func resultPanel")
     try check(
-        inputResultPanel.contains("panelBody(height: 296, scrolls: false)"),
-        "input results should use the non-scrolling panel body for normal rewrite output"
+        inputResultPanel.contains("panelBody(height: 244, scrolls: false)") &&
+            inputResultPanel.contains("resultFooter"),
+        "input results should use a non-scrolling panel body that leaves room for the footer actions"
     )
     let controllerSource = try String(
         contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarController.swift"),

@@ -7,6 +7,109 @@ private enum LingobarAICompletionResult: Sendable {
     case structured(StructuredLingobarResult)
 }
 
+struct LingobarFollowUpKey: Decodable, Equatable, Sendable {
+    var term: String
+    var zh: String
+}
+
+private struct LingobarFollowUpCompletion: Decodable, Sendable {
+    var answer: String
+    var key: LingobarFollowUpKey?
+
+    enum CodingKeys: String, CodingKey {
+        case answer
+        case key
+        case keyTerm
+        case keyMeaning
+    }
+
+    init(answer: String, key: LingobarFollowUpKey?) {
+        self.answer = answer
+        self.key = key
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.answer = try container.decodeIfPresent(String.self, forKey: .answer) ?? ""
+        if let key = try container.decodeIfPresent(LingobarFollowUpKey.self, forKey: .key),
+           !key.term.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self.key = key
+        } else if let term = try container.decodeIfPresent(String.self, forKey: .keyTerm),
+                  let meaning = try container.decodeIfPresent(String.self, forKey: .keyMeaning),
+                  !term.isEmpty {
+            self.key = LingobarFollowUpKey(term: term, zh: meaning)
+        } else {
+            self.key = nil
+        }
+    }
+}
+
+private struct LingobarFollowUpContextSnapshot: Sendable {
+    var isAnchored: Bool
+    var mode: LingobarMode
+    var actionTitle: String
+    var sourceText: String
+    var resultTitle: String
+    var resultSummary: String
+    var resultRows: [LingobarRow]
+}
+
+private enum LingobarFollowUpCompletionDecoder {
+    static func decode(
+        aiClient: OpenAICompatibleClient,
+        context: LingobarFollowUpContextSnapshot,
+        question: String
+    ) async throws -> LingobarFollowUpCompletion {
+        let completion = try await aiClient.complete(
+            system: systemPrompt(context: context),
+            user: userPrompt(context: context, question: question),
+            maxTokens: 900
+        )
+        let json = try StructuredJSONExtractor.extractObject(from: completion)
+        let decoded = try JSONDecoder().decode(LingobarFollowUpCompletion.self, from: Data(json.utf8))
+        guard !decoded.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw OpenAICompatibleError.emptyCompletion
+        }
+        return decoded
+    }
+
+    private static func systemPrompt(context: LingobarFollowUpContextSnapshot) -> String {
+        """
+        You are Lingobar's follow-up chatbot for quick English-learning questions.
+        The UI language is Simplified Chinese. Answer the user's follow-up directly and concisely.
+        \(context.isAnchored ? "Use the provided Lingobar context as the main evidence. Do not invent a new source sentence." : "The user has turned off anchoring, so answer as a standalone quick question.")
+        Keep the answer practical: 2-5 short paragraphs or bullets, no long essay. Do not use Markdown formatting markers such as ** or backticks.
+        Return ONLY JSON with this schema:
+        {"answer":"简体中文回答，可少量包含英文术语","key":{"term":"one useful English expression, or empty string","zh":"简短中文释义"}}
+        If there is no useful key expression, return "key": null.
+        """
+    }
+
+    private static func userPrompt(context: LingobarFollowUpContextSnapshot, question: String) -> String {
+        let rowText = context.resultRows
+            .prefix(6)
+            .map { "- \($0.label): \($0.value)" }
+            .joined(separator: "\n")
+        return """
+        Follow-up question:
+        \(question)
+
+        Anchored context: \(context.isAnchored ? "on" : "off")
+        Mode: \(context.mode.rawValue)
+        Current action: \(context.actionTitle)
+        Source text:
+        \(context.sourceText)
+
+        Current result title: \(context.resultTitle)
+        Current result summary:
+        \(context.resultSummary)
+
+        Current result rows:
+        \(rowText.isEmpty ? "(none)" : rowText)
+        """
+    }
+}
+
 private struct GrammarRequestKey: Hashable {
     var sourceText: String
     var baseURLString: String
@@ -607,6 +710,13 @@ final class LingobarViewModel: ObservableObject {
     @Published var setupGateStatus = AppSettings.setupGateStatus
     @Published var loadingStartedAt: Date?
     @Published var recentCollectedPhraseID: UUID?
+    @Published var isFollowUpOpen = false
+    @Published var isFollowUpContextAnchored = true
+    @Published var followUpDraft = ""
+    @Published var followUpQuestion = ""
+    @Published var followUpAnswer = ""
+    @Published var followUpKey: LingobarFollowUpKey?
+    @Published var isFollowUpLoading = false
     var onLayoutChanged: (() -> Void)?
 
     @Published var actions: [LanguageAction] = AppSettings.actionOrder
@@ -619,6 +729,8 @@ final class LingobarViewModel: ObservableObject {
     private var grammarCacheKeys: [GrammarRequestKey] = []
     private var grammarRequests: [GrammarRequestKey: Task<GrammarResult, Error>] = [:]
     private let grammarCacheLimit = 6
+    private var activeFollowUpRequestID = UUID()
+    private var followUpRevealTask: Task<Void, Never>?
 
     init(store: PhraseStore = .defaultStore(), historyStore: LingobarHistoryStore = .defaultStore()) {
         self.store = store
@@ -635,6 +747,7 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
+        closeFollowUp(sendsLayoutChange: false)
 
         if let selection, !selection.isEmpty {
             mode = .selection
@@ -665,6 +778,7 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
+        closeFollowUp(sendsLayoutChange: false)
         let grammar = GrammarResult.fixture(id: AppSettings.grammarFixtureID) ?? .mockupFixture
         mode = .selection
         selectionSource = sourceAppName
@@ -684,6 +798,7 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
+        closeFollowUp(sendsLayoutChange: false)
         mode = .setup
         self.setupGateStatus = setupGateStatus
         showsResult = false
@@ -707,6 +822,7 @@ final class LingobarViewModel: ObservableObject {
 
         recentCollectedPhraseID = nil
         if let storedSnapshot = activeResultSnapshots[newAction.rawValue] {
+            resetFollowUpThread()
             applyStoredSnapshot(storedSnapshot, action: newAction, status: "已从快照打开")
             return
         }
@@ -714,6 +830,7 @@ final class LingobarViewModel: ObservableObject {
         action = newAction
         grammarResult = nil
         currentHistoryRecord = nil
+        resetFollowUpThread()
 
         switch newAction {
         case .copy:
@@ -741,6 +858,7 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         grammarResult = nil
         recentCollectedPhraseID = nil
+        resetFollowUpThread()
         perform(.rewrite)
     }
 
@@ -758,6 +876,182 @@ final class LingobarViewModel: ObservableObject {
     func togglePinned() {
         isPinned.toggle()
         status = isPinned ? "已固定" : "已取消固定"
+    }
+
+    var canUseFollowUp: Bool {
+        mode != .setup &&
+            !activeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            showsResult &&
+            !isLoading
+    }
+
+    var hasFollowUpExchange: Bool {
+        !followUpQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var followUpContextKind: String {
+        if isFollowUpContextAnchored {
+            "\(action.title)结果"
+        } else {
+            "自由提问"
+        }
+    }
+
+    var followUpContextText: String {
+        if isFollowUpContextAnchored {
+            let text = activeText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? result.title : text
+        }
+        return "未锚定上下文"
+    }
+
+    var followUpSuggestions: [String] {
+        switch action {
+        case .grammar:
+            [
+                "这句最容易读错的是哪一层？",
+                "这里为什么这样拆？",
+                "帮我把这句改得更口语"
+            ]
+        case .rewrite:
+            [
+                "这个版本还能更自然吗？",
+                "帮我改得更正式一点",
+                "解释一下为什么这样改"
+            ]
+        case .translate:
+            [
+                "这句话还有更自然的译法吗？",
+                "这里的关键词怎么用？",
+                "帮我举一个类似例句"
+            ]
+        case .examples:
+            [
+                "哪一句最适合邮件里用？",
+                "帮我换一个更口语的场景",
+                "解释一下这些例句的语气差别"
+            ]
+        case .pronounce:
+            [
+                "这里最该注意哪个重音？",
+                "帮我拆一下连读",
+                "这个词常见读错点是什么？"
+            ]
+        case .copy, .collect:
+            [
+                "这段话还能怎么表达？",
+                "帮我解释关键表达",
+                "给我一个可复用例句"
+            ]
+        }
+    }
+
+    func toggleFollowUpPane() {
+        guard canUseFollowUp || isFollowUpOpen else {
+            status = "暂无可追问内容"
+            return
+        }
+        if isFollowUpOpen {
+            closeFollowUp()
+        } else {
+            isFollowUpOpen = true
+            isFollowUpContextAnchored = true
+            resetFollowUpThread()
+            status = "追问已打开"
+            onLayoutChanged?()
+        }
+    }
+
+    func closeFollowUp(sendsLayoutChange: Bool = true) {
+        let wasOpen = isFollowUpOpen
+        isFollowUpOpen = false
+        resetFollowUpThread()
+        if wasOpen, sendsLayoutChange {
+            onLayoutChanged?()
+        }
+    }
+
+    func toggleFollowUpContextAnchor() {
+        isFollowUpContextAnchored.toggle()
+        resetFollowUpThread()
+        status = isFollowUpContextAnchored ? "已锚定上下文" : "已取消锚定"
+    }
+
+    func submitFollowUp(_ overrideQuestion: String? = nil) {
+        let question = (overrideQuestion ?? followUpDraft).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty else {
+            status = "请输入追问"
+            return
+        }
+        guard canUseFollowUp else {
+            status = "暂无可追问内容"
+            return
+        }
+        guard let aiClient = AppSettings.makeAIClient() else {
+            followUpQuestion = question
+            followUpAnswer = "请先完成 AI 设置后再追问。"
+            followUpKey = nil
+            followUpDraft = ""
+            isFollowUpLoading = false
+            status = "需要 AI 设置"
+            return
+        }
+
+        followUpQuestion = question
+        followUpAnswer = ""
+        followUpKey = nil
+        followUpDraft = ""
+        isFollowUpLoading = true
+        status = "追问生成中"
+        let requestID = UUID()
+        activeFollowUpRequestID = requestID
+        let context = followUpContextSnapshot()
+
+        let completionTask = Task.detached(priority: .userInitiated) {
+            try await LingobarFollowUpCompletionDecoder.decode(
+                aiClient: aiClient,
+                context: context,
+                question: question
+            )
+        }
+        Task {
+            do {
+                let completion = try await completionTask.value
+                completeFollowUp(completion, requestID: requestID)
+            } catch {
+                failFollowUp(error, requestID: requestID)
+            }
+        }
+    }
+
+    func copyFollowUpAnswer() {
+        let answer = followUpAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else {
+            return
+        }
+        recentCollectedPhraseID = nil
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(answer, forType: .string)
+        status = "已复制追问回答"
+    }
+
+    @discardableResult
+    func collectFollowUpAnswer() -> UUID? {
+        let answer = followUpAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else {
+            return nil
+        }
+        return collectFragment(
+            LingobarCollectionFragment(
+                title: followUpKey?.term ?? String(answer.prefix(42)),
+                note: "追问回答",
+                type: followUpKey == nil ? "文本" : "短语",
+                rows: [
+                    LingobarRow("问题", followUpQuestion),
+                    LingobarRow("回答", answer)
+                ]
+            )
+        )
     }
 
     @discardableResult
@@ -890,6 +1184,7 @@ final class LingobarViewModel: ObservableObject {
     ) {
         actions = AppSettings.actionOrder
         activeAIRequestID = UUID()
+        closeFollowUp(sendsLayoutChange: false)
         mode = .selection
         selectionSource = sourceAppName.isEmpty ? "Lingobar" : sourceAppName
         selectedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -956,6 +1251,85 @@ final class LingobarViewModel: ObservableObject {
 
     private var activeSourceAppName: String {
         mode == .input ? "输入模式" : selectionSource
+    }
+
+    private func resetFollowUpThread() {
+        followUpRevealTask?.cancel()
+        followUpRevealTask = nil
+        activeFollowUpRequestID = UUID()
+        followUpDraft = ""
+        followUpQuestion = ""
+        followUpAnswer = ""
+        followUpKey = nil
+        isFollowUpLoading = false
+    }
+
+    private func followUpContextSnapshot() -> LingobarFollowUpContextSnapshot {
+        LingobarFollowUpContextSnapshot(
+            isAnchored: isFollowUpContextAnchored,
+            mode: mode,
+            actionTitle: action.title,
+            sourceText: activeText,
+            resultTitle: result.title,
+            resultSummary: result.summary,
+            resultRows: result.rows
+        )
+    }
+
+    private func completeFollowUp(_ completion: LingobarFollowUpCompletion, requestID: UUID) {
+        guard activeFollowUpRequestID == requestID else {
+            return
+        }
+        followUpRevealTask?.cancel()
+        followUpAnswer = ""
+        followUpKey = nil
+        let answer = completion.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        followUpRevealTask = Task { @MainActor in
+            for chunk in Self.followUpRevealChunks(from: answer) {
+                guard activeFollowUpRequestID == requestID, !Task.isCancelled else {
+                    return
+                }
+                followUpAnswer += chunk
+                try? await Task.sleep(nanoseconds: 18_000_000)
+            }
+            guard activeFollowUpRequestID == requestID, !Task.isCancelled else {
+                return
+            }
+            followUpKey = completion.key
+            isFollowUpLoading = false
+            status = "追问完成"
+            followUpRevealTask = nil
+        }
+    }
+
+    private func failFollowUp(_ error: Error, requestID: UUID) {
+        guard activeFollowUpRequestID == requestID else {
+            return
+        }
+        followUpRevealTask?.cancel()
+        followUpRevealTask = nil
+        followUpAnswer = error is DecodingError
+            ? "AI 返回的追问格式不符合预期，请重试。"
+            : userFacingAIErrorMessage(error)
+        followUpKey = nil
+        isFollowUpLoading = false
+        status = "追问失败"
+    }
+
+    private static func followUpRevealChunks(from answer: String) -> [String] {
+        var chunks: [String] = []
+        var buffer = ""
+        for character in answer {
+            buffer.append(character)
+            if buffer.count >= 2 || character.isWhitespace || "，。！？；：,.!?;:".contains(character) {
+                chunks.append(buffer)
+                buffer = ""
+            }
+        }
+        if !buffer.isEmpty {
+            chunks.append(buffer)
+        }
+        return chunks
     }
 
     private func runAIIfAvailable(for action: LanguageAction, text: String) {

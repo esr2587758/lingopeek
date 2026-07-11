@@ -70,7 +70,6 @@ final class LingobarHubWindowController {
                     self?.state.refreshSettings()
                 },
                 onRelaunch: { [weak self] item in
-                    self?.close()
                     self?.onRelaunch(item)
                 }
             )

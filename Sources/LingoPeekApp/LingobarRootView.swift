@@ -11,6 +11,8 @@ struct LingobarRootView: View {
     var onOpenSettings: () -> Void = {}
     var onOpenAccessibility: () -> Void = {}
     var onOpenCollection: (UUID) -> Void = { _ in }
+    private let actionButtonIconWidth: CGFloat = 17
+    private let actionButtonContentWidth: CGFloat = 50
 
     var body: some View {
         VStack(spacing: 8) {
@@ -104,7 +106,12 @@ struct LingobarRootView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(surfaceBackground)
+        .background {
+            ZStack {
+                surfaceBackground
+                dragSurface()
+            }
+        }
         .clipShape(surfaceShape)
         .overlay(surfaceBorder)
         .lingobarShadow()
@@ -308,9 +315,11 @@ struct LingobarRootView: View {
                     HStack(spacing: 6) {
                         Image(systemName: actionSymbol(action, highlighted: highlighted))
                             .font(.system(size: 13, weight: .semibold))
+                            .frame(width: actionButtonIconWidth)
                         Text(action.title)
-                            .font(.system(size: 13, weight: highlighted ? .semibold : .medium))
+                            .font(.system(size: 13, weight: .semibold))
                     }
+                    .frame(width: actionButtonContentWidth, alignment: .center)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
                     .foregroundStyle(actionForeground(action, available: available))

@@ -1877,10 +1877,46 @@ func checkLingobarHubShellSourceGate() throws {
     try check(!historyContent.contains("LibraryPane("), "Hub history should not reuse the collection library pane")
     try check(!historyContent.contains("historyTypeOptions"), "Hub history should not expose collection-style type filters")
     try check(!historyContent.contains("HubSearchField("), "Hub history should render as a flat list without collection search controls")
-    let historyRow = try sourceRegion(viewSource, from: "private struct HubHistoryRow", to: "private struct HubHistoryBlock")
-    try check(historyRow.contains("var onSelect: (LingobarHubLibraryItem) -> Void"), "Hub history rows should accept a selection callback")
-    try check(historyRow.contains(".contentShape(") && historyRow.contains(".onTapGesture"), "Hub history rows should be selectable by clicking the row body")
-    try check(historyRow.contains(".textSelection(.enabled)"), "Hub history selected sentence should be selectable text")
+    let historyPane = try sourceRegion(viewSource, from: "private struct HubHistoryPane", to: "private struct HubHistoryRow: View")
+    try check(
+        historyPane.contains("private var historyRows: [HubHistoryDisplayRow]") &&
+            historyPane.contains("items.map(HubHistoryDisplayRow.init)") &&
+            historyPane.contains("private func item(with id: UUID)") &&
+            historyPane.contains("ForEach(historyRows)") &&
+            !historyPane.contains("ForEach(items)"),
+        "Hub history pane should render lightweight row models and resolve full snapshot items by id only for actions"
+    )
+    let historyRow = try sourceRegion(viewSource, from: "private struct HubHistoryRow: View", to: "private struct HubHistoryBlock")
+    try check(
+        historyRow.contains("var item: HubHistoryDisplayRow") &&
+            historyRow.contains("var onSelect: (UUID) -> Void") &&
+            !historyRow.contains("var item: LingobarHubLibraryItem"),
+        "Hub history rows should carry only lightweight display data and id-based callbacks"
+    )
+    try check(
+        historyRow.contains(".contentShape(") && historyRow.contains(".simultaneousGesture(TapGesture().onEnded"),
+        "Hub history rows should select reliably from the whole row body, even when text selection is enabled"
+    )
+    try check(
+        historyRow.contains("@State private var isHovered") &&
+            historyRow.contains(".onHover { isHovered = $0 }") &&
+            historyRow.contains("rowFill") &&
+            historyRow.contains("rowStroke"),
+        "Hub history rows should expose hover color feedback"
+    )
+    let historyRowFill = try sourceRegion(historyRow, from: "private var rowFill", to: "private var rowStroke")
+    let historyRowStroke = try sourceRegion(historyRow, from: "private var rowStroke", to: "var body: some View")
+    try check(
+        historyRowFill.contains("return isHovered ? HubColor.selectedFill : HubColor.card") &&
+            !historyRowFill.contains("if isSelected"),
+        "Hub history row fill should be blue only while hovered, not while selected"
+    )
+    try check(
+        historyRowStroke.contains("return isHovered ? HubColor.accent.opacity(0.5) : HubColor.hairline") &&
+            !historyRowStroke.contains("if isSelected"),
+        "Hub history row stroke should be accented only while hovered, not while selected"
+    )
+    try check(historyRow.contains(".textSelection(.enabled)"), "Hub history list text should remain selectable")
     try check(!historyRow.contains("item.resultSnapshot?.rows"), "Hub history rows should not render full result snapshot rows inline")
     try check(!historyRow.contains("HubHistoryBlock("), "Hub history rows should keep the visible list to the selected sentence")
     try check(historyRow.contains("HStack(spacing: 7)"), "Hub history row actions should be horizontal to keep rows compact")
@@ -1889,6 +1925,29 @@ func checkLingobarHubShellSourceGate() throws {
     try check(historyRow.contains("\"arrow.up.forward.square\""), "Hub history rows should expose a trailing button to open the full snapshot")
     try check(historyRow.contains("\"bookmark\""), "Hub history rows should expose a trailing save button")
     try check(historyRow.contains("\"trash\""), "Hub history rows should expose a trailing delete button")
+    let collectionCard = try sourceRegion(viewSource, from: "private struct HubLibraryCard", to: "private struct HubItemDetailPane")
+    try check(
+        collectionCard.contains("@State private var isHovered") &&
+            collectionCard.contains(".onHover { isHovered = $0 }") &&
+            collectionCard.contains("cardFill") &&
+            collectionCard.contains("cardStroke"),
+        "Hub collection cards should expose the same hover color feedback"
+    )
+    let collectionCardFill = try sourceRegion(collectionCard, from: "private var cardFill", to: "private var cardStroke")
+    let collectionCardStroke = try sourceRegion(collectionCard, from: "private var cardStroke", to: "var body: some View")
+    try check(
+        collectionCardFill.contains("return isHovered ? HubColor.selectedFill : HubColor.card") &&
+            !collectionCardFill.contains("if isSelected"),
+        "Hub collection card fill should be blue only while hovered, not while selected"
+    )
+    try check(
+        collectionCardStroke.contains("return isHovered ? HubColor.accent.opacity(0.5) : HubColor.hairline") &&
+            !collectionCardStroke.contains("if isSelected"),
+        "Hub collection card stroke should be accented only while hovered, not while selected"
+    )
+    try check(collectionCard.contains(".textSelection(.enabled)"), "Hub collection list text should remain selectable")
+    let detailBlock = try sourceRegion(viewSource, from: "private struct HubDetailBlock", to: "private struct HubEmptyState")
+    try check(detailBlock.contains(".textSelection(.enabled)"), "Hub detail text should remain selectable after list rows stop selecting text")
     try check(!viewSource.contains("\"清空历史\""), "Hub should not render a dangerous clear-all history button")
     try check(controllerSource.contains("hubWindowController.show(section: .settings)"), "settings entry points should open the Hub settings section")
     try check(controllerSource.contains("appActivationObserver"), "controller should observe app activation for external setup state changes")
@@ -1899,6 +1958,11 @@ func checkLingobarHubShellSourceGate() throws {
     )
     try check(controllerSource.contains("hubWindowController.show(section: .collection)"), "menu should expose the Hub collection entry")
     try check(controllerSource.contains("presentFromHub(_ item: LingobarHubLibraryItem)"), "Hub detail items should be able to relaunch Lingobar")
+    let hubRelaunchCallback = try sourceRegion(windowSource, from: "onRelaunch: { [weak self] item in", to: "self.window = window")
+    try check(
+        !hubRelaunchCallback.contains("self?.close()"),
+        "relaunching a Hub snapshot should keep the Hub window visible"
+    )
     try check(!controllerSource.contains("settingsWindowController.show()"), "old settings window should not remain the active settings route")
     try check(appDelegateSource.contains("LINGOPEEK_OPEN_HUB"), "app launch should support deterministic Hub UI smoke tests")
     try check(appDelegateSource.contains("LINGOPEEK_OPEN_HUB_SECTION"), "Hub launch should support deterministic section routing")
@@ -1914,6 +1978,12 @@ func checkLingobarHubShellSourceGate() throws {
     let actionBar = try sourceRegion(rootViewSource, from: "private var actionBar: some View", to: "private func panelTitle")
     try check(actionBar.contains("viewModel.status"), "Lingobar action bar should render status feedback for save actions")
     try check(actionBar.contains("viewModel.isActionHighlighted(action)"), "Lingobar action bar should let saved state highlight the save button")
+    try check(
+        !actionBar.contains("highlighted ? .semibold : .medium") &&
+            actionBar.contains(".frame(width: actionButtonIconWidth)") &&
+            actionBar.contains(".frame(width: actionButtonContentWidth"),
+        "Lingobar action labels should keep stable width and font weight when highlighted changes"
+    )
     try check(
         actionBar.contains("viewModel.recentCollectedPhraseID") &&
             actionBar.contains("onOpenCollection(collectedPhraseID)"),
@@ -2100,6 +2170,11 @@ func checkSelectionPermissionSourceGate() throws {
         lingobarRootSource.contains("AppSettings.accessibilityRuntimeIdentityNote") &&
             lingobarRootSource.contains("viewModel.setupGateStatus.accessibilityPermissionGranted"),
         "setup gate should surface runtime identity diagnostics when Accessibility is still missing"
+    )
+    let setupPanel = try sourceRegion(lingobarRootSource, from: "private var setupPanel: some View", to: "private var selectionPill")
+    try check(
+        setupPanel.contains("dragSurface()"),
+        "setup gate panel should expose a draggable background like the normal Lingobar surfaces"
     )
 }
 

@@ -627,6 +627,10 @@ private struct HubHistoryPane: View {
     var onSave: (LingobarHubLibraryItem) -> Void
     var onDelete: (LingobarHubLibraryItem) -> Void
 
+    private var historyRows: [HubHistoryDisplayRow] {
+        items.map(HubHistoryDisplayRow.init)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
@@ -649,15 +653,15 @@ private struct HubHistoryPane: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        ForEach(items) { item in
+                        ForEach(historyRows) { item in
                             HubHistoryRow(
                                 item: item,
                                 isSelected: selectedID == item.id,
-                                onSelect: onSelect,
-                                onCopy: onCopy,
-                                onOpen: onOpen,
-                                onSave: onSave,
-                                onDelete: onDelete
+                                onSelect: select,
+                                onCopy: copy,
+                                onOpen: open,
+                                onSave: save,
+                                onDelete: delete
                             )
                         }
                     }
@@ -668,25 +672,86 @@ private struct HubHistoryPane: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    private func item(with id: UUID) -> LingobarHubLibraryItem? {
+        items.first { $0.id == id }
+    }
+
+    private func select(_ id: UUID) {
+        guard let item = item(with: id) else {
+            return
+        }
+        onSelect(item)
+    }
+
+    private func copy(_ id: UUID) {
+        guard let item = item(with: id) else {
+            return
+        }
+        onCopy(item)
+    }
+
+    private func open(_ id: UUID) {
+        guard let item = item(with: id) else {
+            return
+        }
+        onOpen(item)
+    }
+
+    private func save(_ id: UUID) {
+        guard let item = item(with: id) else {
+            return
+        }
+        onSave(item)
+    }
+
+    private func delete(_ id: UUID) {
+        guard let item = item(with: id) else {
+            return
+        }
+        onDelete(item)
+    }
 }
 
-private struct HubHistoryRow: View {
-    var item: LingobarHubLibraryItem
-    var isSelected: Bool
-    var onSelect: (LingobarHubLibraryItem) -> Void
-    var onCopy: (LingobarHubLibraryItem) -> Void
-    var onOpen: (LingobarHubLibraryItem) -> Void
-    var onSave: (LingobarHubLibraryItem) -> Void
-    var onDelete: (LingobarHubLibraryItem) -> Void
+private struct HubHistoryDisplayRow: Identifiable {
+    var id: UUID
+    var displayTitle: String
+    var updatedAtText: String
+    var source: String
+    var isSaved: Bool
 
-    private var displayTitle: String {
-        [
+    init(item: LingobarHubLibraryItem) {
+        id = item.id
+        displayTitle = [
             item.sourceText,
             item.title,
             item.visibleText
         ]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty } ?? "历史记录"
+        updatedAtText = item.updatedAt.hubRelativeString
+        source = item.source
+        isSaved = item.isSaved
+    }
+}
+
+private struct HubHistoryRow: View {
+    var item: HubHistoryDisplayRow
+    var isSelected: Bool
+    var onSelect: (UUID) -> Void
+    var onCopy: (UUID) -> Void
+    var onOpen: (UUID) -> Void
+    var onSave: (UUID) -> Void
+    var onDelete: (UUID) -> Void
+
+    @State private var isHovered = false
+
+    private var rowFill: Color {
+        return isHovered ? HubColor.selectedFill : HubColor.card
+    }
+
+    private var rowStroke: Color {
+        return isHovered ? HubColor.accent.opacity(0.5) : HubColor.hairline
     }
 
     var body: some View {
@@ -696,7 +761,7 @@ private struct HubHistoryRow: View {
                     if item.isSaved {
                         HubBadge(title: "已保存", tint: HubColor.ok)
                     }
-                    Text(item.updatedAt.hubRelativeString)
+                    Text(item.updatedAtText)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(HubColor.tertiaryText)
                     Text(item.source)
@@ -705,31 +770,27 @@ private struct HubHistoryRow: View {
                     Spacer(minLength: 8)
                 }
 
-                Text(displayTitle)
+                Text(item.displayTitle)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(HubColor.primaryText)
                     .lineLimit(3)
                     .textSelection(.enabled)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onSelect(item)
-            }
 
             HStack(spacing: 7) {
                 HubIconButton(systemName: "doc.on.doc", help: "复制") {
-                    onCopy(item)
+                    onCopy(item.id)
                 }
                 HubIconButton(systemName: "arrow.up.forward.square", help: "打开完整快照") {
-                    onOpen(item)
+                    onOpen(item.id)
                 }
                 HubIconButton(systemName: item.isSaved ? "bookmark.fill" : "bookmark", help: item.isSaved ? "已保存" : "保存") {
-                    onSave(item)
+                    onSave(item.id)
                 }
                 .disabled(item.isSaved)
                 HubIconButton(systemName: "trash", help: "删除") {
-                    onDelete(item)
+                    onDelete(item.id)
                 }
             }
             .frame(minWidth: 124, alignment: .trailing)
@@ -738,13 +799,17 @@ private struct HubHistoryRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isSelected ? HubColor.selectedFill : HubColor.card)
+                .fill(rowFill)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(isSelected ? HubColor.accent.opacity(0.5) : HubColor.hairline, lineWidth: 1)
+                .stroke(rowStroke, lineWidth: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .simultaneousGesture(TapGesture().onEnded {
+            onSelect(item.id)
+        })
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -905,53 +970,65 @@ private struct HubLibraryCard: View {
     var isSelected: Bool
     var onSelect: () -> Void
 
+    @State private var isHovered = false
+
+    private var cardFill: Color {
+        return isHovered ? HubColor.selectedFill : HubColor.card
+    }
+
+    private var cardStroke: Color {
+        return isHovered ? HubColor.accent.opacity(0.5) : HubColor.hairline
+    }
+
     var body: some View {
-        Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 8) {
-                    HubBadge(title: item.itemType)
-                    if let action = item.action {
-                        HubBadge(title: action.title, tint: HubColor.accent)
-                    }
-                    if item.kind == .history, item.isSaved {
-                        HubBadge(title: "已保存", tint: HubColor.ok)
-                    }
-                    Spacer(minLength: 8)
-                    Text(item.createdAt.hubRelativeString)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(HubColor.tertiaryText)
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                HubBadge(title: item.itemType)
+                if let action = item.action {
+                    HubBadge(title: action.title, tint: HubColor.accent)
                 }
-                Text(item.title.isEmpty ? item.visibleText : item.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(2)
-                    .foregroundStyle(HubColor.primaryText)
-                if !item.note.isEmpty {
-                    Text(item.note)
-                        .font(.system(size: 12))
-                        .lineLimit(2)
-                        .foregroundStyle(HubColor.secondaryText)
+                if item.kind == .history, item.isSaved {
+                    HubBadge(title: "已保存", tint: HubColor.ok)
                 }
-                HStack(spacing: 6) {
-                    Image(systemName: "app.connected.to.app.below.fill")
-                        .font(.system(size: 10))
-                    Text(item.source)
-                        .lineLimit(1)
-                }
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(HubColor.tertiaryText)
+                Spacer(minLength: 8)
+                Text(item.createdAt.hubRelativeString)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(HubColor.tertiaryText)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? HubColor.selectedFill : HubColor.card)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? HubColor.accent.opacity(0.5) : HubColor.hairline, lineWidth: 1)
-            )
+            Text(item.title.isEmpty ? item.visibleText : item.title)
+                .font(.system(size: 14, weight: .semibold))
+                .lineLimit(2)
+                .foregroundStyle(HubColor.primaryText)
+            if !item.note.isEmpty {
+                Text(item.note)
+                    .font(.system(size: 12))
+                    .lineLimit(2)
+                    .foregroundStyle(HubColor.secondaryText)
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "app.connected.to.app.below.fill")
+                    .font(.system(size: 10))
+                Text(item.source)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(HubColor.tertiaryText)
         }
-        .buttonStyle(.plain)
+        .textSelection(.enabled)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(cardFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(cardStroke, lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .simultaneousGesture(TapGesture().onEnded(onSelect))
+        .onHover { isHovered = $0 }
+        .accessibilityAddTraits(.isButton)
     }
 }
 

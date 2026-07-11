@@ -4,6 +4,11 @@ import LingobarUI
 import SwiftUI
 
 struct LingobarRootView: View {
+    private static let mainWidth: CGFloat = 720
+    private static let followUpPaneWidth: CGFloat = 420
+    private static let followUpGap: CGFloat = 14
+    private static let followUpMinimumHeight: CGFloat = 500
+
     @ObservedObject var viewModel: LingobarViewModel
     @State private var inputHasMarkedText = false
     @State private var activeResultTextSelection: ResultTextSelection?
@@ -15,6 +20,40 @@ struct LingobarRootView: View {
     private let actionButtonContentWidth: CGFloat = 50
 
     var body: some View {
+        HStack(alignment: .top, spacing: viewModel.isFollowUpOpen ? Self.followUpGap : 0) {
+            mainContent
+                .frame(
+                    width: Self.mainWidth,
+                    height: rootHeight,
+                    alignment: .top
+                )
+
+            if viewModel.isFollowUpOpen {
+                followUpPane
+                    .frame(width: Self.followUpPaneWidth, height: rootHeight)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .frame(
+            width: rootWidth,
+            height: rootHeight,
+            alignment: .topLeading
+        )
+        .onExitCommand(perform: onClose)
+        .onChange(of: viewModel.mode) { _, _ in
+            activeResultTextSelection = nil
+        }
+        .onChange(of: viewModel.action) { _, _ in
+            activeResultTextSelection = nil
+        }
+        .onChange(of: viewModel.result) { _, _ in
+            activeResultTextSelection = nil
+        }
+        .animation(.easeOut(duration: 0.18), value: viewModel.isFollowUpOpen)
+        .environment(\.colorScheme, .dark)
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 8) {
             if viewModel.mode == .setup {
                 setupPanel
@@ -28,22 +67,6 @@ struct LingobarRootView: View {
                 }
             }
         }
-        .frame(
-            width: 720,
-            height: rootHeight,
-            alignment: .top
-        )
-        .onExitCommand(perform: onClose)
-        .onChange(of: viewModel.mode) { _, _ in
-            activeResultTextSelection = nil
-        }
-        .onChange(of: viewModel.action) { _, _ in
-            activeResultTextSelection = nil
-        }
-        .onChange(of: viewModel.result) { _, _ in
-            activeResultTextSelection = nil
-        }
-        .environment(\.colorScheme, .dark)
     }
 
     private var setupPanel: some View {
@@ -250,7 +273,10 @@ struct LingobarRootView: View {
     private var inputResultPanel: some View {
         VStack(spacing: 0) {
             panelTitle("改写 · 自然英文", shortcut: viewModel.shortcut(for: viewModel.action))
-            panelBody(height: 296, scrolls: false)
+            panelBody(height: 244, scrolls: false)
+            if !viewModel.isLoading {
+                resultFooter
+            }
         }
         .background(surfaceBackground)
         .clipShape(surfaceShape)
@@ -280,6 +306,7 @@ struct LingobarRootView: View {
                     )
                 }
             }
+            resultFooter
         }
         .background(surfaceBackground)
         .clipShape(surfaceShape)
@@ -295,7 +322,10 @@ struct LingobarRootView: View {
             }
 
             panelTitle(viewModel.result.title, shortcut: viewModel.shortcut(for: viewModel.action))
-            panelBody(height: viewModel.mode == .selection ? 300 : 176)
+            panelBody(height: viewModel.mode == .selection ? 300 : 124)
+            if !viewModel.isLoading {
+                resultFooter
+            }
         }
         .background(surfaceBackground)
         .clipShape(surfaceShape)
@@ -382,6 +412,380 @@ struct LingobarRootView: View {
         }
     }
 
+    private var resultFooter: some View {
+        HStack(spacing: 6) {
+            footerIconTextButton("复制", systemName: "doc.on.doc") {
+                viewModel.copyResult()
+            }
+            footerIconTextButton("收藏", systemName: "star") {
+                _ = viewModel.saveCurrentPhrase()
+            }
+            Spacer(minLength: 12)
+            followUpEntryButton()
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .background(Color.lingoBand)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.lingoHairline)
+                .frame(height: 1)
+        }
+    }
+
+    private func footerIconTextButton(
+        _ title: String,
+        systemName: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemName)
+                    .font(.system(size: 11.5, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11.5, weight: .medium))
+            }
+            .frame(height: 30)
+            .padding(.horizontal, 10)
+            .foregroundStyle(Color.lingoMuted)
+            .hoverChrome(
+                fill: Color.lingoChip,
+                hoverFill: Color.lingoChipHover,
+                cornerRadius: 8
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func followUpEntryButton() -> some View {
+        Button {
+            viewModel.toggleFollowUpPane()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "questionmark.bubble")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text("追问")
+                    .font(.system(size: 12.5, weight: .semibold))
+            }
+            .frame(height: 30)
+            .padding(.horizontal, 13)
+            .foregroundStyle(viewModel.isFollowUpOpen ? Color.white : Color.lingoAccentText)
+            .hoverChrome(
+                fill: viewModel.isFollowUpOpen ? Color.lingoAccent : Color.lingoAccentWeak,
+                hoverFill: viewModel.isFollowUpOpen ? Color.lingoAccent.opacity(0.92) : Color.lingoAccent.opacity(0.24),
+                stroke: viewModel.isFollowUpOpen ? Color.clear : Color.lingoAccent,
+                hoverStroke: viewModel.isFollowUpOpen ? Color.clear : Color.lingoAccent,
+                cornerRadius: 8
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!viewModel.canUseFollowUp && !viewModel.isFollowUpOpen)
+        .opacity(viewModel.canUseFollowUp || viewModel.isFollowUpOpen ? 1 : 0.45)
+        .help(viewModel.isFollowUpOpen ? "收起追问" : "打开追问")
+    }
+
+    private var followUpPane: some View {
+        VStack(spacing: 0) {
+            followUpHeader
+            followUpThread
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            followUpComposer
+        }
+        .background(surfaceBackground)
+        .clipShape(surfaceShape)
+        .overlay(surfaceBorder)
+        .lingobarShadow()
+    }
+
+    private var followUpHeader: some View {
+        HStack(spacing: 9) {
+            HStack(spacing: 7) {
+                Image(systemName: "questionmark.bubble")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.lingoAccentText)
+                Text("追问")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.lingoText)
+            }
+            .fixedSize()
+
+            followUpContextChip
+
+            iconButton(systemName: "xmark", help: "收起追问", foreground: Color.lingoSubtle) {
+                viewModel.closeFollowUp()
+            }
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.vertical, 11)
+        .background(dragSurface())
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.lingoHairline)
+                .frame(height: 1)
+        }
+    }
+
+    private var followUpContextChip: some View {
+        Button {
+            viewModel.toggleFollowUpContextAnchor()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "pin")
+                    .font(.system(size: 11.5, weight: .semibold))
+                Text(viewModel.followUpContextKind)
+                    .font(.system(size: 11, weight: .semibold))
+                    .fixedSize()
+                Text(viewModel.followUpContextText)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .foregroundStyle(viewModel.isFollowUpContextAnchored ? Color.lingoAccentText : Color.lingoSubtle)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(viewModel.isFollowUpContextAnchored ? Color.lingoAccentWeak : Color.lingoChip)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(
+                        viewModel.isFollowUpContextAnchored ? Color.lingoAccent : Color.lingoHairline,
+                        style: StrokeStyle(
+                            lineWidth: 1,
+                            dash: viewModel.isFollowUpContextAnchored ? [] : [4, 3]
+                        )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .help(viewModel.isFollowUpContextAnchored ? "点按取消锚定，可自由提问" : "点按锚定当前上下文")
+    }
+
+    private var followUpThread: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if viewModel.hasFollowUpExchange {
+                    followUpUserMessage
+                    followUpAssistantMessage
+                } else {
+                    followUpEmptyState
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var followUpEmptyState: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            Text("关于这次\(viewModel.action.title)结果，想继续问点什么？")
+                .font(.system(size: 14))
+                .foregroundStyle(Color.lingoMuted)
+                .lineSpacing(3)
+            FlowLayout(items: viewModel.followUpSuggestions, spacing: 7) { suggestion in
+                Button {
+                    viewModel.submitFollowUp(suggestion)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkle.magnifyingglass")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.lingoAccentText)
+                        Text(suggestion)
+                            .font(.system(size: 12.5))
+                            .lineLimit(2)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .foregroundStyle(Color.lingoMuted)
+                    .hoverChrome(
+                        fill: Color.clear,
+                        hoverFill: Color.lingoChip,
+                        stroke: Color.lingoHairline,
+                        hoverStroke: Color.lingoHairlineStrong,
+                        cornerRadius: 9
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isFollowUpLoading)
+            }
+        }
+    }
+
+    private var followUpUserMessage: some View {
+        HStack(alignment: .top) {
+            Spacer(minLength: 30)
+            Text(viewModel.followUpQuestion)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.white)
+                .lineSpacing(4)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 9)
+                .background(Color.lingoAccent, in: UnevenRoundedRectangle(
+                    topLeadingRadius: 13,
+                    bottomLeadingRadius: 13,
+                    bottomTrailingRadius: 4,
+                    topTrailingRadius: 13,
+                    style: .continuous
+                ))
+        }
+    }
+
+    private var followUpAssistantMessage: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.lingoAccentText)
+                .frame(width: 26, height: 26)
+                .background(Color.lingoAccentWeak, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 9) {
+                if viewModel.isFollowUpLoading && viewModel.followUpAnswer.isEmpty {
+                    HStack(spacing: 8) {
+                        LingobarSpinner()
+                        Text("正在生成追问回答…")
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Color.lingoMuted)
+                    }
+                    .padding(.vertical, 3)
+                } else {
+                    Text(viewModel.followUpAnswer)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.lingoText)
+                        .lineSpacing(5)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if let key = viewModel.followUpKey, !viewModel.isFollowUpLoading {
+                    HStack(alignment: .firstTextBaseline, spacing: 9) {
+                        Text(key.term)
+                            .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.lingoAccentText)
+                        Text(key.zh)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Color.lingoMuted)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
+                if !viewModel.isFollowUpLoading && !viewModel.followUpAnswer.isEmpty {
+                    HStack(spacing: 6) {
+                        followUpMiniButton("复制", systemName: "doc.on.doc") {
+                            viewModel.copyFollowUpAnswer()
+                        }
+                        followUpMiniButton("收藏", systemName: "star") {
+                            _ = viewModel.collectFollowUpAnswer()
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var followUpComposer: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            Image(systemName: "mic")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.lingoSubtle)
+                .frame(width: 32, height: 32)
+                .help("语音输入（MVP 暂未开放）")
+
+            TextField(followUpComposerPlaceholder, text: $viewModel.followUpDraft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Color.lingoText)
+                .lineLimit(1...3)
+                .padding(.vertical, 7)
+                .disabled(viewModel.isFollowUpLoading)
+                .onSubmit {
+                    viewModel.submitFollowUp()
+                }
+
+            Button {
+                if !viewModel.isFollowUpLoading {
+                    viewModel.submitFollowUp()
+                }
+            } label: {
+                Image(systemName: viewModel.isFollowUpLoading ? "stop.fill" : "arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .frame(width: 34, height: 34)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.white)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(viewModel.isFollowUpLoading ? Color.lingoChipHover : Color.lingoAccent)
+            )
+            .disabled(!canSubmitFollowUpButton)
+            .opacity(canSubmitFollowUpButton ? 1 : 0.4)
+            .help(viewModel.isFollowUpLoading ? "生成中" : "发送 (↩)")
+        }
+        .padding(8)
+        .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(Color.lingoHairline, lineWidth: 1)
+        )
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 13)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.lingoHairline)
+                .frame(height: 1)
+        }
+    }
+
+    private var followUpComposerPlaceholder: String {
+        if viewModel.isFollowUpLoading {
+            return "正在生成回答…"
+        }
+        if let suggestion = viewModel.followUpSuggestions.first, !viewModel.hasFollowUpExchange {
+            return "追问：\(suggestion)"
+        }
+        return "继续追问…"
+    }
+
+    private var canSubmitFollowUpButton: Bool {
+        viewModel.isFollowUpLoading ||
+            !viewModel.followUpDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func followUpMiniButton(
+        _ title: String,
+        systemName: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemName)
+                    .font(.system(size: 11.5, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11.5, weight: .medium))
+            }
+            .frame(height: 27)
+            .padding(.horizontal, 10)
+            .foregroundStyle(Color.lingoMuted)
+            .hoverChrome(
+                fill: Color.lingoChip,
+                hoverFill: Color.lingoChipHover,
+                cornerRadius: 7
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func panelTitle(_ title: String, shortcut: String) -> some View {
         HStack(spacing: 8) {
             Circle()
@@ -465,7 +869,18 @@ struct LingobarRootView: View {
         )
     }
 
+    private var rootWidth: CGFloat {
+        Self.mainWidth + (viewModel.isFollowUpOpen ? Self.followUpGap + Self.followUpPaneWidth : 0)
+    }
+
     private var rootHeight: CGFloat {
+        if viewModel.isFollowUpOpen {
+            return max(baseRootHeight, Self.followUpMinimumHeight)
+        }
+        return baseRootHeight
+    }
+
+    private var baseRootHeight: CGFloat {
         switch viewModel.mode {
         case .setup:
             if !viewModel.setupGateStatus.accessibilityPermissionGranted,
@@ -478,7 +893,7 @@ struct LingobarRootView: View {
             if viewModel.action == .grammar, viewModel.grammarResult != nil {
                 812
             } else {
-                viewModel.isLoading ? 441 : 440
+                viewModel.isLoading ? 441 : 492
             }
         case .input:
             if viewModel.isLoading {

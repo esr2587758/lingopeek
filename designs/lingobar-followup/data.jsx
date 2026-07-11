@@ -55,7 +55,7 @@ const FU_SUGGESTIONS = {
 
 // ---- Anchored context cards the user can attach / detach ----
 const FU_CONTEXTS = {
-  selection: { kind: "选区", label: "翻译 · call into question", text: FU_SELECTION.text },
+  selection: { kind: "语法结果", label: "语法 · call into question", text: FU_SELECTION.text },
   input: { kind: "改写结果", label: "改写 · 主结果", text: FU_INPUT.primary },
 };
 

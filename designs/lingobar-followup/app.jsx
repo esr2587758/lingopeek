@@ -1,17 +1,23 @@
-// app.jsx — orchestrator. Mode toggle (选中 / 输入) + side-by-side variant compare.
+// app.jsx — orchestrator. Mode toggle (选中 / 输入) + variant toggle (右侧停靠 / 浮层窗).
+// One full-size scene at a time, so the wide right-dock layout has real room.
 
 const { useState: aUseState, useRef: aUseRef, useCallback: aUseCallback } = React;
 
 const MODES = [
-  { id: "selection", name: "选中模式", ds: "读到不懂的句子 · 就着翻译结果追问" },
+  { id: "selection", name: "选中模式", ds: "读到长难句 · 就着语法结果追问" },
   { id: "input", name: "输入模式", ds: "写完一句改写 · 追着结果继续调" },
+];
+
+const VARIANTS = [
+  { id: "dock", name: "右侧停靠", ds: "对话作为右栏 · 结果与对话各自滚动" },
+  { id: "window", name: "独立浮层窗", ds: "对话独立成窗 · 更专注" },
 ];
 
 function App() {
   const [mode, setMode] = aUseState("selection");
+  const [variant, setVariant] = aUseState("dock");
   const [toast, setToast] = aUseState("");
-  // remount variants on mode change so their internal chat resets cleanly
-  const [gen, setGen] = aUseState(0);
+  const [gen, setGen] = aUseState(0); // remount scene to reset its chat cleanly
   const toastT = aUseRef(null);
 
   const flash = aUseCallback((t) => {
@@ -20,7 +26,9 @@ function App() {
     toastT.current = setTimeout(() => setToast(""), 1500);
   }, []);
 
-  const switchMode = (id) => { setMode(id); setGen((g) => g + 1); };
+  const bump = () => setGen((g) => g + 1);
+  const switchMode = (id) => { setMode(id); bump(); };
+  const switchVariant = (id) => { setVariant(id); bump(); };
 
   return (
     <div className="stage">
@@ -29,7 +37,7 @@ function App() {
         <span className="mb-app">Lingobar</span>
         <span className="mb-item">文件</span><span className="mb-item">编辑</span>
         <span className="mb-item">视图</span><span className="mb-item">收藏</span>
-        <div className="mb-right"><span>⌘.</span><span className="mono">周四 14:06</span><span>🔋 86%</span></div>
+        <div className="mb-right"><span>⌘.</span><span className="mono">周五 14:06</span><span>🔋 86%</span></div>
       </div>
 
       {/* mode switcher */}
@@ -42,15 +50,21 @@ function App() {
         ))}
       </div>
 
-      <div className="fu-headline">
-        <h1>追问 · 没懂的地方接着问</h1>
-        <p>选中模式和输入模式共用同一套追问对话：纯文字、流式回答、锚定当前上下文。下面两栏对比两种呈现方式。</p>
+      {/* variant switcher (top-right) */}
+      <div className="vswitch">
+        <span className="vswitch-lbl">呈现</span>
+        {VARIANTS.map((v) => (
+          <button key={v.id} className="vs-opt" data-active={variant === v.id} onClick={() => switchVariant(v.id)} title={v.ds}>
+            {v.name}
+          </button>
+        ))}
       </div>
 
-      {/* side-by-side compare */}
-      <div className="fu-compare" key={gen}>
-        <VariantInline mode={mode} flash={flash} />
-        <VariantWindow mode={mode} flash={flash} />
+      {/* single full-size scene */}
+      <div className="fu-single" data-variant={variant} key={gen}>
+        {variant === "dock"
+          ? <VariantDock mode={mode} flash={flash} />
+          : <VariantWindow mode={mode} flash={flash} />}
       </div>
 
       {toast && (

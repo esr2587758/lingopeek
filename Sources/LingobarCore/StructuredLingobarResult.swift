@@ -5,6 +5,7 @@ public struct StructuredLingobarResult: Codable, Equatable, Sendable {
     public var chips: [String]
     public var moreActionTitle: String
     public var defaultCollectionItem: DefaultCollectionItem
+    public var learningInsights: LingobarLearningInsights
 
     public init(
         title: String,
@@ -12,7 +13,8 @@ public struct StructuredLingobarResult: Codable, Equatable, Sendable {
         rows: [LingobarRow],
         chips: [String],
         moreActionTitle: String,
-        defaultCollectionItem: DefaultCollectionItem
+        defaultCollectionItem: DefaultCollectionItem,
+        learningInsights: LingobarLearningInsights = .empty
     ) {
         self.title = title
         self.summary = summary
@@ -20,6 +22,7 @@ public struct StructuredLingobarResult: Codable, Equatable, Sendable {
         self.chips = chips
         self.moreActionTitle = moreActionTitle
         self.defaultCollectionItem = defaultCollectionItem
+        self.learningInsights = learningInsights
     }
 
     enum CodingKeys: String, CodingKey {
@@ -29,6 +32,10 @@ public struct StructuredLingobarResult: Codable, Equatable, Sendable {
         case chips
         case moreActionTitle
         case defaultCollectionItem
+        case learningInsights
+        case collocations
+        case phrases
+        case grammarPoints
         case variants
         case rewrites
         case examples
@@ -53,6 +60,7 @@ public struct StructuredLingobarResult: Codable, Equatable, Sendable {
         self.moreActionTitle = try container.decodeIfPresent(String.self, forKey: .moreActionTitle) ?? ""
         self.defaultCollectionItem = try container.decodeIfPresent(DefaultCollectionItem.self, forKey: .defaultCollectionItem)
             ?? DefaultCollectionItem(title: self.rows.first?.value ?? self.summary, note: self.summary, type: "文本")
+        self.learningInsights = try Self.decodeLearningInsights(from: container)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -63,6 +71,7 @@ public struct StructuredLingobarResult: Codable, Equatable, Sendable {
         try container.encode(chips, forKey: .chips)
         try container.encode(moreActionTitle, forKey: .moreActionTitle)
         try container.encode(defaultCollectionItem, forKey: .defaultCollectionItem)
+        try container.encode(learningInsights, forKey: .learningInsights)
     }
 
     public func lingobarResult(shortcut: String) -> LingobarResult {
@@ -74,7 +83,19 @@ public struct StructuredLingobarResult: Codable, Equatable, Sendable {
             sideTitle: "后续动作",
             chips: chips,
             moreActionTitle: moreActionTitle,
-            defaultCollectionItem: defaultCollectionItem
+            defaultCollectionItem: defaultCollectionItem,
+            learningInsights: learningInsights
+        )
+    }
+
+    private static func decodeLearningInsights(from container: KeyedDecodingContainer<CodingKeys>) throws -> LingobarLearningInsights {
+        if let insights = try container.decodeIfPresent(LingobarLearningInsights.self, forKey: .learningInsights) {
+            return insights
+        }
+        return LingobarLearningInsights(
+            collocations: try container.decodeIfPresent([GrammarCollocation].self, forKey: .collocations) ?? [],
+            phrases: try container.decodeIfPresent([GrammarPhrase].self, forKey: .phrases) ?? [],
+            grammarPoints: try container.decodeIfPresent([GrammarPoint].self, forKey: .grammarPoints) ?? []
         )
     }
 

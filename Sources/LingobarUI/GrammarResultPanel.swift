@@ -3,6 +3,7 @@ import SwiftUI
 
 public struct GrammarResultPanel: View {
     public var result: GrammarResult
+    public var learningInsightsOverride: LingobarLearningInsights?
     public var onCollect: ((LingobarCollectionFragment) -> Void)?
 
     @State private var selectedView: GrammarVizView
@@ -16,9 +17,11 @@ public struct GrammarResultPanel: View {
         initialView: GrammarVizView = .annotated,
         initialDependencyHoveredChunkID: String? = nil,
         initialDependencyHoveredDependencyID: String? = nil,
+        learningInsightsOverride: LingobarLearningInsights? = nil,
         onCollect: ((LingobarCollectionFragment) -> Void)? = nil
     ) {
         self.result = result
+        self.learningInsightsOverride = learningInsightsOverride
         self.onCollect = onCollect
         self._selectedView = State(initialValue: initialView)
         self.initialDependencyHoveredChunkID = initialDependencyHoveredChunkID
@@ -29,11 +32,18 @@ public struct GrammarResultPanel: View {
         VStack(spacing: 0) {
             sentenceSection
             viewTabs
+            selectedTabContent
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var selectedTabContent: some View {
+        VStack(spacing: 0) {
             visualizationSection
             patternSection
             knowledgeSection
         }
-        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("grammar-tab-content-\(selectedView.rawValue)")
     }
 
     private var sentenceSection: some View {
@@ -350,7 +360,7 @@ public struct GrammarResultPanel: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 0) {
                 columnHead("link", "固定搭配")
-                ForEach(result.collocations) { collocation in
+                ForEach(displayedLearningInsights.collocations) { collocation in
                     grammarCollectable(
                         LingobarCollectionFragment(
                             title: collocation.phrase,
@@ -370,7 +380,7 @@ public struct GrammarResultPanel: View {
                 columnHead("book.closed", "常见词组")
                     .padding(.top, 7)
                 GrammarWrapLayout(spacing: 7, rowSpacing: 7) {
-                    ForEach(result.phrases) { phrase in
+                    ForEach(displayedLearningInsights.phrases) { phrase in
                         grammarCollectable(
                             LingobarCollectionFragment(
                                 title: phrase.en,
@@ -398,7 +408,7 @@ public struct GrammarResultPanel: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 columnHead("lightbulb", "语法点")
-                ForEach(result.grammarPoints) { point in
+                ForEach(displayedLearningInsights.grammarPoints) { point in
                     grammarCollectable(
                         LingobarCollectionFragment(
                             title: point.title,
@@ -415,6 +425,11 @@ public struct GrammarResultPanel: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
+        .accessibilityIdentifier("grammar-tab-learning-\(selectedView.rawValue)")
+    }
+
+    private var displayedLearningInsights: LingobarLearningInsights {
+        learningInsightsOverride ?? result.learningInsights
     }
 
     private func columnHead(_ systemName: String, _ title: String) -> some View {

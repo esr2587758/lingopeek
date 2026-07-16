@@ -10,6 +10,7 @@ public struct LingobarResult: Codable, Equatable, Sendable {
     public var moreActionTitle: String
     public var defaultCollectionTitle: String
     public var defaultCollectionItem: DefaultCollectionItem?
+    public var learningInsights: LingobarLearningInsights
 
     public init(
         title: String,
@@ -20,7 +21,8 @@ public struct LingobarResult: Codable, Equatable, Sendable {
         chips: [String],
         moreActionTitle: String = "",
         defaultCollectionTitle: String = "",
-        defaultCollectionItem: DefaultCollectionItem? = nil
+        defaultCollectionItem: DefaultCollectionItem? = nil,
+        learningInsights: LingobarLearningInsights = .empty
     ) {
         self.title = title
         self.shortcut = shortcut
@@ -31,6 +33,7 @@ public struct LingobarResult: Codable, Equatable, Sendable {
         self.moreActionTitle = moreActionTitle
         self.defaultCollectionTitle = defaultCollectionTitle.isEmpty ? defaultCollectionItem?.title ?? "" : defaultCollectionTitle
         self.defaultCollectionItem = defaultCollectionItem
+        self.learningInsights = learningInsights
     }
 
     enum CodingKeys: String, CodingKey {
@@ -43,6 +46,7 @@ public struct LingobarResult: Codable, Equatable, Sendable {
         case moreActionTitle
         case defaultCollectionTitle
         case defaultCollectionItem
+        case learningInsights
     }
 
     public init(from decoder: Decoder) throws {
@@ -57,8 +61,35 @@ public struct LingobarResult: Codable, Equatable, Sendable {
             chips: try container.decodeIfPresent([String].self, forKey: .chips) ?? [],
             moreActionTitle: try container.decodeIfPresent(String.self, forKey: .moreActionTitle) ?? "",
             defaultCollectionTitle: try container.decodeIfPresent(String.self, forKey: .defaultCollectionTitle) ?? "",
-            defaultCollectionItem: defaultCollectionItem
+            defaultCollectionItem: defaultCollectionItem,
+            learningInsights: try container.decodeIfPresent(LingobarLearningInsights.self, forKey: .learningInsights) ?? .empty
         )
+    }
+}
+
+public struct LingobarLearningInsights: Codable, Equatable, Sendable {
+    public static let empty = LingobarLearningInsights(
+        collocations: [],
+        phrases: [],
+        grammarPoints: []
+    )
+
+    public var collocations: [GrammarCollocation]
+    public var phrases: [GrammarPhrase]
+    public var grammarPoints: [GrammarPoint]
+
+    public init(
+        collocations: [GrammarCollocation],
+        phrases: [GrammarPhrase],
+        grammarPoints: [GrammarPoint]
+    ) {
+        self.collocations = collocations
+        self.phrases = phrases
+        self.grammarPoints = grammarPoints
+    }
+
+    public var isEmpty: Bool {
+        collocations.isEmpty && phrases.isEmpty && grammarPoints.isEmpty
     }
 }
 

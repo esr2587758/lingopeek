@@ -459,8 +459,29 @@ public struct GrammarResult: Codable, Equatable, Sendable {
             sideTitle: "语法解析",
             chips: [pattern.en] + collocations.map(\.phrase),
             moreActionTitle: LanguageAction.grammar.moreActionTitle,
-            defaultCollectionItem: defaultCollectionItem
+            defaultCollectionItem: defaultCollectionItem,
+            learningInsights: LingobarLearningInsights(
+                collocations: collocations,
+                phrases: phrases,
+                grammarPoints: grammarPoints
+            )
         )
+    }
+
+    public var learningInsights: LingobarLearningInsights {
+        LingobarLearningInsights(
+            collocations: collocations,
+            phrases: phrases,
+            grammarPoints: grammarPoints
+        )
+    }
+
+    public func applyingLearningInsights(_ insights: LingobarLearningInsights) -> GrammarResult {
+        var copy = self
+        copy.collocations = insights.collocations
+        copy.phrases = insights.phrases
+        copy.grammarPoints = insights.grammarPoints
+        return copy
     }
 
     enum CodingKeys: String, CodingKey {

@@ -68,6 +68,12 @@ func checkLocalLanguageEngine() throws {
     try check(engine.result(for: .rewrite, text: "我觉得这个方案风险有点高").moreActionTitle == "更多版本", "rewrite more action should be contextual")
     try check(engine.result(for: .examples, text: "call into question").moreActionTitle == "更多例句", "examples more action should be contextual")
     try check(engine.result(for: .pronounce, text: "consolidate").moreActionTitle == "慢速播放", "pronunciation more action should be contextual")
+    for action in [LanguageAction.translate, .grammar, .rewrite, .examples, .pronounce] {
+        let result = engine.result(for: action, text: "The findings call into question old assumptions.")
+        try check(!result.learningInsights.collocations.isEmpty, "\(action.title) should include fixed collocations")
+        try check(!result.learningInsights.phrases.isEmpty, "\(action.title) should include common phrases")
+        try check(!result.learningInsights.grammarPoints.isEmpty, "\(action.title) should include grammar points")
+    }
     try check(translate.defaultCollectionTitle.contains("质疑"), "translation should collect a reusable translation")
     try check(engine.result(for: .grammar, text: "any sentence can become a small object").defaultCollectionTitle.contains("sth."), "grammar should collect its reusable pattern")
     try check(engine.result(for: .rewrite, text: "选中即理解，输入即改写").defaultCollectionTitle.contains("These results"), "rewrite should collect its primary rewrite")
@@ -405,6 +411,23 @@ func checkStructuredAIResultParsing() throws {
         "title": "call into question",
         "note": "对……提出质疑",
         "type": "短语"
+      },
+      "learningInsights": {
+        "collocations": [
+          {
+            "phrase": "call into question",
+            "pos": "v. phr.（动词短语）",
+            "zh": "对……提出质疑",
+            "note": "用于证据挑战旧观点",
+            "example": "The findings call into question old assumptions."
+          }
+        ],
+        "phrases": [
+          { "en": "long-held assumptions", "zh": "长期假设" }
+        ],
+        "grammarPoints": [
+          { "tag": "搭配", "title": "call into question 后接宾语", "body": "后面接被质疑的对象。" }
+        ]
       }
     }
     """.data(using: .utf8)!
@@ -418,11 +441,15 @@ func checkStructuredAIResultParsing() throws {
     try check(result.moreActionTitle == "解释更多", "structured AI result should keep contextual more action")
     try check(result.defaultCollectionItem?.title == "call into question", "structured AI result should keep default collection item")
     try check(result.defaultCollectionTitle == "call into question", "structured AI result should bridge default collection title")
+    try check(result.learningInsights.collocations.first?.phrase == "call into question", "structured AI result should keep learning collocations")
+    try check(result.learningInsights.phrases.first?.en == "long-held assumptions", "structured AI result should keep learning phrases")
+    try check(result.learningInsights.grammarPoints.first?.title.contains("call into question") == true, "structured AI result should keep grammar points")
 
     let sparse = #"{"title":"翻译"}"#.data(using: .utf8)!
     let sparseStructured = try JSONDecoder().decode(StructuredLingobarResult.self, from: sparse)
     try check(sparseStructured.summary == "", "sparse structured AI result should default missing summary")
     try check(sparseStructured.rows == [LingobarRow("结果", "")], "sparse structured AI result should default missing rows")
+    try check(sparseStructured.learningInsights.isEmpty, "sparse structured AI result should default missing learning insights")
 
     let rewrite = """
     {
@@ -1673,6 +1700,284 @@ func checkGrammarAbbreviationDisplaySourceGate() throws {
     )
 }
 
+func checkGrammarTabLearningSectionsSourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let uiSource = try String(
+        contentsOf: root.appending(path: "Sources/LingobarUI/GrammarResultPanel.swift"),
+        encoding: .utf8
+    )
+    let viewModelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift"),
+        encoding: .utf8
+    )
+
+    let body = try sourceRegion(uiSource, from: "public var body: some View", to: "private var selectedTabContent")
+    try check(body.contains("selectedTabContent"), "grammar panel body should route selected grammar tabs through a shared tab content container")
+    try check(
+        body.doesNotContainAny(["patternSection", "knowledgeSection"]),
+        "pattern and knowledge sections should belong to selected tab content, not sit beside the tab container"
+    )
+
+    let tabContent = try sourceRegion(uiSource, from: "private var selectedTabContent", to: "private var sentenceSection")
+    try check(
+        tabContent.contains("visualizationSection") &&
+            tabContent.contains("patternSection") &&
+            tabContent.contains("knowledgeSection"),
+        "each grammar tab should include visualization, reusable pattern, and learning sections"
+    )
+    try check(
+        tabContent.contains("grammar-tab-content-\\(selectedView.rawValue)"),
+        "selected grammar tab content should expose a tab-specific accessibility identifier"
+    )
+
+    let knowledgeSection = try sourceRegion(uiSource, from: "private var knowledgeSection", to: "private func columnHead")
+    try check(
+        knowledgeSection.contains("固定搭配") &&
+            knowledgeSection.contains("常见词组") &&
+            knowledgeSection.contains("语法点"),
+        "grammar tab learning section should keep collocations, phrases, and grammar points together"
+    )
+    try check(
+        knowledgeSection.contains("grammar-tab-learning-\\(selectedView.rawValue)"),
+        "grammar tab learning section should be associated with the active grammar tab"
+    )
+
+    let grammarKnowledgePrompt = try sourceRegion(viewModelSource, from: "private static func grammarKnowledgePrompt", to: "private extension KeyedDecodingContainer")
+    try check(
+        grammarKnowledgePrompt.contains("shared below every grammar visualization tab") &&
+            grammarKnowledgePrompt.contains("annotated, dependency, tree, trunk, tense, and word-order"),
+        "grammar knowledge prompt should request learning points that work across every grammar tab"
+    )
+}
+
+func checkActionTabLearningInsightsSourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let resultSource = try String(
+        contentsOf: root.appending(path: "Sources/LingobarCore/LingobarResult.swift"),
+        encoding: .utf8
+    )
+    let structuredSource = try String(
+        contentsOf: root.appending(path: "Sources/LingobarCore/StructuredLingobarResult.swift"),
+        encoding: .utf8
+    )
+    let grammarSource = try String(
+        contentsOf: root.appending(path: "Sources/LingobarCore/GrammarResult.swift"),
+        encoding: .utf8
+    )
+    let rootViewSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarRootView.swift"),
+        encoding: .utf8
+    )
+    let grammarPanelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingobarUI/GrammarResultPanel.swift"),
+        encoding: .utf8
+    )
+    let viewModelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift"),
+        encoding: .utf8
+    )
+
+    try check(
+        resultSource.contains("public struct LingobarLearningInsights") &&
+            resultSource.contains("public var learningInsights: LingobarLearningInsights"),
+        "generic Lingobar results should carry learning insights, not only grammar results"
+    )
+    try check(
+        grammarSource.contains("public var learningInsights: LingobarLearningInsights") &&
+            grammarSource.contains("func applyingLearningInsights"),
+        "grammar results should expose and accept the shared learning-insight block"
+    )
+    try check(
+        structuredSource.contains("case learningInsights") &&
+            structuredSource.contains("case collocations") &&
+            structuredSource.contains("decodeLearningInsights"),
+        "structured AI results should decode collocations, phrases, and grammar points"
+    )
+
+    let schemaPrompt = try sourceRegion(viewModelSource, from: "let schema = ", to: "return switch action")
+    try check(
+        schemaPrompt.contains("Do not include learningInsights here") &&
+            schemaPrompt.contains("shared from the cached grammar result") &&
+            schemaPrompt.contains("every action tab shows the same learning sections"),
+        "generic action prompts should not request per-tab learning insights"
+    )
+
+    let panelBodyContent = try sourceRegion(rootViewSource, from: "private var panelBodyContent", to: "private var translationVariantRows")
+    try check(
+        panelBodyContent.contains("shouldShowLearningInsights") &&
+            panelBodyContent.contains("learningInsightsSection(viewModel.visibleLearningInsights)"),
+        "generic action panels should render shared grammar-derived learning insights below normal results"
+    )
+    let grammarResultPanel = try sourceRegion(rootViewSource, from: "private func grammarResultPanel", to: "private func genericResultPanel")
+    try check(
+        grammarResultPanel.contains("learningInsightsOverride: viewModel.visibleLearningInsights,"),
+        "grammar action panels should render the same shared learning insights as every other action tab, even while the shared request is still empty"
+    )
+    try check(
+        grammarPanelSource.contains("learningInsightsOverride: LingobarLearningInsights?") &&
+            grammarPanelSource.contains("displayedLearningInsights") &&
+            grammarPanelSource.contains("ForEach(displayedLearningInsights.collocations)") &&
+            grammarPanelSource.contains("ForEach(displayedLearningInsights.phrases)") &&
+            grammarPanelSource.contains("ForEach(displayedLearningInsights.grammarPoints)"),
+        "grammar result panel should allow the shared learning-insight source to replace per-result learning content"
+    )
+
+    let learningSection = try sourceRegion(rootViewSource, from: "private func learningInsightsSection", to: "private func learningColumn")
+    try check(
+        learningSection.contains("固定搭配") &&
+            learningSection.contains("常见词组") &&
+            learningSection.contains("语法点") &&
+            learningSection.contains("action-learning-insights-\\(viewModel.action.rawValue)") &&
+            learningSection.contains("rows: insights.collocations.map") &&
+            learningSection.contains("rows: insights.phrases.map") &&
+            learningSection.contains("rows: insights.grammarPoints.map") &&
+            !learningSection.contains(".prefix("),
+        "generic action learning section should expose the full grammar-derived learning categories per action"
+    )
+
+    let localEngineSource = try String(
+        contentsOf: root.appending(path: "Sources/LingobarCore/LocalLanguageEngine.swift"),
+        encoding: .utf8
+    )
+    try check(
+        localEngineSource.contains("defaultLearningInsights") &&
+            countOccurrences(of: "learningInsights: Self.defaultLearningInsights", in: localEngineSource) >= 5,
+        "local language engine fixtures should include learning insights across language actions"
+    )
+
+    try check(
+        viewModelSource.contains("@Published private(set) var sharedLearningInsights") &&
+            viewModelSource.contains("var visibleLearningInsights: LingobarLearningInsights") &&
+            viewModelSource.contains("grammarRequests: [GrammarRequestKey: Task<GrammarResult, Error>]") &&
+            !viewModelSource.contains("learningInsightRequests") &&
+            !viewModelSource.contains("decodeGrammarLearningInsights"),
+        "view model should expose one shared learning-insight source backed by the full grammar cache"
+    )
+    let runAI = try sourceRegion(viewModelSource, from: "private func runAIIfAvailable", to: "private func completeGrammarSpine")
+    try check(
+        runAI.contains("if action != .grammar") &&
+            runAI.contains("warmSharedLearningInsightsIfAvailable(for: text, aiClient: aiClient)") &&
+            runAI.contains("grammarRequests[grammarKey]"),
+        "non-grammar actions should warm the full grammar task while grammar actions own their visible grammar request"
+    )
+    let completion = try sourceRegion(viewModelSource, from: "private func completeAIRequest", to: "private func failAIRequest")
+    try check(
+        completion.contains("setSharedLearningInsights(from: grammar, key: grammarCacheKey)") &&
+            completion.contains("rememberGrammarResult(grammar, for: grammarCacheKey)") &&
+            !completion.contains("learningInsightsCache[grammarCacheKey]") &&
+            !completion.contains("grammar.applyingLearningInsights(cachedInsights)") &&
+            !completion.contains("setSharedLearningInsights(from: structured"),
+        "grammar completions should make the full grammar result canonical for cross-tab learning insights"
+    )
+    let learningCache = try sourceRegion(viewModelSource, from: "private func warmSharedLearningInsightsIfAvailable", to: "private func recordCompletedHistory")
+    try check(
+        learningCache.contains("grammarResultCache[grammarKey]") &&
+            learningCache.contains("grammarRequests[grammarKey] ?? Task.detached") &&
+            learningCache.contains("LingobarAICompletionDecoder.decodeGrammar") &&
+            learningCache.contains("rememberGrammarResult(grammar, for: grammarKey)") &&
+            learningCache.contains("setSharedLearningInsights(from: grammar, key: grammarKey)") &&
+            learningCache.contains("updateCurrentGrammarResultLearningInsights") &&
+            learningCache.contains("resetSharedLearningInsights") &&
+            !learningCache.contains("learningInsightsCache") &&
+            !learningCache.contains("decodeGrammarLearningInsights"),
+        "shared learning insights should be populated from the cached full grammar request and applied to grammar snapshots"
+    )
+    let grammarCache = try sourceRegion(viewModelSource, from: "private func rememberGrammarResult", to: "private func setSharedLearningInsights(from grammar")
+    try check(
+        grammarCache.contains("setSharedLearningInsights(from: grammar, key: key)") &&
+            !grammarCache.contains("rememberLearningInsights"),
+        "full grammar results should be the canonical cross-tab learning cache"
+    )
+}
+
+func checkFollowUpThreadMemorySourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let viewModelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift"),
+        encoding: .utf8
+    )
+    let rootViewSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarRootView.swift"),
+        encoding: .utf8
+    )
+
+    try check(
+        viewModelSource.contains("struct LingobarFollowUpExchange") &&
+            viewModelSource.contains("@Published var followUpThread: [LingobarFollowUpExchange]"),
+        "follow-up pane should keep a thread of exchanges instead of a single question/answer pair"
+    )
+
+    let contextSnapshot = try sourceRegion(viewModelSource, from: "private struct LingobarFollowUpContextSnapshot", to: "struct LingobarFollowUpExchange")
+    try check(
+        contextSnapshot.contains("conversation: [LingobarFollowUpConversationTurn]"),
+        "follow-up context snapshot should carry previous conversation turns"
+    )
+
+    let followUpPrompt = try sourceRegion(viewModelSource, from: "private static func systemPrompt(context:", to: "private struct GrammarRequestKey")
+    try check(
+        followUpPrompt.contains("Use previous follow-up turns as conversation memory") &&
+            followUpPrompt.contains("Previous follow-up turns:"),
+        "follow-up prompt should include previous turns as conversational memory"
+    )
+
+    let submitFollowUp = try sourceRegion(viewModelSource, from: "func submitFollowUp", to: "func copyFollowUpAnswer")
+    try check(
+        submitFollowUp.contains("let context = followUpContextSnapshot()") &&
+            submitFollowUp.contains("appendFollowUpExchange") &&
+            submitFollowUp.contains("activeFollowUpExchangeID"),
+        "follow-up submit should capture prior context, append a new exchange, and track the active exchange"
+    )
+
+    let togglePane = try sourceRegion(viewModelSource, from: "func toggleFollowUpPane", to: "func closeFollowUp")
+    try check(
+        !togglePane.contains("resetFollowUpThread()") &&
+            togglePane.contains("if !hasFollowUpExchange"),
+        "opening the follow-up pane should preserve the current session thread"
+    )
+    let closePane = try sourceRegion(viewModelSource, from: "func closeFollowUp", to: "func toggleFollowUpContextAnchor")
+    try check(
+        !closePane.contains("resetFollowUpThread()"),
+        "closing the follow-up pane should hide it without clearing the current session thread"
+    )
+    let toggleAnchor = try sourceRegion(viewModelSource, from: "func toggleFollowUpContextAnchor", to: "func submitFollowUp")
+    try check(
+        !toggleAnchor.contains("resetFollowUpThread()"),
+        "toggling follow-up context anchoring should not erase the current session thread"
+    )
+    let performAction = try sourceRegion(viewModelSource, from: "func perform", to: "func submitInput")
+    try check(
+        !performAction.contains("resetFollowUpThread()"),
+        "switching language actions should preserve the current Lingobar session thread"
+    )
+
+    let followUpHelpers = try sourceRegion(viewModelSource, from: "private func resetFollowUpSession", to: "private static func followUpRevealChunks")
+    try check(
+        followUpHelpers.contains("followUpThread = []") &&
+            followUpHelpers.contains("resetFollowUpSession") &&
+            followUpHelpers.contains("closeFollowUp(sendsLayoutChange: sendsLayoutChange)") &&
+            followUpHelpers.contains("followUpConversationContext()") &&
+            followUpHelpers.contains(".suffix(6)") &&
+            followUpHelpers.contains("updateFollowUpExchange"),
+        "follow-up helpers should reset, summarize, and update the multi-turn thread"
+    )
+
+    let followUpThreadView = try sourceRegion(rootViewSource, from: "private var followUpThread", to: "private var followUpEmptyState")
+    try check(
+        followUpThreadView.contains("ForEach(viewModel.followUpThread)") &&
+            followUpThreadView.contains("followUpExchange(exchange)"),
+        "follow-up pane should render every exchange in the thread"
+    )
+
+    let followUpMessageViews = try sourceRegion(rootViewSource, from: "private func followUpExchange", to: "private var followUpComposer")
+    try check(
+        followUpMessageViews.contains("exchange.question") &&
+            followUpMessageViews.contains("exchange.answer") &&
+            followUpMessageViews.contains("copyFollowUpAnswer(exchangeID: exchange.id)") &&
+            followUpMessageViews.contains("collectFollowUpAnswer(exchangeID: exchange.id)"),
+        "follow-up message controls should operate on the selected exchange, not only the latest answer"
+    )
+}
+
 func sourceRegion(_ source: String, from start: String, to end: String) throws -> String {
     let startRange = try requiredRange(in: source, needle: start, message: "source should contain \(start)")
     guard let endRange = source[startRange.upperBound...].range(of: end) else {
@@ -2202,6 +2507,9 @@ do {
     try checkLingobarViewModelHistoryRecordingSourceGate()
     try checkGrammarStagedDecodingRecoverySourceGate()
     try checkGrammarAbbreviationDisplaySourceGate()
+    try checkGrammarTabLearningSectionsSourceGate()
+    try checkActionTabLearningInsightsSourceGate()
+    try checkFollowUpThreadMemorySourceGate()
     try checkSelectionPermissionSourceGate()
     try checkPhraseStore()
     try checkLingobarHubShellSourceGate()

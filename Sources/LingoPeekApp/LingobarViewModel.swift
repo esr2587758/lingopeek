@@ -52,6 +52,34 @@ private struct LingobarFollowUpContextSnapshot: Sendable {
     var resultTitle: String
     var resultSummary: String
     var resultRows: [LingobarRow]
+    var conversation: [LingobarFollowUpConversationTurn]
+}
+
+struct LingobarFollowUpExchange: Identifiable, Equatable, Sendable {
+    var id: UUID
+    var question: String
+    var answer: String
+    var key: LingobarFollowUpKey?
+    var isLoading: Bool
+
+    init(
+        id: UUID = UUID(),
+        question: String,
+        answer: String = "",
+        key: LingobarFollowUpKey? = nil,
+        isLoading: Bool = false
+    ) {
+        self.id = id
+        self.question = question
+        self.answer = answer
+        self.key = key
+        self.isLoading = isLoading
+    }
+}
+
+private struct LingobarFollowUpConversationTurn: Sendable {
+    var question: String
+    var answer: String
 }
 
 private enum LingobarFollowUpCompletionDecoder {
@@ -78,6 +106,7 @@ private enum LingobarFollowUpCompletionDecoder {
         You are Lingobar's follow-up chatbot for quick English-learning questions.
         The UI language is Simplified Chinese. Answer the user's follow-up directly and concisely.
         \(context.isAnchored ? "Use the provided Lingobar context as the main evidence. Do not invent a new source sentence." : "The user has turned off anchoring, so answer as a standalone quick question.")
+        Use previous follow-up turns as conversation memory when the latest question refers to prior answers, wording, examples, or explanations.
         Keep the answer practical: 2-5 short paragraphs or bullets, no long essay. Do not use Markdown formatting markers such as ** or backticks.
         Return ONLY JSON with this schema:
         {"answer":"简体中文回答，可少量包含英文术语","key":{"term":"one useful English expression, or empty string","zh":"简短中文释义"}}
@@ -90,6 +119,17 @@ private enum LingobarFollowUpCompletionDecoder {
             .prefix(6)
             .map { "- \($0.label): \($0.value)" }
             .joined(separator: "\n")
+        let conversationText = context.conversation
+            .suffix(6)
+            .enumerated()
+            .map { index, turn in
+                """
+                Turn \(index + 1)
+                User: \(turn.question)
+                Lingobar: \(turn.answer)
+                """
+            }
+            .joined(separator: "\n\n")
         return """
         Follow-up question:
         \(question)
@@ -106,6 +146,9 @@ private enum LingobarFollowUpCompletionDecoder {
 
         Current result rows:
         \(rowText.isEmpty ? "(none)" : rowText)
+
+        Previous follow-up turns:
+        \(conversationText.isEmpty ? "(none)" : conversationText)
         """
     }
 }
@@ -471,6 +514,7 @@ private enum LingobarAICompletionDecoder {
         \(canonical)
 
         Return keys: collocations, phrases, grammarPoints.
+        These items are shared below every grammar visualization tab; choose sentence-specific learning points that help in annotated, dependency, tree, trunk, tense, and word-order views.
         collocations: 2-4 items with phrase, pos, zh, note, example.
         collocations.pos must not be a bare abbreviation. Use Chinese or abbreviation plus Chinese, for example "v. phr.（动词短语）", "prep（介词）", or "adv（副词/状语）".
         phrases: 3-6 items with en, zh.
@@ -713,10 +757,12 @@ final class LingobarViewModel: ObservableObject {
     @Published var isFollowUpOpen = false
     @Published var isFollowUpContextAnchored = true
     @Published var followUpDraft = ""
+    @Published var followUpThread: [LingobarFollowUpExchange] = []
     @Published var followUpQuestion = ""
     @Published var followUpAnswer = ""
     @Published var followUpKey: LingobarFollowUpKey?
     @Published var isFollowUpLoading = false
+    @Published private(set) var sharedLearningInsights: LingobarLearningInsights = .empty
     var onLayoutChanged: (() -> Void)?
 
     @Published var actions: [LanguageAction] = AppSettings.actionOrder
@@ -729,7 +775,9 @@ final class LingobarViewModel: ObservableObject {
     private var grammarCacheKeys: [GrammarRequestKey] = []
     private var grammarRequests: [GrammarRequestKey: Task<GrammarResult, Error>] = [:]
     private let grammarCacheLimit = 6
+    private var sharedLearningInsightsKey: GrammarRequestKey?
     private var activeFollowUpRequestID = UUID()
+    private var activeFollowUpExchangeID: UUID?
     private var followUpRevealTask: Task<Void, Never>?
 
     init(store: PhraseStore = .defaultStore(), historyStore: LingobarHistoryStore = .defaultStore()) {
@@ -747,7 +795,8 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
-        closeFollowUp(sendsLayoutChange: false)
+        resetSharedLearningInsights()
+        resetFollowUpSession(sendsLayoutChange: false)
 
         if let selection, !selection.isEmpty {
             mode = .selection
@@ -778,7 +827,8 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
-        closeFollowUp(sendsLayoutChange: false)
+        resetSharedLearningInsights()
+        resetFollowUpSession(sendsLayoutChange: false)
         let grammar = GrammarResult.fixture(id: AppSettings.grammarFixtureID) ?? .mockupFixture
         mode = .selection
         selectionSource = sourceAppName
@@ -786,6 +836,7 @@ final class LingobarViewModel: ObservableObject {
         action = .grammar
         grammarResult = grammar
         result = grammar.lingobarResult(shortcut: shortcut(for: .grammar))
+        setSharedLearningInsights(from: grammar)
         showsResult = true
         isLoading = false
         loadingStartedAt = nil
@@ -798,7 +849,8 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
-        closeFollowUp(sendsLayoutChange: false)
+        resetSharedLearningInsights()
+        resetFollowUpSession(sendsLayoutChange: false)
         mode = .setup
         self.setupGateStatus = setupGateStatus
         showsResult = false
@@ -822,7 +874,6 @@ final class LingobarViewModel: ObservableObject {
 
         recentCollectedPhraseID = nil
         if let storedSnapshot = activeResultSnapshots[newAction.rawValue] {
-            resetFollowUpThread()
             applyStoredSnapshot(storedSnapshot, action: newAction, status: "已从快照打开")
             return
         }
@@ -830,7 +881,6 @@ final class LingobarViewModel: ObservableObject {
         action = newAction
         grammarResult = nil
         currentHistoryRecord = nil
-        resetFollowUpThread()
 
         switch newAction {
         case .copy:
@@ -858,6 +908,7 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         grammarResult = nil
         recentCollectedPhraseID = nil
+        resetSharedLearningInsights()
         resetFollowUpThread()
         perform(.rewrite)
     }
@@ -885,8 +936,12 @@ final class LingobarViewModel: ObservableObject {
             !isLoading
     }
 
+    var visibleLearningInsights: LingobarLearningInsights {
+        sharedLearningInsights
+    }
+
     var hasFollowUpExchange: Bool {
-        !followUpQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !followUpThread.isEmpty
     }
 
     var followUpContextKind: String {
@@ -955,8 +1010,9 @@ final class LingobarViewModel: ObservableObject {
             closeFollowUp()
         } else {
             isFollowUpOpen = true
-            isFollowUpContextAnchored = true
-            resetFollowUpThread()
+            if !hasFollowUpExchange {
+                isFollowUpContextAnchored = true
+            }
             status = "追问已打开"
             onLayoutChanged?()
         }
@@ -965,7 +1021,6 @@ final class LingobarViewModel: ObservableObject {
     func closeFollowUp(sendsLayoutChange: Bool = true) {
         let wasOpen = isFollowUpOpen
         isFollowUpOpen = false
-        resetFollowUpThread()
         if wasOpen, sendsLayoutChange {
             onLayoutChanged?()
         }
@@ -973,7 +1028,6 @@ final class LingobarViewModel: ObservableObject {
 
     func toggleFollowUpContextAnchor() {
         isFollowUpContextAnchored.toggle()
-        resetFollowUpThread()
         status = isFollowUpContextAnchored ? "已锚定上下文" : "已取消锚定"
     }
 
@@ -983,29 +1037,40 @@ final class LingobarViewModel: ObservableObject {
             status = "请输入追问"
             return
         }
+        guard !isFollowUpLoading else {
+            status = "追问生成中"
+            return
+        }
         guard canUseFollowUp else {
             status = "暂无可追问内容"
             return
         }
         guard let aiClient = AppSettings.makeAIClient() else {
-            followUpQuestion = question
-            followUpAnswer = "请先完成 AI 设置后再追问。"
-            followUpKey = nil
+            appendFollowUpExchange(
+                LingobarFollowUpExchange(
+                    question: question,
+                    answer: "请先完成 AI 设置后再追问。"
+                )
+            )
             followUpDraft = ""
             isFollowUpLoading = false
             status = "需要 AI 设置"
             return
         }
 
-        followUpQuestion = question
-        followUpAnswer = ""
-        followUpKey = nil
+        let context = followUpContextSnapshot()
+        let exchangeID = appendFollowUpExchange(
+            LingobarFollowUpExchange(
+                question: question,
+                isLoading: true
+            )
+        )
         followUpDraft = ""
         isFollowUpLoading = true
         status = "追问生成中"
         let requestID = UUID()
         activeFollowUpRequestID = requestID
-        let context = followUpContextSnapshot()
+        activeFollowUpExchangeID = exchangeID
 
         let completionTask = Task.detached(priority: .userInitiated) {
             try await LingobarFollowUpCompletionDecoder.decode(
@@ -1024,8 +1089,9 @@ final class LingobarViewModel: ObservableObject {
         }
     }
 
-    func copyFollowUpAnswer() {
-        let answer = followUpAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+    func copyFollowUpAnswer(exchangeID: UUID? = nil) {
+        let exchange = followUpExchange(for: exchangeID)
+        let answer = (exchange?.answer ?? followUpAnswer).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !answer.isEmpty else {
             return
         }
@@ -1036,18 +1102,21 @@ final class LingobarViewModel: ObservableObject {
     }
 
     @discardableResult
-    func collectFollowUpAnswer() -> UUID? {
-        let answer = followUpAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+    func collectFollowUpAnswer(exchangeID: UUID? = nil) -> UUID? {
+        let exchange = followUpExchange(for: exchangeID)
+        let answer = (exchange?.answer ?? followUpAnswer).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !answer.isEmpty else {
             return nil
         }
+        let question = exchange?.question ?? followUpQuestion
+        let key = exchange?.key ?? followUpKey
         return collectFragment(
             LingobarCollectionFragment(
-                title: followUpKey?.term ?? String(answer.prefix(42)),
+                title: key?.term ?? String(answer.prefix(42)),
                 note: "追问回答",
-                type: followUpKey == nil ? "文本" : "短语",
+                type: key == nil ? "文本" : "短语",
                 rows: [
-                    LingobarRow("问题", followUpQuestion),
+                    LingobarRow("问题", question),
                     LingobarRow("回答", answer)
                 ]
             )
@@ -1184,7 +1253,8 @@ final class LingobarViewModel: ObservableObject {
     ) {
         actions = AppSettings.actionOrder
         activeAIRequestID = UUID()
-        closeFollowUp(sendsLayoutChange: false)
+        resetSharedLearningInsights()
+        resetFollowUpSession(sendsLayoutChange: false)
         mode = .selection
         selectionSource = sourceAppName.isEmpty ? "Lingobar" : sourceAppName
         selectedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1198,6 +1268,9 @@ final class LingobarViewModel: ObservableObject {
         activeResultSnapshots = snapshots
         recentCollectedPhraseID = nil
         grammarResult = action == .grammar ? activeResultSnapshots[action.rawValue]?.grammarResult : nil
+        if let grammarSnapshot = grammarSnapshot ?? activeResultSnapshots[LanguageAction.grammar.rawValue]?.grammarResult {
+            setSharedLearningInsights(from: grammarSnapshot)
+        }
         result = resultSnapshot
         showsResult = true
         isLoading = false
@@ -1253,11 +1326,18 @@ final class LingobarViewModel: ObservableObject {
         mode == .input ? "输入模式" : selectionSource
     }
 
+    private func resetFollowUpSession(sendsLayoutChange: Bool = true) {
+        closeFollowUp(sendsLayoutChange: sendsLayoutChange)
+        resetFollowUpThread()
+    }
+
     private func resetFollowUpThread() {
         followUpRevealTask?.cancel()
         followUpRevealTask = nil
         activeFollowUpRequestID = UUID()
+        activeFollowUpExchangeID = nil
         followUpDraft = ""
+        followUpThread = []
         followUpQuestion = ""
         followUpAnswer = ""
         followUpKey = nil
@@ -1272,30 +1352,40 @@ final class LingobarViewModel: ObservableObject {
             sourceText: activeText,
             resultTitle: result.title,
             resultSummary: result.summary,
-            resultRows: result.rows
+            resultRows: result.rows,
+            conversation: followUpConversationContext()
         )
     }
 
     private func completeFollowUp(_ completion: LingobarFollowUpCompletion, requestID: UUID) {
-        guard activeFollowUpRequestID == requestID else {
+        guard activeFollowUpRequestID == requestID,
+              let exchangeID = activeFollowUpExchangeID else {
             return
         }
         followUpRevealTask?.cancel()
-        followUpAnswer = ""
-        followUpKey = nil
+        updateFollowUpExchange(id: exchangeID) { exchange in
+            exchange.answer = ""
+            exchange.key = nil
+            exchange.isLoading = true
+        }
         let answer = completion.answer.trimmingCharacters(in: .whitespacesAndNewlines)
         followUpRevealTask = Task { @MainActor in
             for chunk in Self.followUpRevealChunks(from: answer) {
                 guard activeFollowUpRequestID == requestID, !Task.isCancelled else {
                     return
                 }
-                followUpAnswer += chunk
+                updateFollowUpExchange(id: exchangeID) { exchange in
+                    exchange.answer += chunk
+                }
                 try? await Task.sleep(nanoseconds: 18_000_000)
             }
             guard activeFollowUpRequestID == requestID, !Task.isCancelled else {
                 return
             }
-            followUpKey = completion.key
+            updateFollowUpExchange(id: exchangeID) { exchange in
+                exchange.key = completion.key
+                exchange.isLoading = false
+            }
             isFollowUpLoading = false
             status = "追问完成"
             followUpRevealTask = nil
@@ -1303,17 +1393,68 @@ final class LingobarViewModel: ObservableObject {
     }
 
     private func failFollowUp(_ error: Error, requestID: UUID) {
-        guard activeFollowUpRequestID == requestID else {
+        guard activeFollowUpRequestID == requestID,
+              let exchangeID = activeFollowUpExchangeID else {
             return
         }
         followUpRevealTask?.cancel()
         followUpRevealTask = nil
-        followUpAnswer = error is DecodingError
-            ? "AI 返回的追问格式不符合预期，请重试。"
-            : userFacingAIErrorMessage(error)
-        followUpKey = nil
+        updateFollowUpExchange(id: exchangeID) { exchange in
+            exchange.answer = error is DecodingError
+                ? "AI 返回的追问格式不符合预期，请重试。"
+                : userFacingAIErrorMessage(error)
+            exchange.key = nil
+            exchange.isLoading = false
+        }
         isFollowUpLoading = false
         status = "追问失败"
+    }
+
+    @discardableResult
+    private func appendFollowUpExchange(_ exchange: LingobarFollowUpExchange) -> UUID {
+        followUpThread.append(exchange)
+        syncLatestFollowUpState(from: exchange)
+        return exchange.id
+    }
+
+    private func updateFollowUpExchange(
+        id: UUID,
+        _ transform: (inout LingobarFollowUpExchange) -> Void
+    ) {
+        guard let index = followUpThread.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        var exchange = followUpThread[index]
+        transform(&exchange)
+        followUpThread[index] = exchange
+        if followUpThread.last?.id == id {
+            syncLatestFollowUpState(from: exchange)
+        }
+    }
+
+    private func syncLatestFollowUpState(from exchange: LingobarFollowUpExchange) {
+        followUpQuestion = exchange.question
+        followUpAnswer = exchange.answer
+        followUpKey = exchange.key
+    }
+
+    private func followUpExchange(for id: UUID?) -> LingobarFollowUpExchange? {
+        if let id {
+            return followUpThread.first { $0.id == id }
+        }
+        return followUpThread.last
+    }
+
+    private func followUpConversationContext() -> [LingobarFollowUpConversationTurn] {
+        followUpThread
+            .filter { !$0.isLoading && !$0.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .suffix(6)
+            .map {
+                LingobarFollowUpConversationTurn(
+                    question: $0.question,
+                    answer: $0.answer
+                )
+            }
     }
 
     private static func followUpRevealChunks(from answer: String) -> [String] {
@@ -1345,6 +1486,9 @@ final class LingobarViewModel: ObservableObject {
         let historySourceAppName = mode == .input ? "输入模式" : selectionSource
         let requestID = UUID()
         activeAIRequestID = requestID
+        if action != .grammar {
+            warmSharedLearningInsightsIfAvailable(for: text, aiClient: aiClient)
+        }
 
         let grammarKey = action == .grammar
             ? grammarRequestKey(for: text, configuration: aiClient.configuration)
@@ -1393,7 +1537,7 @@ final class LingobarViewModel: ObservableObject {
                         requestID: requestID,
                         historySourceText: historySourceText,
                         historySourceAppName: historySourceAppName,
-                        grammarCacheKey: nil
+                        grammarCacheKey: grammarKey
                     )
                 } catch {
                     grammarRequests[grammarKey] = nil
@@ -1476,10 +1620,12 @@ final class LingobarViewModel: ObservableObject {
 
         var completedGrammarResult: GrammarResult?
         switch decoded {
-        case .grammar(let grammar):
+        case .grammar(let decodedGrammar):
+            let grammar = decodedGrammar
             grammarResult = grammar
             completedGrammarResult = grammar
             result = grammar.lingobarResult(shortcut: shortcut(for: action))
+            setSharedLearningInsights(from: grammar, key: grammarCacheKey)
             if let grammarCacheKey {
                 rememberGrammarResult(grammar, for: grammarCacheKey)
             }
@@ -1587,6 +1733,53 @@ final class LingobarViewModel: ObservableObject {
         )
     }
 
+    private func warmSharedLearningInsightsIfAvailable(
+        for text: String,
+        aiClient: OpenAICompatibleClient
+    ) {
+        guard mode == .selection,
+              LanguageAction.grammar.isAvailable(for: text),
+              let grammarKey = grammarRequestKey(for: text, configuration: aiClient.configuration) else {
+            return
+        }
+
+        if sharedLearningInsightsKey == grammarKey, !sharedLearningInsights.isEmpty {
+            return
+        }
+        sharedLearningInsightsKey = grammarKey
+
+        if let cachedGrammar = grammarResultCache[grammarKey] {
+            setSharedLearningInsights(from: cachedGrammar, key: grammarKey)
+            return
+        }
+
+        let grammarTask = grammarRequests[grammarKey] ?? Task.detached(priority: .utility) {
+            try await LingobarAICompletionDecoder.decodeGrammar(
+                aiClient: aiClient,
+                user: text
+            )
+        }
+        grammarRequests[grammarKey] = grammarTask
+
+        Task {
+            do {
+                let grammar = try await grammarTask.value
+                grammarRequests[grammarKey] = nil
+                rememberGrammarResult(grammar, for: grammarKey)
+                guard sharedLearningInsightsKey == grammarKey,
+                      grammarRequestKey(for: activeText, configuration: aiClient.configuration) == grammarKey else {
+                    return
+                }
+                setSharedLearningInsights(from: grammar, key: grammarKey)
+            } catch {
+                if sharedLearningInsightsKey == grammarKey {
+                    sharedLearningInsightsKey = nil
+                }
+                grammarRequests[grammarKey] = nil
+            }
+        }
+    }
+
     private func rememberGrammarResult(_ grammar: GrammarResult, for key: GrammarRequestKey) {
         grammarResultCache[key] = grammar
         grammarCacheKeys.removeAll { $0 == key }
@@ -1596,6 +1789,45 @@ final class LingobarViewModel: ObservableObject {
             let oldestKey = grammarCacheKeys.removeFirst()
             grammarResultCache.removeValue(forKey: oldestKey)
         }
+
+        if sharedLearningInsightsKey == key {
+            setSharedLearningInsights(from: grammar, key: key)
+        }
+    }
+
+    private func setSharedLearningInsights(from grammar: GrammarResult, key: GrammarRequestKey? = nil) {
+        setSharedLearningInsights(grammar.learningInsights, key: key)
+    }
+
+    private func setSharedLearningInsights(_ insights: LingobarLearningInsights, key: GrammarRequestKey? = nil) {
+        let insights = LingobarLearningInsights(
+            collocations: insights.collocations,
+            phrases: insights.phrases,
+            grammarPoints: insights.grammarPoints
+        )
+        if let key {
+            sharedLearningInsightsKey = key
+        }
+        if sharedLearningInsights != insights {
+            sharedLearningInsights = insights
+        }
+        updateCurrentGrammarResultLearningInsights(insights)
+    }
+
+    private func updateCurrentGrammarResultLearningInsights(_ insights: LingobarLearningInsights) {
+        guard action == .grammar,
+              let grammarResult,
+              grammarResult.learningInsights != insights else {
+            return
+        }
+        let updatedGrammar = grammarResult.applyingLearningInsights(insights)
+        self.grammarResult = updatedGrammar
+        result = updatedGrammar.lingobarResult(shortcut: shortcut(for: .grammar))
+    }
+
+    private func resetSharedLearningInsights() {
+        sharedLearningInsightsKey = nil
+        sharedLearningInsights = .empty
     }
 
     private func recordCompletedHistory(
@@ -1631,6 +1863,7 @@ final class LingobarViewModel: ObservableObject {
         let schema = """
         Return ONLY JSON with this schema:
         {"title":"\(action.title)","summary":"...","rows":[{"label":"...","value":"..."}],"chips":["..."],"moreActionTitle":"\(action.moreActionTitle)","defaultCollectionItem":{"title":"...","note":"...","type":"短语|英文|例句|句型|文本"}}
+        Do not include learningInsights here. 固定搭配, 常见词组, and 语法点 are shared from the cached grammar result so every action tab shows the same learning sections.
         """
         return switch action {
         case .translate:

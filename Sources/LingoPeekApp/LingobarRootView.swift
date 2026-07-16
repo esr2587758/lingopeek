@@ -300,6 +300,7 @@ struct LingobarRootView: View {
                 VStack(spacing: 0) {
                     GrammarResultPanel(
                         result: grammarResult,
+                        learningInsightsOverride: viewModel.visibleLearningInsights,
                         onCollect: { fragment in
                             collect(fragment)
                         }
@@ -569,8 +570,9 @@ struct LingobarRootView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if viewModel.hasFollowUpExchange {
-                    followUpUserMessage
-                    followUpAssistantMessage
+                    ForEach(viewModel.followUpThread) { exchange in
+                        followUpExchange(exchange)
+                    }
                 } else {
                     followUpEmptyState
                 }
@@ -617,10 +619,17 @@ struct LingobarRootView: View {
         }
     }
 
-    private var followUpUserMessage: some View {
+    private func followUpExchange(_ exchange: LingobarFollowUpExchange) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            followUpUserMessage(exchange.question)
+            followUpAssistantMessage(exchange)
+        }
+    }
+
+    private func followUpUserMessage(_ question: String) -> some View {
         HStack(alignment: .top) {
             Spacer(minLength: 30)
-            Text(viewModel.followUpQuestion)
+            Text(question)
                 .font(.system(size: 14))
                 .foregroundStyle(Color.white)
                 .lineSpacing(4)
@@ -636,7 +645,7 @@ struct LingobarRootView: View {
         }
     }
 
-    private var followUpAssistantMessage: some View {
+    private func followUpAssistantMessage(_ exchange: LingobarFollowUpExchange) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "sparkles")
                 .font(.system(size: 13, weight: .semibold))
@@ -646,7 +655,7 @@ struct LingobarRootView: View {
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 9) {
-                if viewModel.isFollowUpLoading && viewModel.followUpAnswer.isEmpty {
+                if exchange.isLoading && exchange.answer.isEmpty {
                     HStack(spacing: 8) {
                         LingobarSpinner()
                         Text("正在生成追问回答…")
@@ -655,7 +664,7 @@ struct LingobarRootView: View {
                     }
                     .padding(.vertical, 3)
                 } else {
-                    Text(viewModel.followUpAnswer)
+                    Text(exchange.answer)
                         .font(.system(size: 14))
                         .foregroundStyle(Color.lingoText)
                         .lineSpacing(5)
@@ -663,7 +672,7 @@ struct LingobarRootView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if let key = viewModel.followUpKey, !viewModel.isFollowUpLoading {
+                if let key = exchange.key, !exchange.isLoading {
                     HStack(alignment: .firstTextBaseline, spacing: 9) {
                         Text(key.term)
                             .font(.system(size: 13.5, weight: .semibold, design: .rounded))
@@ -677,13 +686,13 @@ struct LingobarRootView: View {
                     .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
-                if !viewModel.isFollowUpLoading && !viewModel.followUpAnswer.isEmpty {
+                if !exchange.isLoading && !exchange.answer.isEmpty {
                     HStack(spacing: 6) {
                         followUpMiniButton("复制", systemName: "doc.on.doc") {
-                            viewModel.copyFollowUpAnswer()
+                            viewModel.copyFollowUpAnswer(exchangeID: exchange.id)
                         }
                         followUpMiniButton("收藏", systemName: "star") {
-                            _ = viewModel.collectFollowUpAnswer()
+                            _ = viewModel.collectFollowUpAnswer(exchangeID: exchange.id)
                         }
                     }
                 }
@@ -827,6 +836,9 @@ struct LingobarRootView: View {
                 loadingBody
             } else {
                 resultBody
+                if shouldShowLearningInsights {
+                    learningInsightsSection(viewModel.visibleLearningInsights)
+                }
             }
         }
         .padding(.horizontal, 18)
@@ -929,6 +941,12 @@ struct LingobarRootView: View {
         viewModel.result.rows.filter { row in
             ["重点", "语感", "说明", "备注"].contains(row.label)
         }
+    }
+
+    private var shouldShowLearningInsights: Bool {
+        viewModel.mode == .selection &&
+            !viewModel.visibleLearningInsights.isEmpty &&
+            ![LanguageAction.copy, .collect].contains(viewModel.action)
     }
 
     private func collect(_ fragment: LingobarCollectionFragment) {
@@ -1118,6 +1136,114 @@ struct LingobarRootView: View {
                 .fill(Color.lingoHairline)
                 .frame(height: 1)
         }
+    }
+
+    private func learningInsightsSection(_ insights: LingobarLearningInsights) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 7) {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text("学习点")
+                    .font(.system(size: 11.5, weight: .semibold))
+            }
+            .foregroundStyle(Color.lingoAccentText)
+            .padding(.top, 2)
+
+            HStack(alignment: .top, spacing: 12) {
+                learningColumn(
+                    icon: "link",
+                    title: "固定搭配",
+                    rows: insights.collocations.map { collocation in
+                        LearningInsightRow(
+                            title: collocation.phrase,
+                            detail: [collocation.zh, collocation.note].filter { !$0.isEmpty }.joined(separator: " · "),
+                            collectionType: "短语",
+                            rows: [
+                                LingobarRow("释义", collocation.zh),
+                                LingobarRow("说明", collocation.note),
+                                LingobarRow("例句", collocation.example)
+                            ]
+                        )
+                    }
+                )
+                learningColumn(
+                    icon: "book.closed",
+                    title: "常见词组",
+                    rows: insights.phrases.map { phrase in
+                        LearningInsightRow(
+                            title: phrase.en,
+                            detail: phrase.zh,
+                            collectionType: "短语",
+                            rows: [
+                                LingobarRow("短语", phrase.en),
+                                LingobarRow("释义", phrase.zh)
+                            ]
+                        )
+                    }
+                )
+                learningColumn(
+                    icon: "lightbulb",
+                    title: "语法点",
+                    rows: insights.grammarPoints.map { point in
+                        LearningInsightRow(
+                            title: point.title,
+                            detail: point.body,
+                            collectionType: "句型",
+                            rows: [LingobarRow(point.tag, point.body)]
+                        )
+                    }
+                )
+            }
+        }
+        .padding(.top, 2)
+        .accessibilityIdentifier("action-learning-insights-\(viewModel.action.rawValue)")
+    }
+
+    private func learningColumn(icon: String, title: String, rows: [LearningInsightRow]) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(Color.lingoMuted)
+
+            if rows.isEmpty {
+                Text("暂无")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.lingoSubtle)
+            } else {
+                ForEach(rows) { row in
+                    collectableBlock(
+                        LingobarCollectionFragment(
+                            title: row.title,
+                            note: row.detail,
+                            type: row.collectionType,
+                            rows: row.rows
+                        )
+                    ) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(row.title)
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(Color.lingoText)
+                                .lineLimit(2)
+                            if !row.detail.isEmpty {
+                                Text(row.detail)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(Color.lingoSubtle)
+                                    .lineLimit(3)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 7)
+                        .background(Color.lingoChip, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private func keyCard(title: String, detail: String) -> some View {
@@ -2242,6 +2368,17 @@ private struct LingobarInputTextView: NSViewRepresentable {
                 }
             }
         }
+    }
+}
+
+private struct LearningInsightRow: Identifiable {
+    var title: String
+    var detail: String
+    var collectionType: String
+    var rows: [LingobarRow]
+
+    var id: String {
+        "\(collectionType)-\(title)-\(detail)"
     }
 }
 

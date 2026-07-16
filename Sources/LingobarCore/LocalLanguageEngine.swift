@@ -39,7 +39,8 @@ public struct LocalLanguageEngine: Sendable {
                 sideTitle: "翻译选项",
                 chips: ["通用翻译", "书面表达", "意译", "语感"],
                 moreActionTitle: action.moreActionTitle,
-                defaultCollectionTitle: "这些发现让人们开始质疑关于睡眠如何帮助巩固记忆的长期假设。"
+                defaultCollectionTitle: "这些发现让人们开始质疑关于睡眠如何帮助巩固记忆的长期假设。",
+                learningInsights: Self.defaultLearningInsights
             )
         case .grammar:
             return LingobarResult(
@@ -55,7 +56,8 @@ public struct LocalLanguageEngine: Sendable {
                 sideTitle: "拆解粒度",
                 chips: ["主干", "完整", "中文", "术语"],
                 moreActionTitle: action.moreActionTitle,
-                defaultCollectionTitle: "sth. calls into question assumptions about how …"
+                defaultCollectionTitle: "sth. calls into question assumptions about how …",
+                learningInsights: Self.defaultLearningInsights
             )
         case .collect:
             return LingobarResult(
@@ -84,7 +86,8 @@ public struct LocalLanguageEngine: Sendable {
                 sideTitle: "改写方向",
                 chips: ["更口语", "更正式", "更简洁", "更地道"],
                 moreActionTitle: action.moreActionTitle,
-                defaultCollectionTitle: "These results challenge what we've long assumed about how sleep helps the brain lock in memories."
+                defaultCollectionTitle: "These results challenge what we've long assumed about how sleep helps the brain lock in memories.",
+                learningInsights: Self.defaultLearningInsights
             )
         case .examples:
             return LingobarResult(
@@ -98,7 +101,8 @@ public struct LocalLanguageEngine: Sendable {
                 sideTitle: "同结构句型 · 可直接套用",
                 chips: ["搭配", "同结构", "同场景", "基础"],
                 moreActionTitle: action.moreActionTitle,
-                defaultCollectionTitle: "The report calls into question the safety of the new drug."
+                defaultCollectionTitle: "The report calls into question the safety of the new drug.",
+                learningInsights: Self.defaultLearningInsights
             )
         case .pronounce:
             return LingobarResult(
@@ -112,8 +116,32 @@ public struct LocalLanguageEngine: Sendable {
                 sideTitle: "可跟读",
                 chips: ["美音", "英音", "正常", "慢速"],
                 moreActionTitle: action.moreActionTitle,
-                defaultCollectionTitle: "consolidate"
+                defaultCollectionTitle: "consolidate",
+                learningInsights: Self.defaultLearningInsights
             )
         }
     }
+
+    private static let defaultLearningInsights = LingobarLearningInsights(
+        collocations: [
+            GrammarCollocation(
+                phrase: "call into question",
+                pos: "v. phr.（动词短语）",
+                zh: "对……提出质疑",
+                note: "常用于研究、证据或结果推翻旧假设。",
+                example: "The findings call into question old assumptions."
+            )
+        ],
+        phrases: [
+            GrammarPhrase(en: "long-held assumptions", zh: "长期以来的假设"),
+            GrammarPhrase(en: "during sleep", zh: "在睡眠期间")
+        ],
+        grammarPoints: [
+            GrammarPoint(
+                tag: "结构",
+                title: "call into question 后接宾语",
+                body: "这个固定搭配整体作谓语，后面接被质疑的对象。"
+            )
+        ]
+    )
 }

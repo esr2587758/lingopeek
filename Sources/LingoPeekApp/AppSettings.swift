@@ -14,11 +14,19 @@ enum AppSettings {
     static let showSelectionFloatButtonKey = "Lingobar.settings.showSelectionFloatButton"
     static let defaultEnglishActionKey = "Lingobar.settings.defaultEnglishAction"
     static let defaultChineseMixedActionKey = "Lingobar.settings.defaultChineseMixedAction"
+    static let defaultEnglishActionIDKey = "Lingobar.settings.defaultEnglishActionID"
+    static let defaultChineseMixedActionIDKey = "Lingobar.settings.defaultChineseMixedActionID"
     static let actionOrderKey = "Lingobar.settings.actionOrder"
+    static let actionOrderIDsKey = "Lingobar.settings.actionOrderIDs"
+    static let customPromptActionsKey = "Lingobar.settings.customPromptActions"
     static let collectionTargetKey = "Lingobar.settings.collectionTarget"
     static let autoReadClipboardKey = "Lingobar.settings.autoReadClipboard"
     static let hotKeyCodeKey = "Lingobar.hotKey.keyCode"
     static let hotKeyModifiersKey = "Lingobar.hotKey.modifiers"
+    static let inputHotKeyCodeKey = "Lingobar.inputHotKey.keyCode"
+    static let inputHotKeyModifiersKey = "Lingobar.inputHotKey.modifiers"
+    static let selectionHotKeyCodeKey = "Lingobar.selectionHotKey.keyCode"
+    static let selectionHotKeyModifiersKey = "Lingobar.selectionHotKey.modifiers"
     static let hotKeyDidChangeNotification = Notification.Name("Lingobar.hotKeyDidChange")
     static let settingsDidChangeNotification = Notification.Name("Lingobar.settingsDidChange")
 
@@ -154,26 +162,55 @@ enum AppSettings {
     }
 
     static var hotKey: LingobarHotKey {
+        inputHotKey
+    }
+
+    static var inputHotKey: LingobarHotKey {
         let defaults = UserDefaults.standard
-        guard defaults.object(forKey: hotKeyCodeKey) != nil,
-              defaults.object(forKey: hotKeyModifiersKey) != nil else {
+        let codeKey = defaults.object(forKey: inputHotKeyCodeKey) != nil ? inputHotKeyCodeKey : hotKeyCodeKey
+        let modifiersKey = defaults.object(forKey: inputHotKeyModifiersKey) != nil ? inputHotKeyModifiersKey : hotKeyModifiersKey
+        guard defaults.object(forKey: codeKey) != nil,
+              defaults.object(forKey: modifiersKey) != nil else {
             return .default
         }
         return LingobarHotKey(
-            keyCode: UInt32(defaults.integer(forKey: hotKeyCodeKey)),
-            carbonModifiers: UInt32(defaults.integer(forKey: hotKeyModifiersKey))
+            keyCode: UInt32(defaults.integer(forKey: codeKey)),
+            carbonModifiers: UInt32(defaults.integer(forKey: modifiersKey))
         )
     }
 
+    static var selectionHotKey: LingobarHotKey {
+        hotKey(forCodeKey: selectionHotKeyCodeKey, modifiersKey: selectionHotKeyModifiersKey, defaultValue: .defaultSelection)
+    }
+
     static func saveHotKey(_ hotKey: LingobarHotKey) {
+        saveInputHotKey(hotKey)
+    }
+
+    static func saveInputHotKey(_ hotKey: LingobarHotKey) {
         let defaults = UserDefaults.standard
-        defaults.set(Int(hotKey.keyCode), forKey: hotKeyCodeKey)
-        defaults.set(Int(hotKey.carbonModifiers), forKey: hotKeyModifiersKey)
+        defaults.set(Int(hotKey.keyCode), forKey: inputHotKeyCodeKey)
+        defaults.set(Int(hotKey.carbonModifiers), forKey: inputHotKeyModifiersKey)
+        NotificationCenter.default.post(name: hotKeyDidChangeNotification, object: nil)
+    }
+
+    static func saveSelectionHotKey(_ hotKey: LingobarHotKey) {
+        let defaults = UserDefaults.standard
+        defaults.set(Int(hotKey.keyCode), forKey: selectionHotKeyCodeKey)
+        defaults.set(Int(hotKey.carbonModifiers), forKey: selectionHotKeyModifiersKey)
         NotificationCenter.default.post(name: hotKeyDidChangeNotification, object: nil)
     }
 
     static func resetHotKey() {
-        saveHotKey(.default)
+        resetInputHotKey()
+    }
+
+    static func resetInputHotKey() {
+        saveInputHotKey(.default)
+    }
+
+    static func resetSelectionHotKey() {
+        saveSelectionHotKey(.defaultSelection)
     }
 
     static var launchAtLogin: Bool {
@@ -207,6 +244,22 @@ enum AppSettings {
         return LingobarSettingsSnapshot.chineseMixedDefaultActions.contains(action) ? action : .rewrite
     }
 
+    static var defaultEnglishActionID: String {
+        validDefaultActionID(
+            forKey: defaultEnglishActionIDKey,
+            legacyKey: defaultEnglishActionKey,
+            fallback: defaultEnglishAction.actionID
+        )
+    }
+
+    static var defaultChineseMixedActionID: String {
+        validDefaultActionID(
+            forKey: defaultChineseMixedActionIDKey,
+            legacyKey: defaultChineseMixedActionKey,
+            fallback: defaultChineseMixedAction.actionID
+        )
+    }
+
     static var collectionTarget: LingobarCollectionTarget {
         let rawValue = UserDefaults.standard.string(forKey: collectionTargetKey) ?? ""
         return LingobarCollectionTarget(rawValue: rawValue) ?? .followCurrentPanel
@@ -231,6 +284,28 @@ enum AppSettings {
         return parsed + defaultOrder.filter { !parsed.contains($0) }
     }
 
+    static var customPromptActions: [CustomPromptAction] {
+        guard let data = UserDefaults.standard.data(forKey: customPromptActionsKey),
+              let actions = try? JSONDecoder().decode([CustomPromptAction].self, from: data) else {
+            return []
+        }
+        return normalizedCustomPromptActions(actions)
+    }
+
+    static var actionOrderIDs: [String] {
+        let stored = UserDefaults.standard.stringArray(forKey: actionOrderIDsKey)
+        let fallback = LingobarActionCatalog.defaultOrderIDs(from: actionOrder)
+        let base = stored?.isEmpty == false ? stored! : fallback
+        return LingobarActionCatalog.descriptors(customPromptActions: customPromptActions, orderIDs: base).map(\.id)
+    }
+
+    static var actionDescriptors: [LingobarActionDescriptor] {
+        LingobarActionCatalog.descriptors(
+            customPromptActions: customPromptActions,
+            orderIDs: actionOrderIDs
+        )
+    }
+
     static func makeSettingsSnapshot() -> LingobarSettingsSnapshot {
         LingobarSettingsSnapshot(
             launchAtLogin: launchAtLogin,
@@ -243,10 +318,15 @@ enum AppSettings {
             accessibilityPermissionGranted: isAccessibilityPermissionGranted,
             triggerOnSelection: triggerOnSelection,
             showSelectionFloatButton: showSelectionFloatButton,
-            inputHotKeyDisplay: [hotKey.displayString],
+            inputHotKeyDisplay: [inputHotKey.displayString],
+            selectionHotKeyDisplay: [selectionHotKey.displayString],
             actionOrder: actionOrder,
+            actionOrderIDs: actionOrderIDs,
+            customPromptActions: customPromptActions,
             defaultEnglishAction: defaultEnglishAction,
             defaultChineseMixedAction: defaultChineseMixedAction,
+            defaultEnglishActionID: defaultEnglishActionID,
+            defaultChineseMixedActionID: defaultChineseMixedActionID,
             collectionTarget: collectionTarget,
             autoReadClipboard: autoReadClipboard
         )
@@ -304,16 +384,78 @@ enum AppSettings {
 
     static func saveDefaultEnglishAction(_ action: LanguageAction) {
         UserDefaults.standard.set(action.rawValue, forKey: defaultEnglishActionKey)
+        UserDefaults.standard.set(action.actionID, forKey: defaultEnglishActionIDKey)
         postSettingsDidChange()
     }
 
     static func saveDefaultChineseMixedAction(_ action: LanguageAction) {
         UserDefaults.standard.set(action.rawValue, forKey: defaultChineseMixedActionKey)
+        UserDefaults.standard.set(action.actionID, forKey: defaultChineseMixedActionIDKey)
+        postSettingsDidChange()
+    }
+
+    static func saveDefaultEnglishActionID(_ actionID: String) {
+        UserDefaults.standard.set(actionID, forKey: defaultEnglishActionIDKey)
+        if let builtIn = LanguageAction(rawValue: actionID) {
+            UserDefaults.standard.set(builtIn.rawValue, forKey: defaultEnglishActionKey)
+        }
+        postSettingsDidChange()
+    }
+
+    static func saveDefaultChineseMixedActionID(_ actionID: String) {
+        UserDefaults.standard.set(actionID, forKey: defaultChineseMixedActionIDKey)
+        if let builtIn = LanguageAction(rawValue: actionID) {
+            UserDefaults.standard.set(builtIn.rawValue, forKey: defaultChineseMixedActionKey)
+        }
         postSettingsDidChange()
     }
 
     static func saveActionOrder(_ actions: [LanguageAction]) {
         UserDefaults.standard.set(actions.map(\.rawValue), forKey: actionOrderKey)
+        UserDefaults.standard.set(actions.map(\.actionID), forKey: actionOrderIDsKey)
+        postSettingsDidChange()
+    }
+
+    static func saveActionOrderIDs(_ actionIDs: [String]) {
+        UserDefaults.standard.set(actionIDs, forKey: actionOrderIDsKey)
+        postSettingsDidChange()
+    }
+
+    static func saveCustomPromptAction(_ action: CustomPromptAction) -> Bool {
+        var actions = customPromptActions
+        let normalized = CustomPromptAction(id: action.id, title: action.title, promptTemplate: action.promptTemplate, createdAt: action.createdAt, updatedAt: Date())
+        guard isValidCustomPromptAction(normalized, existing: actions) else {
+            return false
+        }
+        if let index = actions.firstIndex(where: { $0.id == normalized.id }) {
+            actions[index] = normalized
+        } else {
+            actions.append(normalized)
+        }
+        saveCustomPromptActions(actions)
+        saveActionOrderIDs(LingobarActionCatalog.descriptors(customPromptActions: actions, orderIDs: actionOrderIDs + [normalized.actionID]).map(\.id))
+        return true
+    }
+
+    static func deleteCustomPromptAction(id: UUID) {
+        var actions = customPromptActions
+        guard let deleted = actions.first(where: { $0.id == id }) else {
+            return
+        }
+        actions.removeAll { $0.id == id }
+        let nextDefault = LingobarActionCatalog.nextEligibleDefaultActionID(
+            after: deleted.actionID,
+            orderIDs: actionOrderIDs,
+            customPromptActions: actions
+        )
+        saveCustomPromptActions(actions)
+        saveActionOrderIDs(actionOrderIDs.filter { $0 != deleted.actionID })
+        if defaultEnglishActionID == deleted.actionID {
+            saveDefaultEnglishActionID(nextDefault)
+        }
+        if defaultChineseMixedActionID == deleted.actionID {
+            saveDefaultChineseMixedActionID(nextDefault)
+        }
         postSettingsDidChange()
     }
 
@@ -337,13 +479,21 @@ enum AppSettings {
             showSelectionFloatButtonKey,
             defaultEnglishActionKey,
             defaultChineseMixedActionKey,
+            defaultEnglishActionIDKey,
+            defaultChineseMixedActionIDKey,
             actionOrderKey,
+            actionOrderIDsKey,
+            customPromptActionsKey,
             collectionTargetKey,
             autoReadClipboardKey,
             modelKey,
             baseURLKey,
             hotKeyCodeKey,
-            hotKeyModifiersKey
+            hotKeyModifiersKey,
+            inputHotKeyCodeKey,
+            inputHotKeyModifiersKey,
+            selectionHotKeyCodeKey,
+            selectionHotKeyModifiersKey
         ]
         keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
         LocalTokenStore.deleteToken()
@@ -378,6 +528,69 @@ enum AppSettings {
     private static func languageAction(forKey key: String, defaultValue: LanguageAction) -> LanguageAction {
         let rawValue = UserDefaults.standard.string(forKey: key) ?? ""
         return LanguageAction(rawValue: rawValue) ?? defaultValue
+    }
+
+    private static func hotKey(forCodeKey codeKey: String, modifiersKey: String, defaultValue: LingobarHotKey) -> LingobarHotKey {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: codeKey) != nil,
+              defaults.object(forKey: modifiersKey) != nil else {
+            return defaultValue
+        }
+        return LingobarHotKey(
+            keyCode: UInt32(defaults.integer(forKey: codeKey)),
+            carbonModifiers: UInt32(defaults.integer(forKey: modifiersKey))
+        )
+    }
+
+    private static func validDefaultActionID(forKey key: String, legacyKey: String, fallback: String) -> String {
+        let stored = UserDefaults.standard.string(forKey: key)
+            ?? UserDefaults.standard.string(forKey: legacyKey)
+            ?? fallback
+        if actionDescriptors.contains(where: { $0.id == stored && $0.isResultProducing }) {
+            return stored
+        }
+        return fallback
+    }
+
+    private static func saveCustomPromptActions(_ actions: [CustomPromptAction]) {
+        let normalized = normalizedCustomPromptActions(actions)
+        if let data = try? JSONEncoder().encode(normalized) {
+            UserDefaults.standard.set(data, forKey: customPromptActionsKey)
+        }
+    }
+
+    private static func normalizedCustomPromptActions(_ actions: [CustomPromptAction]) -> [CustomPromptAction] {
+        var seenTitles: Set<String> = []
+        return actions.compactMap { action in
+            let title = action.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let prompt = action.promptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+            let titleKey = title.lowercased()
+            guard !title.isEmpty,
+                  !prompt.isEmpty,
+                  LanguageAction.selectionActions.allSatisfy({ $0.title.lowercased() != titleKey }),
+                  !seenTitles.contains(titleKey) else {
+                return nil
+            }
+            seenTitles.insert(titleKey)
+            return CustomPromptAction(
+                id: action.id,
+                title: title,
+                promptTemplate: prompt,
+                createdAt: action.createdAt,
+                updatedAt: action.updatedAt
+            )
+        }
+    }
+
+    private static func isValidCustomPromptAction(_ action: CustomPromptAction, existing: [CustomPromptAction]) -> Bool {
+        let title = action.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let prompt = action.promptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty,
+              !prompt.isEmpty,
+              LanguageAction.selectionActions.allSatisfy({ $0.title.lowercased() != title }) else {
+            return false
+        }
+        return existing.allSatisfy { $0.id == action.id || $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != title }
     }
 
     private static func postSettingsDidChange() {

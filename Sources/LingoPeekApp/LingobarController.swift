@@ -29,7 +29,12 @@ final class LingobarController: NSObject, NSWindowDelegate {
     private var hotKeyObserver: NSObjectProtocol?
     private var settingsObserver: NSObjectProtocol?
     private var appActivationObserver: NSObjectProtocol?
-    private var registeredHotKey: LingobarHotKey?
+    private var registeredInputHotKey: LingobarHotKey?
+    private var registeredSelectionHotKey: LingobarHotKey?
+    private var selectionPollTimer: Timer?
+    private var pendingLauncherSelection: String?
+    private var stableSelectionPollCount = 0
+    private var lastPresentedLauncherSelection: String?
     private var isPositioningProgrammatically = false
     private let appUpdater: AppUpdater?
 
@@ -45,19 +50,16 @@ final class LingobarController: NSObject, NSWindowDelegate {
 
     func start(openSettingsOnLaunch: Bool = false, openHubOnLaunch: LingobarHubSection? = nil) {
         updateStatusItemVisibility()
-        hotKeyManager = HotKeyManager { [weak self] in
-            Task { @MainActor in
-                self?.presentFromHotKey()
-            }
-        }
-        registerConfiguredHotKey()
+        hotKeyManager = HotKeyManager()
+        registerConfiguredHotKeys()
+        startSelectionPolling()
         hotKeyObserver = NotificationCenter.default.addObserver(
             forName: AppSettings.hotKeyDidChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.registerConfiguredHotKey()
+                self?.registerConfiguredHotKeys()
             }
         }
         settingsObserver = NotificationCenter.default.addObserver(
@@ -87,14 +89,15 @@ final class LingobarController: NSObject, NSWindowDelegate {
             DispatchQueue.main.async { [weak self] in
                 self?.presentUITestSelection(uiTestSelection)
             }
-        } else {
-            present(captureSelectionByCopying: false)
         }
     }
 
     func stop() {
         hotKeyManager?.unregister()
-        registeredHotKey = nil
+        registeredInputHotKey = nil
+        registeredSelectionHotKey = nil
+        selectionPollTimer?.invalidate()
+        selectionPollTimer = nil
         if let hotKeyObserver {
             NotificationCenter.default.removeObserver(hotKeyObserver)
             self.hotKeyObserver = nil
@@ -111,7 +114,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
     }
 
     private func refreshRuntimeSettings() {
-        viewModel.actions = AppSettings.actionOrder
+        viewModel.actions = AppSettings.actionDescriptors
         viewModel.setupGateStatus = AppSettings.setupGateStatus
         updateStatusItemVisibility()
     }
@@ -125,11 +128,15 @@ final class LingobarController: NSObject, NSWindowDelegate {
     }
 
     func present() {
-        present(captureSelectionByCopying: true)
+        presentSelectionWorkflow(captureSelectionByCopying: true)
     }
 
-    private func presentFromHotKey() {
-        present(captureSelectionByCopying: true)
+    private func presentInputFromHotKey() {
+        presentInputWorkflow()
+    }
+
+    private func presentSelectionFromHotKey() {
+        presentSelectionWorkflow(captureSelectionByCopying: true)
     }
 
     private var uiTestSelection: String? {
@@ -148,20 +155,64 @@ final class LingobarController: NSObject, NSWindowDelegate {
         show(panel)
     }
 
-    private func registerConfiguredHotKey() {
-        let hotKey = AppSettings.hotKey
-        guard hotKey != registeredHotKey else {
-            return
+    private func registerConfiguredHotKeys() {
+        let inputHotKey = AppSettings.inputHotKey
+        if inputHotKey != registeredInputHotKey {
+            let status = hotKeyManager?.register(inputHotKey, id: 1) { [weak self] in
+                Task { @MainActor in
+                    self?.presentInputFromHotKey()
+                }
+            } ?? noErr
+            if status == noErr {
+                registeredInputHotKey = inputHotKey
+            } else if let registeredInputHotKey {
+                AppSettings.saveInputHotKey(registeredInputHotKey)
+            }
         }
-        let status = hotKeyManager?.register(hotKey) ?? noErr
-        if status == noErr {
-            registeredHotKey = hotKey
-        } else if let registeredHotKey {
-            AppSettings.saveHotKey(registeredHotKey)
+
+        let selectionHotKey = AppSettings.selectionHotKey
+        if selectionHotKey != registeredSelectionHotKey {
+            let status = hotKeyManager?.register(selectionHotKey, id: 2) { [weak self] in
+                Task { @MainActor in
+                    self?.presentSelectionFromHotKey()
+                }
+            } ?? noErr
+            if status == noErr {
+                registeredSelectionHotKey = selectionHotKey
+            } else if let registeredSelectionHotKey {
+                AppSettings.saveSelectionHotKey(registeredSelectionHotKey)
+            }
         }
     }
 
-    private func present(captureSelectionByCopying: Bool) {
+    private func presentInputWorkflow() {
+        if AppSettings.usesGrammarFixture {
+            viewModel.presentGrammarFixture()
+            let panel = ensurePanel()
+            panel.setContentSize(contentSize)
+            position(panel)
+            show(panel)
+            return
+        }
+
+        let setupGateStatus = AppSettings.setupGateStatus
+        guard setupGateStatus.requiredAction == .useLingobar else {
+            viewModel.presentSetupGate(setupGateStatus)
+            let panel = ensurePanel()
+            panel.setContentSize(contentSize)
+            position(panel)
+            show(panel)
+            return
+        }
+
+        viewModel.presentInputMode()
+        let panel = ensurePanel()
+        panel.setContentSize(contentSize)
+        position(panel)
+        show(panel)
+    }
+
+    private func presentSelectionWorkflow(captureSelectionByCopying: Bool) {
         if AppSettings.usesGrammarFixture {
             viewModel.presentGrammarFixture()
             let panel = ensurePanel()
@@ -185,11 +236,78 @@ final class LingobarController: NSObject, NSWindowDelegate {
         let selection = captureSelectionByCopying
             ? selectionReader.selectedTextIncludingClipboardFallback()
             : selectionReader.selectedText()
-        viewModel.present(selection: selection, sourceAppName: sourceAppName)
+        if let selection, !selection.isEmpty {
+            viewModel.present(selection: selection, sourceAppName: sourceAppName)
+        } else if captureSelectionByCopying {
+            viewModel.presentRecentSelectionHistoryOrExample(sourceAppName: sourceAppName)
+        } else {
+            viewModel.presentInputMode()
+        }
         let panel = ensurePanel()
         panel.setContentSize(contentSize)
         position(panel)
         show(panel)
+    }
+
+    private func startSelectionPolling() {
+        selectionPollTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.35, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.pollSelectionForLauncher()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        selectionPollTimer = timer
+    }
+
+    private func pollSelectionForLauncher() {
+        guard AppSettings.triggerOnSelection,
+              AppSettings.showSelectionFloatButton,
+              AppSettings.setupGateStatus.requiredAction == .useLingobar,
+              !isLingoPeekFrontmost else {
+            resetSelectionPollingCandidate()
+            return
+        }
+        if panel?.isVisible == true, viewModel.mode != .launcher {
+            return
+        }
+        guard let selection = selectionReader.selectedText(),
+              !selection.isEmpty else {
+            resetSelectionPollingCandidate()
+            return
+        }
+
+        if pendingLauncherSelection == selection {
+            stableSelectionPollCount += 1
+        } else {
+            pendingLauncherSelection = selection
+            stableSelectionPollCount = 1
+        }
+
+        guard stableSelectionPollCount >= 2,
+              lastPresentedLauncherSelection != selection else {
+            return
+        }
+        presentLauncher(selection: selection, sourceAppName: frontmostSourceAppName())
+    }
+
+    private var isLingoPeekFrontmost: Bool {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier
+    }
+
+    private func resetSelectionPollingCandidate() {
+        pendingLauncherSelection = nil
+        stableSelectionPollCount = 0
+        lastPresentedLauncherSelection = nil
+    }
+
+    private func presentLauncher(selection: String, sourceAppName: String) {
+        lastPresentedLauncherSelection = selection
+        viewModel.presentSelectionLauncher(selection: selection, sourceAppName: sourceAppName)
+        let panel = ensurePanel()
+        panel.setContentSize(contentSize)
+        positionLauncher(panel)
+        showLauncher(panel)
     }
 
     private func show(_ panel: NSPanel) {
@@ -197,6 +315,10 @@ final class LingobarController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         panel.makeMain()
+    }
+
+    private func showLauncher(_ panel: NSPanel) {
+        panel.orderFrontRegardless()
     }
 
     func hide() {
@@ -301,8 +423,10 @@ final class LingobarController: NSObject, NSWindowDelegate {
         let baseSize = switch viewModel.mode {
         case .setup:
             Self.setupPanelSize
+        case .launcher:
+            NSSize(width: 420, height: 46)
         case .selection:
-            if viewModel.action == .grammar, viewModel.grammarResult != nil {
+            if viewModel.action.builtInAction == .grammar, viewModel.grammarResult != nil {
                 Self.grammarPanelSize
             } else if viewModel.isLoading {
                 Self.selectionLoadingPanelSize
@@ -355,6 +479,15 @@ final class LingobarController: NSObject, NSWindowDelegate {
         let visibleFrame = placementVisibleFrame(for: savedPanelOrigin() ?? NSEvent.mouseLocation)
         let origin = savedPanelOrigin()
             ?? centeredOrigin(size: panel.frame.size, in: visibleFrame)
+        updatePanelProgrammatically {
+            panel.setFrameOrigin(clampedOrigin(origin, size: panel.frame.size, in: visibleFrame))
+        }
+    }
+
+    private func positionLauncher(_ panel: NSPanel) {
+        let mouse = NSEvent.mouseLocation
+        let visibleFrame = placementVisibleFrame(for: mouse)
+        let origin = NSPoint(x: mouse.x + 12, y: mouse.y - panel.frame.height - 8)
         updatePanelProgrammatically {
             panel.setFrameOrigin(clampedOrigin(origin, size: panel.frame.size, in: visibleFrame))
         }
@@ -471,6 +604,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
                 sourceText: selectedText,
                 sourceAppName: item.source,
                 sourceAction: item.action,
+                sourceActionID: item.actionID,
                 resultSnapshot: snapshot.result,
                 grammarSnapshot: snapshot.grammarResult,
                 resultSnapshots: item.resultSnapshots

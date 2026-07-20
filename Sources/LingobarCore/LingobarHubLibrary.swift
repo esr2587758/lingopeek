@@ -18,6 +18,8 @@ public struct LingobarHubLibraryItem: Identifiable, Equatable, Sendable {
     public var createdAt: Date
     public var updatedAt: Date
     public var action: LanguageAction?
+    public var actionID: String
+    public var actionTitle: String
     public var copyText: String
     public var sourceText: String
     public var resultSnapshot: LingobarResult?
@@ -35,6 +37,8 @@ public struct LingobarHubLibraryItem: Identifiable, Equatable, Sendable {
         createdAt: Date,
         updatedAt: Date? = nil,
         action: LanguageAction?,
+        actionID: String? = nil,
+        actionTitle: String? = nil,
         copyText: String,
         sourceText: String,
         resultSnapshot: LingobarResult? = nil,
@@ -51,6 +55,8 @@ public struct LingobarHubLibraryItem: Identifiable, Equatable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt
         self.action = action
+        self.actionID = actionID ?? action?.actionID ?? LanguageAction.translate.actionID
+        self.actionTitle = actionTitle ?? action?.title ?? "翻译"
         self.copyText = copyText
         self.sourceText = sourceText
         self.resultSnapshot = resultSnapshot
@@ -72,6 +78,8 @@ public enum LingobarHubLibrary {
                 source: phrase.sourceAppName,
                 createdAt: phrase.createdAt,
                 action: phrase.sourceAction,
+                actionID: phrase.sourceAction?.actionID,
+                actionTitle: phrase.sourceAction?.title,
                 copyText: phrase.title,
                 sourceText: phrase.sourceText.isEmpty ? phrase.title : phrase.sourceText,
                 resultSnapshot: phrase.resultSnapshot,
@@ -98,6 +106,8 @@ public enum LingobarHubLibrary {
                 createdAt: record.createdAt,
                 updatedAt: record.updatedAt,
                 action: record.action,
+                actionID: record.actionID,
+                actionTitle: record.actionTitle,
                 copyText: record.copyText,
                 sourceText: record.sourceText,
                 resultSnapshot: record.resultSnapshot,

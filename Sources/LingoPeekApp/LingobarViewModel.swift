@@ -179,6 +179,14 @@ private enum LingobarAICompletionDecoder {
         return .structured(try await decodeStructured(action: action, aiClient: aiClient, system: system, user: user))
     }
 
+    static func decodeCustom(
+        aiClient: OpenAICompatibleClient,
+        system: String,
+        user: String
+    ) async throws -> LingobarAICompletionResult {
+        .structured(try await decodeStructured(action: nil, aiClient: aiClient, system: system, user: user))
+    }
+
     static func decodeGrammar(
         aiClient: OpenAICompatibleClient,
         user: String,
@@ -290,7 +298,7 @@ private enum LingobarAICompletionDecoder {
     }
 
     private static func decodeStructured(
-        action: LanguageAction,
+        action: LanguageAction?,
         aiClient: OpenAICompatibleClient,
         system: String,
         user: String
@@ -318,7 +326,7 @@ private enum LingobarAICompletionDecoder {
         throw lastError ?? DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "AI response could not be decoded"))
     }
 
-    private static func validateStructuredResult(_ result: StructuredLingobarResult, action: LanguageAction) throws {
+    private static func validateStructuredResult(_ result: StructuredLingobarResult, action: LanguageAction?) throws {
         guard action == .rewrite else {
             return
         }
@@ -739,9 +747,11 @@ private struct GrammarCanonicalChunk: Encodable {
 
 @MainActor
 final class LingobarViewModel: ObservableObject {
+    private static let defaultExampleSelection = "any sentence can become a small object for translation, parsing, memory, and expression."
+
     @Published var mode: LingobarMode = .selection
-    @Published var action: LanguageAction = .translate
-    @Published var selectedText = "any sentence can become a small object for translation, parsing, memory, and expression."
+    @Published var action: LingobarActionDescriptor = LingobarActionDescriptor(builtInAction: .translate)
+    @Published var selectedText = defaultExampleSelection
     @Published var inputText = ""
     @Published var result: LingobarResult
     @Published var grammarResult: GrammarResult?
@@ -753,6 +763,7 @@ final class LingobarViewModel: ObservableObject {
     @Published var selectionSource = "当前 App"
     @Published var setupGateStatus = AppSettings.setupGateStatus
     @Published var loadingStartedAt: Date?
+    @Published var isResultStale = false
     @Published var recentCollectedPhraseID: UUID?
     @Published var isFollowUpOpen = false
     @Published var isFollowUpContextAnchored = true
@@ -765,7 +776,7 @@ final class LingobarViewModel: ObservableObject {
     @Published private(set) var sharedLearningInsights: LingobarLearningInsights = .empty
     var onLayoutChanged: (() -> Void)?
 
-    @Published var actions: [LanguageAction] = AppSettings.actionOrder
+    @Published var actions: [LingobarActionDescriptor] = AppSettings.actionDescriptors
     private let store: PhraseStore
     private let historyStore: LingobarHistoryStore
     private var currentHistoryRecord: LingobarHistoryRecord?
@@ -787,14 +798,18 @@ final class LingobarViewModel: ObservableObject {
             SavedPhrase(title: "selection-first", note: "以选区为入口，而不是先打开 App。")
         ]
 
-        self.result = LingobarViewModel.pendingResult(for: .translate, actionOrder: AppSettings.actionOrder)
+        self.result = LingobarViewModel.pendingResult(
+            for: LingobarActionDescriptor(builtInAction: .translate),
+            actionDescriptors: AppSettings.actionDescriptors
+        )
     }
 
-    func present(selection: String?, sourceAppName: String = "当前 App") {
-        actions = AppSettings.actionOrder
+    func present(selection: String?, sourceAppName: String = "当前 App", requestedActionID: String? = nil) {
+        actions = AppSettings.actionDescriptors
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
+        isResultStale = false
         resetSharedLearningInsights()
         resetFollowUpSession(sendsLayoutChange: false)
 
@@ -802,16 +817,21 @@ final class LingobarViewModel: ObservableObject {
             mode = .selection
             selectionSource = sourceAppName
             selectedText = selection
-            action = configuredDefaultSelectionAction(for: selection)
+            action = requestedActionID.flatMap(actionDescriptor(for:)) ?? configuredDefaultSelectionAction(for: selection)
             result = pendingResult(for: action)
             grammarResult = nil
             showsResult = true
             loadingStartedAt = nil
             onLayoutChanged?()
+            guard action.isAvailable(for: activeText) else {
+                showUnavailableAction(action)
+                return
+            }
             runAIIfAvailable(for: action, text: activeText)
         } else {
             mode = .input
-            action = .rewrite
+            action = actionDescriptor(for: requestedActionID ?? LanguageAction.rewrite.actionID)
+                ?? LingobarActionDescriptor(builtInAction: .rewrite)
             inputText = AppSettings.autoReadClipboard ? clipboardText() : ""
             result = pendingResult(for: action)
             grammarResult = nil
@@ -822,8 +842,76 @@ final class LingobarViewModel: ObservableObject {
         }
     }
 
+    func presentInputMode() {
+        present(selection: nil, sourceAppName: "输入模式", requestedActionID: LanguageAction.rewrite.actionID)
+    }
+
+    func presentSelectionLauncher(selection: String, sourceAppName: String = "当前 App") {
+        actions = AppSettings.actionDescriptors
+        currentHistoryRecord = nil
+        activeResultSnapshots = [:]
+        recentCollectedPhraseID = nil
+        isResultStale = false
+        resetSharedLearningInsights()
+        resetFollowUpSession(sendsLayoutChange: false)
+        mode = .launcher
+        selectionSource = sourceAppName
+        selectedText = selection
+        showsResult = false
+        isLoading = false
+        loadingStartedAt = nil
+        status = "选择动作"
+        onLayoutChanged?()
+    }
+
+    func presentRecentSelectionHistoryOrExample(sourceAppName: String = "Lingobar") {
+        actions = AppSettings.actionDescriptors
+        if let record = recentSelectionHistoryRecord() {
+            let snapshot = record.storedSnapshot(for: record.actionID)
+                ?? LingobarStoredResultSnapshot(result: record.resultSnapshot)
+            presentSnapshot(
+                sourceText: record.sourceText,
+                sourceAppName: record.sourceAppName,
+                sourceAction: record.action,
+                sourceActionID: record.actionID,
+                resultSnapshot: snapshot.result,
+                grammarSnapshot: snapshot.grammarResult,
+                resultSnapshots: record.resultSnapshots
+            )
+            currentHistoryRecord = record
+            status = "最近选择历史"
+            return
+        }
+
+        present(
+            selection: Self.defaultExampleSelection,
+            sourceAppName: sourceAppName,
+            requestedActionID: AppSettings.defaultEnglishActionID
+        )
+        status = "示例文本"
+    }
+
+    var launcherActions: [LingobarActionDescriptor] {
+        Array(actions.filter(\.isResultProducing).prefix(5))
+    }
+
+    func openFromLauncher(_ descriptor: LingobarActionDescriptor) {
+        mode = .selection
+        action = descriptor
+        result = pendingResult(for: descriptor)
+        grammarResult = nil
+        showsResult = true
+        isResultStale = false
+        onLayoutChanged?()
+        guard descriptor.isAvailable(for: activeText) else {
+            showUnavailableAction(descriptor)
+            return
+        }
+        runAIIfAvailable(for: descriptor, text: activeText)
+    }
+
     func presentGrammarFixture(sourceAppName: String = "Lingobar") {
-        actions = AppSettings.actionOrder
+        actions = AppSettings.actionDescriptors
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
@@ -833,9 +921,9 @@ final class LingobarViewModel: ObservableObject {
         mode = .selection
         selectionSource = sourceAppName
         selectedText = grammar.sourceSentence
-        action = .grammar
+        action = LingobarActionDescriptor(builtInAction: .grammar)
         grammarResult = grammar
-        result = grammar.lingobarResult(shortcut: shortcut(for: .grammar))
+        result = grammar.lingobarResult(shortcut: shortcut(for: action))
         setSharedLearningInsights(from: grammar)
         showsResult = true
         isLoading = false
@@ -845,7 +933,7 @@ final class LingobarViewModel: ObservableObject {
     }
 
     func presentSetupGate(_ setupGateStatus: SetupGateStatus) {
-        actions = AppSettings.actionOrder
+        actions = AppSettings.actionDescriptors
         currentHistoryRecord = nil
         activeResultSnapshots = [:]
         recentCollectedPhraseID = nil
@@ -861,19 +949,26 @@ final class LingobarViewModel: ObservableObject {
     }
 
     func perform(_ newAction: LanguageAction) {
+        guard let descriptor = actionDescriptor(for: newAction.actionID) else {
+            return
+        }
+        perform(descriptor)
+    }
+
+    func perform(_ newAction: LingobarActionDescriptor) {
         guard newAction.isAvailable(for: activeText) else {
             status = "\(newAction.title)仅支持英文内容"
             return
         }
 
-        if newAction == .collect {
+        if newAction.builtInAction == .collect {
             recentCollectedPhraseID = nil
             saveCurrentHistorySnapshot()
             return
         }
 
         recentCollectedPhraseID = nil
-        if let storedSnapshot = activeResultSnapshots[newAction.rawValue] {
+        if !isResultStale, let storedSnapshot = activeResultSnapshots[newAction.id] {
             applyStoredSnapshot(storedSnapshot, action: newAction, status: "已从快照打开")
             return
         }
@@ -881,11 +976,12 @@ final class LingobarViewModel: ObservableObject {
         action = newAction
         grammarResult = nil
         currentHistoryRecord = nil
+        isResultStale = false
 
-        switch newAction {
+        switch newAction.builtInAction {
         case .copy:
             copyResult()
-        case .translate, .grammar, .rewrite, .examples, .pronounce:
+        case .translate, .grammar, .rewrite, .examples, .pronounce, nil:
             result = pendingResult(for: newAction)
             showsResult = true
             onLayoutChanged?()
@@ -910,15 +1006,54 @@ final class LingobarViewModel: ObservableObject {
         recentCollectedPhraseID = nil
         resetSharedLearningInsights()
         resetFollowUpThread()
-        perform(.rewrite)
+        perform(action)
     }
 
-    func isAvailable(_ languageAction: LanguageAction) -> Bool {
+    func selectInputAction(_ descriptor: LingobarActionDescriptor) {
+        guard mode == .input,
+              descriptor.isResultProducing else {
+            return
+        }
+        action = descriptor
+        result = pendingResult(for: descriptor)
+        showsResult = false
+        grammarResult = nil
+        currentHistoryRecord = nil
+        activeResultSnapshots = [:]
+        status = "已选择\(descriptor.title)"
+    }
+
+    func updateSelectedText(_ text: String) {
+        guard selectedText != text else {
+            return
+        }
+        selectedText = text
+        guard mode == .selection else {
+            return
+        }
+        activeAIRequestID = UUID()
+        currentHistoryRecord = nil
+        activeResultSnapshots = [:]
+        grammarResult = nil
+        isResultStale = showsResult
+        resetSharedLearningInsights()
+        resetFollowUpThread()
+        if isResultStale {
+            status = "原文已修改"
+        }
+        onLayoutChanged?()
+    }
+
+    func regenerateCurrentAction() {
+        perform(action)
+    }
+
+    func isAvailable(_ languageAction: LingobarActionDescriptor) -> Bool {
         languageAction.isAvailable(for: activeText)
     }
 
-    func isActionHighlighted(_ languageAction: LanguageAction) -> Bool {
-        if languageAction == .collect {
+    func isActionHighlighted(_ languageAction: LingobarActionDescriptor) -> Bool {
+        if languageAction.builtInAction == .collect {
             return currentHistoryRecord?.isSaved == true
         }
         return action == languageAction
@@ -961,7 +1096,7 @@ final class LingobarViewModel: ObservableObject {
     }
 
     var followUpSuggestions: [String] {
-        switch action {
+        switch action.builtInAction {
         case .grammar:
             [
                 "这句最容易读错的是哪一层？",
@@ -997,6 +1132,12 @@ final class LingobarViewModel: ObservableObject {
                 "这段话还能怎么表达？",
                 "帮我解释关键表达",
                 "给我一个可复用例句"
+            ]
+        case nil:
+            [
+                "这个结果还能换一种说法吗？",
+                "帮我解释一下关键表达",
+                "给我一个可复用版本"
             ]
         }
     }
@@ -1153,9 +1294,23 @@ final class LingobarViewModel: ObservableObject {
         guard !title.isEmpty else {
             return nil
         }
-        let snapshot = fragment.resultSnapshot(
-            action: action,
-            shortcut: shortcut(for: action)
+        let summary = fragment.note.isEmpty ? fragment.title : fragment.note
+        let snapshotRows = fragment.rows.isEmpty
+            ? [LingobarRow(fragment.type, fragment.title)]
+            : fragment.rows
+        let snapshot = LingobarResult(
+            title: action.title,
+            shortcut: shortcut(for: action),
+            summary: summary,
+            rows: snapshotRows,
+            sideTitle: "后续动作",
+            chips: [],
+            moreActionTitle: action.moreActionTitle,
+            defaultCollectionItem: DefaultCollectionItem(
+                title: fragment.title,
+                note: fragment.note,
+                type: fragment.type
+            )
         )
         let phrase = SavedPhrase(
             title: title,
@@ -1163,7 +1318,7 @@ final class LingobarViewModel: ObservableObject {
             type: fragment.type.isEmpty ? "文本" : fragment.type,
             sourceText: activeText,
             sourceAppName: activeSourceAppName,
-            sourceAction: action,
+            sourceAction: action.builtInAction,
             resultSnapshot: snapshot
         )
         savedPhrases.insert(phrase, at: 0)
@@ -1220,13 +1375,49 @@ final class LingobarViewModel: ObservableObject {
         status = "已复制选中文本"
     }
 
-    private func configuredDefaultSelectionAction(for selection: String) -> LanguageAction {
-        let configured = LanguageAction.defaultSelectionAction(for: selection) == .rewrite
-            ? AppSettings.defaultChineseMixedAction
-            : AppSettings.defaultEnglishAction
-        return configured.isAvailable(for: selection)
-            ? configured
-            : LanguageAction.defaultSelectionAction(for: selection)
+    private func configuredDefaultSelectionAction(for selection: String) -> LingobarActionDescriptor {
+        let builtInDefault = LanguageAction.defaultSelectionAction(for: selection)
+        let configuredID = builtInDefault == .rewrite
+            ? AppSettings.defaultChineseMixedActionID
+            : AppSettings.defaultEnglishActionID
+        let configured = actionDescriptor(for: configuredID)
+        if let configured {
+            return configured
+        }
+        return actionDescriptor(for: builtInDefault.actionID)
+            ?? LingobarActionDescriptor(builtInAction: builtInDefault)
+    }
+
+    private func actionDescriptor(for actionID: String?) -> LingobarActionDescriptor? {
+        guard let actionID,
+              !actionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        if let descriptor = actions.first(where: { $0.id == actionID }) {
+            return descriptor
+        }
+        return AppSettings.actionDescriptors.first { $0.id == actionID }
+    }
+
+    private func showUnavailableAction(_ unavailableAction: LingobarActionDescriptor) {
+        action = unavailableAction
+        grammarResult = nil
+        result = errorResult(message: "\(unavailableAction.title)暂不支持当前文本。")
+        showsResult = true
+        isLoading = false
+        loadingStartedAt = nil
+        status = "\(unavailableAction.title)不适用"
+        onLayoutChanged?()
+    }
+
+    private func recentSelectionHistoryRecord() -> LingobarHistoryRecord? {
+        guard let records = try? historyStore.load() else {
+            return nil
+        }
+        return records.first { record in
+            !record.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                record.sourceAppName != "输入模式"
+        }
     }
 
     private func clipboardText() -> String {
@@ -1247,11 +1438,12 @@ final class LingobarViewModel: ObservableObject {
         sourceText: String,
         sourceAppName: String,
         sourceAction: LanguageAction?,
+        sourceActionID: String? = nil,
         resultSnapshot: LingobarResult,
         grammarSnapshot: GrammarResult? = nil,
         resultSnapshots: [String: LingobarStoredResultSnapshot] = [:]
     ) {
-        actions = AppSettings.actionOrder
+        actions = AppSettings.actionDescriptors
         activeAIRequestID = UUID()
         resetSharedLearningInsights()
         resetFollowUpSession(sendsLayoutChange: false)
@@ -1259,16 +1451,18 @@ final class LingobarViewModel: ObservableObject {
         selectionSource = sourceAppName.isEmpty ? "Lingobar" : sourceAppName
         selectedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         inputText = ""
-        action = sourceAction ?? LanguageAction.defaultSelectionAction(for: selectedText)
+        action = actionDescriptor(for: sourceActionID)
+            ?? sourceAction.flatMap { actionDescriptor(for: $0.actionID) }
+            ?? configuredDefaultSelectionAction(for: selectedText)
         var snapshots = resultSnapshots
-        snapshots[action.rawValue] = LingobarStoredResultSnapshot(
+        snapshots[action.id] = LingobarStoredResultSnapshot(
             result: resultSnapshot,
-            grammarResult: grammarSnapshot ?? resultSnapshots[action.rawValue]?.grammarResult
+            grammarResult: grammarSnapshot ?? resultSnapshots[action.id]?.grammarResult
         )
         activeResultSnapshots = snapshots
         recentCollectedPhraseID = nil
-        grammarResult = action == .grammar ? activeResultSnapshots[action.rawValue]?.grammarResult : nil
-        if let grammarSnapshot = grammarSnapshot ?? activeResultSnapshots[LanguageAction.grammar.rawValue]?.grammarResult {
+        grammarResult = action.builtInAction == .grammar ? activeResultSnapshots[action.id]?.grammarResult : nil
+        if let grammarSnapshot = grammarSnapshot ?? activeResultSnapshots[LanguageAction.grammar.actionID]?.grammarResult {
             setSharedLearningInsights(from: grammarSnapshot)
         }
         result = resultSnapshot
@@ -1282,12 +1476,12 @@ final class LingobarViewModel: ObservableObject {
 
     private func applyStoredSnapshot(
         _ snapshot: LingobarStoredResultSnapshot,
-        action newAction: LanguageAction,
+        action newAction: LingobarActionDescriptor,
         status message: String
     ) {
         activeAIRequestID = UUID()
         action = newAction
-        grammarResult = newAction == .grammar ? snapshot.grammarResult : nil
+        grammarResult = newAction.builtInAction == .grammar ? snapshot.grammarResult : nil
         result = snapshot.result
         showsResult = true
         isLoading = false
@@ -1319,7 +1513,7 @@ final class LingobarViewModel: ObservableObject {
     }
 
     private var activeText: String {
-        mode == .selection ? selectedText : inputText
+        mode == .input ? inputText : selectedText
     }
 
     private var activeSourceAppName: String {
@@ -1473,7 +1667,7 @@ final class LingobarViewModel: ObservableObject {
         return chunks
     }
 
-    private func runAIIfAvailable(for action: LanguageAction, text: String) {
+    private func runAIIfAvailable(for action: LingobarActionDescriptor, text: String) {
         guard let aiClient = AppSettings.makeAIClient() else {
             status = "需要 AI 设置"
             grammarResult = nil
@@ -1486,11 +1680,11 @@ final class LingobarViewModel: ObservableObject {
         let historySourceAppName = mode == .input ? "输入模式" : selectionSource
         let requestID = UUID()
         activeAIRequestID = requestID
-        if action != .grammar {
+        if action.builtInAction != .grammar {
             warmSharedLearningInsightsIfAvailable(for: text, aiClient: aiClient)
         }
 
-        let grammarKey = action == .grammar
+        let grammarKey = action.builtInAction == .grammar
             ? grammarRequestKey(for: text, configuration: aiClient.configuration)
             : nil
         if let grammarKey, let cachedGrammar = grammarResultCache[grammarKey] {
@@ -1508,7 +1702,7 @@ final class LingobarViewModel: ObservableObject {
         isLoading = true
         loadingStartedAt = Date()
         status = "AI 生成中"
-        recordUITestMetric(event: "start", action: action.rawValue, requestID: requestID)
+        recordUITestMetric(event: "start", action: action.id, requestID: requestID)
         onLayoutChanged?()
 
         if let grammarKey {
@@ -1548,12 +1742,20 @@ final class LingobarViewModel: ObservableObject {
         }
 
         let system = systemPrompt(for: action)
+        let user = action.customPromptAction?.userPrompt(for: text) ?? text
         let completionTask = Task.detached(priority: .userInitiated) {
-            try await LingobarAICompletionDecoder.decode(
-                action: action,
+            if let builtInAction = action.builtInAction {
+                return try await LingobarAICompletionDecoder.decode(
+                    action: builtInAction,
+                    aiClient: aiClient,
+                    system: system,
+                    user: user
+                )
+            }
+            return try await LingobarAICompletionDecoder.decodeCustom(
                 aiClient: aiClient,
                 system: system,
-                user: text
+                user: user
             )
         }
         Task {
@@ -1575,7 +1777,7 @@ final class LingobarViewModel: ObservableObject {
 
     private func completeGrammarSpine(
         _ grammar: GrammarResult,
-        action: LanguageAction,
+        action: LingobarActionDescriptor,
         requestID: UUID
     ) {
         guard activeAIRequestID == requestID else {
@@ -1585,7 +1787,7 @@ final class LingobarViewModel: ObservableObject {
         result = grammar.lingobarResult(shortcut: shortcut(for: action))
         status = "语法骨架完成"
         showsResult = true
-        recordUITestMetric(event: "spine", action: action.rawValue, requestID: requestID)
+        recordUITestMetric(event: "spine", action: action.id, requestID: requestID)
         onLayoutChanged?()
     }
 
@@ -1608,7 +1810,7 @@ final class LingobarViewModel: ObservableObject {
 
     private func completeAIRequest(
         _ decoded: LingobarAICompletionResult,
-        action: LanguageAction,
+        action: LingobarActionDescriptor,
         requestID: UUID,
         historySourceText: String,
         historySourceAppName: String,
@@ -1636,7 +1838,7 @@ final class LingobarViewModel: ObservableObject {
 
         status = "AI 完成"
         isLoading = false
-        recordUITestMetric(event: "complete", action: action.rawValue, requestID: requestID)
+        recordUITestMetric(event: "complete", action: action.id, requestID: requestID)
         loadingStartedAt = nil
         onLayoutChanged?()
         recordCompletedHistory(
@@ -1662,7 +1864,7 @@ final class LingobarViewModel: ObservableObject {
             status = "AI 不可用"
         }
         isLoading = false
-        recordUITestMetric(event: "failure", action: action.rawValue, requestID: requestID, error: error)
+        recordUITestMetric(event: "failure", action: action.id, requestID: requestID, error: error)
         loadingStartedAt = nil
         onLayoutChanged?()
     }
@@ -1815,14 +2017,14 @@ final class LingobarViewModel: ObservableObject {
     }
 
     private func updateCurrentGrammarResultLearningInsights(_ insights: LingobarLearningInsights) {
-        guard action == .grammar,
+        guard action.builtInAction == .grammar,
               let grammarResult,
               grammarResult.learningInsights != insights else {
             return
         }
         let updatedGrammar = grammarResult.applyingLearningInsights(insights)
         self.grammarResult = updatedGrammar
-        result = updatedGrammar.lingobarResult(shortcut: shortcut(for: .grammar))
+        result = updatedGrammar.lingobarResult(shortcut: shortcut(for: action))
     }
 
     private func resetSharedLearningInsights() {
@@ -1831,13 +2033,13 @@ final class LingobarViewModel: ObservableObject {
     }
 
     private func recordCompletedHistory(
-        action: LanguageAction,
+        action: LingobarActionDescriptor,
         sourceText: String,
         sourceAppName: String,
         result: LingobarResult,
         grammarSnapshot: GrammarResult? = nil
     ) {
-        activeResultSnapshots[action.rawValue] = LingobarStoredResultSnapshot(
+        activeResultSnapshots[action.id] = LingobarStoredResultSnapshot(
             result: result,
             grammarResult: grammarSnapshot
         )
@@ -1859,13 +2061,22 @@ final class LingobarViewModel: ObservableObject {
         }
     }
 
-    private func systemPrompt(for action: LanguageAction) -> String {
+    private func systemPrompt(for action: LingobarActionDescriptor) -> String {
         let schema = """
         Return ONLY JSON with this schema:
         {"title":"\(action.title)","summary":"...","rows":[{"label":"...","value":"..."}],"chips":["..."],"moreActionTitle":"\(action.moreActionTitle)","defaultCollectionItem":{"title":"...","note":"...","type":"短语|英文|例句|句型|文本"}}
         Do not include learningInsights here. 固定搭配, 常见词组, and 语法点 are shared from the cached grammar result so every action tab shows the same learning sections.
         """
-        return switch action {
+        if let customPromptAction = action.customPromptAction {
+            return """
+            You are Lingobar, a concise bilingual English learning assistant. The UI language is Simplified Chinese.
+            Follow the user's saved instruction exactly while preserving the source text's meaning unless the instruction explicitly asks otherwise.
+            Saved action title: \(customPromptAction.title)
+            \(schema)
+            """
+        }
+
+        return switch action.builtInAction {
         case .translate:
             """
             You are Lingobar, a concise English learning assistant. Translate the user's text into Chinese.
@@ -1899,7 +2110,7 @@ final class LingobarViewModel: ObservableObject {
             "You are Lingobar. Produce 3 to 5 reusable English examples and avoid long explanations. \(schema)"
         case .pronounce:
             "You are Lingobar. Provide pronunciation guidance: stress, linking, and common mistakes. \(schema)"
-        default:
+        case .copy, .collect, nil:
             "You are Lingobar, a concise bilingual English learning assistant. \(schema)"
         }
     }
@@ -1940,28 +2151,28 @@ final class LingobarViewModel: ObservableObject {
         return "AI 请求失败，请重试或检查 AI 设置。"
     }
 
-    private func decodingErrorMessage(for action: LanguageAction) -> String {
-        if action == .grammar {
+    private func decodingErrorMessage(for action: LingobarActionDescriptor) -> String {
+        if action.builtInAction == .grammar {
             return "AI 返回结构不符合语法面板，请重试。"
         }
         return "AI 返回结构不符合\(action.title)结果，请重试。"
     }
 
-    func shortcut(for action: LanguageAction) -> String {
-        LanguageAction.shortcut(for: action, in: actions)
+    func shortcut(for action: LingobarActionDescriptor) -> String {
+        LingobarActionCatalog.shortcut(for: action, in: actions)
     }
 
-    private func pendingResult(for action: LanguageAction) -> LingobarResult {
-        Self.pendingResult(for: action, actionOrder: actions)
+    private func pendingResult(for action: LingobarActionDescriptor) -> LingobarResult {
+        Self.pendingResult(for: action, actionDescriptors: actions)
     }
 
     private static func pendingResult(
-        for action: LanguageAction,
-        actionOrder: [LanguageAction]
+        for action: LingobarActionDescriptor,
+        actionDescriptors: [LingobarActionDescriptor]
     ) -> LingobarResult {
         LingobarResult(
             title: action.title,
-            shortcut: LanguageAction.shortcut(for: action, in: actionOrder),
+            shortcut: LingobarActionCatalog.shortcut(for: action, in: actionDescriptors),
             summary: "正在请求 AI…",
             rows: [],
             sideTitle: "后续动作",

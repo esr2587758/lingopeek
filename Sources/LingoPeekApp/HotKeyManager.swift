@@ -2,23 +2,23 @@ import Carbon.HIToolbox
 import Foundation
 
 final class HotKeyManager: @unchecked Sendable {
-    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyRefs: [UInt32: EventHotKeyRef] = [:]
+    private var callbacks: [UInt32: @MainActor @Sendable () -> Void] = [:]
     private var handlerRef: EventHandlerRef?
-    private var nextHotKeyID: UInt32 = 1
-    private let onPressed: @MainActor @Sendable () -> Void
-
-    init(onPressed: @escaping @MainActor @Sendable () -> Void) {
-        self.onPressed = onPressed
-    }
+    private let signature = fourCharCode("LPK1")
 
     @discardableResult
-    func register(_ hotKey: LingobarHotKey = AppSettings.hotKey) -> OSStatus {
+    func register(
+        _ hotKey: LingobarHotKey,
+        id: UInt32,
+        onPressed: @escaping @MainActor @Sendable () -> Void
+    ) -> OSStatus {
         let handlerStatus = installHandlerIfNeeded()
         guard handlerStatus == noErr else {
             return handlerStatus
         }
 
-        let hotKeyID = EventHotKeyID(signature: fourCharCode("LPK1"), id: nextHotKeyID)
+        let hotKeyID = EventHotKeyID(signature: signature, id: id)
         var nextHotKeyRef: EventHotKeyRef?
         let status = RegisterEventHotKey(
             hotKey.keyCode,
@@ -32,19 +32,20 @@ final class HotKeyManager: @unchecked Sendable {
             return status
         }
 
-        if let hotKeyRef {
-            UnregisterEventHotKey(hotKeyRef)
+        if let existing = hotKeyRefs[id] {
+            UnregisterEventHotKey(existing)
         }
-        hotKeyRef = nextHotKeyRef
-        nextHotKeyID = nextHotKeyID &+ 1
+        hotKeyRefs[id] = nextHotKeyRef
+        callbacks[id] = onPressed
         return status
     }
 
     func unregister() {
-        if let hotKeyRef {
+        for hotKeyRef in hotKeyRefs.values {
             UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
         }
+        hotKeyRefs = [:]
+        callbacks = [:]
         if let handlerRef {
             RemoveEventHandler(handlerRef)
             self.handlerRef = nil
@@ -67,14 +68,17 @@ final class HotKeyManager: @unchecked Sendable {
         let userData = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         return InstallEventHandler(
             GetApplicationEventTarget(),
-            { _, _, userData in
+            { _, event, userData in
                 guard let userData else {
                     return noErr
                 }
                 let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
+                guard let callback = manager.callback(for: event) else {
+                    return noErr
+                }
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
-                        manager.onPressed()
+                        callback()
                     }
                 }
                 return noErr
@@ -84,6 +88,27 @@ final class HotKeyManager: @unchecked Sendable {
             userData,
             &handlerRef
         )
+    }
+
+    private func callback(for event: EventRef?) -> (@MainActor @Sendable () -> Void)? {
+        guard let event else {
+            return nil
+        }
+        var hotKeyID = EventHotKeyID()
+        let status = GetEventParameter(
+            event,
+            EventParamName(kEventParamDirectObject),
+            EventParamType(typeEventHotKeyID),
+            nil,
+            MemoryLayout<EventHotKeyID>.size,
+            nil,
+            &hotKeyID
+        )
+        guard status == noErr,
+              hotKeyID.signature == signature else {
+            return nil
+        }
+        return callbacks[hotKeyID.id]
     }
 }
 

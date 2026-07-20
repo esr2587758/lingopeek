@@ -62,12 +62,17 @@ public enum LingobarRelaunchPlanner {
     public static func plan(
         snapshots: [String: LingobarStoredResultSnapshot],
         sourceAction: LanguageAction?,
+        sourceActionID: String? = nil,
         requestedAction: LanguageAction?
     ) -> LingobarRelaunchPlan {
         let fallbackAction = requestedAction ?? sourceAction ?? .translate
         guard let requestedAction else {
             return plan(
-                storedSnapshot: preferredSnapshot(in: snapshots, sourceAction: sourceAction),
+                storedSnapshot: preferredSnapshot(
+                    in: snapshots,
+                    sourceAction: sourceAction,
+                    sourceActionID: sourceActionID
+                ),
                 sourceAction: sourceAction,
                 requestedAction: nil
             )
@@ -78,7 +83,11 @@ public enum LingobarRelaunchPlanner {
         guard let sourceAction,
               requestedAction != sourceAction else {
             return plan(
-                storedSnapshot: preferredSnapshot(in: snapshots, sourceAction: sourceAction),
+                storedSnapshot: preferredSnapshot(
+                    in: snapshots,
+                    sourceAction: sourceAction,
+                    sourceActionID: sourceActionID
+                ),
                 sourceAction: sourceAction,
                 requestedAction: requestedAction
             )
@@ -105,8 +114,13 @@ public enum LingobarRelaunchPlanner {
 
     private static func preferredSnapshot(
         in snapshots: [String: LingobarStoredResultSnapshot],
-        sourceAction: LanguageAction?
+        sourceAction: LanguageAction?,
+        sourceActionID: String? = nil
     ) -> LingobarStoredResultSnapshot? {
+        if let sourceActionID,
+           let snapshot = snapshots[sourceActionID] {
+            return snapshot
+        }
         if let sourceAction,
            let snapshot = snapshots[sourceAction.rawValue] {
             return snapshot

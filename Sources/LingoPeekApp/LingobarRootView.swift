@@ -5,6 +5,7 @@ import SwiftUI
 
 struct LingobarRootView: View {
     private static let mainWidth: CGFloat = 720
+    private static let launcherWidth: CGFloat = 216
     private static let followUpPaneWidth: CGFloat = 420
     private static let followUpGap: CGFloat = 14
     private static let followUpMinimumHeight: CGFloat = 500
@@ -23,7 +24,7 @@ struct LingobarRootView: View {
         HStack(alignment: .top, spacing: viewModel.isFollowUpOpen ? Self.followUpGap : 0) {
             mainContent
                 .frame(
-                    width: Self.mainWidth,
+                    width: mainContentWidth,
                     height: rootHeight,
                     alignment: .top
                 )
@@ -211,47 +212,32 @@ struct LingobarRootView: View {
     }
 
     private var selectionLauncher: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "text.cursor")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.lingoAccentText)
-                Text(viewModel.selectedText)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.lingoMuted)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 12)
-
-            HStack(spacing: 5) {
-                ForEach(viewModel.launcherActions, id: \.id) { action in
-                    Button {
-                        viewModel.openFromLauncher(action)
-                    } label: {
-                        Image(systemName: action.symbol)
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(width: 30, height: 30)
-                            .foregroundStyle(Color.lingoText)
-                            .hoverChrome(
-                                fill: Color.lingoChip,
-                                hoverFill: Color.lingoChipHover,
-                                stroke: Color.lingoHairline,
-                                hoverStroke: Color.lingoHairlineStrong,
-                                cornerRadius: 8
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .help(action.title)
+        HStack(spacing: 5) {
+            ForEach(viewModel.launcherActions, id: \.id) { action in
+                Button {
+                    viewModel.openFromLauncher(action)
+                } label: {
+                    Image(systemName: action.symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 30, height: 30)
+                        .foregroundStyle(Color.lingoText)
+                        .hoverChrome(
+                            fill: Color.lingoChip,
+                            hoverFill: Color.lingoChipHover,
+                            stroke: Color.lingoHairline,
+                            hoverStroke: Color.lingoHairlineStrong,
+                            cornerRadius: 8
+                        )
                 }
-
-                iconButton(systemName: "xmark", help: "关闭") {
-                    onClose()
-                }
+                .buttonStyle(.plain)
+                .help(action.title)
             }
-            .padding(.trailing, 8)
+
+            iconButton(systemName: "xmark", help: "关闭") {
+                onClose()
+            }
         }
+        .padding(.horizontal, 8)
         .frame(maxWidth: .infinity)
         .frame(height: 46)
         .background {
@@ -357,7 +343,7 @@ struct LingobarRootView: View {
 
     private var inputResultPanel: some View {
         VStack(spacing: 0) {
-            panelTitle("改写 · 自然英文", shortcut: viewModel.shortcut(for: viewModel.action))
+            panelTitle(viewModel.action.title, shortcut: viewModel.shortcut(for: viewModel.action))
             panelBody(height: 244, scrolls: false)
             if !viewModel.isLoading {
                 resultFooter
@@ -967,7 +953,11 @@ struct LingobarRootView: View {
     }
 
     private var rootWidth: CGFloat {
-        Self.mainWidth + (viewModel.isFollowUpOpen ? Self.followUpGap + Self.followUpPaneWidth : 0)
+        mainContentWidth + (viewModel.isFollowUpOpen ? Self.followUpGap + Self.followUpPaneWidth : 0)
+    }
+
+    private var mainContentWidth: CGFloat {
+        viewModel.mode == .launcher ? Self.launcherWidth : Self.mainWidth
     }
 
     private var rootHeight: CGFloat {

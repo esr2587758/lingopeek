@@ -84,6 +84,10 @@ final class LingobarController: NSObject, NSWindowDelegate {
             DispatchQueue.main.async { [weak self] in
                 self?.hubWindowController.show(section: openHubOnLaunch)
             }
+        } else if ProcessInfo.processInfo.environment["LINGOPEEK_UI_TEST_INPUT"] == "1" {
+            DispatchQueue.main.async { [weak self] in
+                self?.presentInputWorkflow()
+            }
         } else if let uiTestSelection = uiTestSelection,
                   !uiTestSelection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             DispatchQueue.main.async { [weak self] in
@@ -145,6 +149,14 @@ final class LingobarController: NSObject, NSWindowDelegate {
     }
 
     private func presentUITestSelection(_ selection: String) {
+        if ProcessInfo.processInfo.environment["LINGOPEEK_UI_TEST_LAUNCHER"] == "1" {
+            viewModel.presentSelectionLauncher(selection: selection, sourceAppName: "UI Test")
+            let panel = ensurePanel()
+            panel.setContentSize(contentSize)
+            positionLauncher(panel)
+            showLauncher(panel)
+            return
+        }
         viewModel.present(selection: selection, sourceAppName: "UI Test")
         if LanguageAction.grammar.isAvailable(for: selection) {
             viewModel.perform(.grammar)
@@ -381,8 +393,8 @@ final class LingobarController: NSObject, NSWindowDelegate {
         panel.onCancel = { [weak self] in
             self?.hide()
         }
-        panel.onLanguageAction = { [weak self] action in
-            self?.viewModel.perform(action)
+        panel.onLanguageAction = { [weak self] descriptor in
+            self?.viewModel.perform(descriptor)
         }
         panel.isReleasedWhenClosed = false
         panel.level = .floating
@@ -424,7 +436,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
         case .setup:
             Self.setupPanelSize
         case .launcher:
-            NSSize(width: 420, height: 46)
+            NSSize(width: 216, height: 46)
         case .selection:
             if viewModel.action.builtInAction == .grammar, viewModel.grammarResult != nil {
                 Self.grammarPanelSize
@@ -597,6 +609,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
         switch LingobarRelaunchPlanner.plan(
             snapshots: item.resultSnapshots,
             sourceAction: item.action,
+            sourceActionID: item.actionID,
             requestedAction: nil
         ) {
         case .openSnapshot(let snapshot):
@@ -605,6 +618,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
                 sourceAppName: item.source,
                 sourceAction: item.action,
                 sourceActionID: item.actionID,
+                sourceActionTitle: item.actionTitle,
                 resultSnapshot: snapshot.result,
                 grammarSnapshot: snapshot.grammarResult,
                 resultSnapshots: item.resultSnapshots
@@ -621,7 +635,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
 
 private final class LingobarPanel: NSPanel {
     var onCancel: (() -> Void)?
-    var onLanguageAction: ((LanguageAction) -> Void)?
+    var onLanguageAction: ((LingobarActionDescriptor) -> Void)?
 
     override var canBecomeKey: Bool {
         true
@@ -653,19 +667,18 @@ private final class LingobarPanel: NSPanel {
     private func handleLingobarShortcut(_ event: NSEvent) -> Bool {
         guard event.type == .keyDown,
               let keyEquivalent = event.charactersIgnoringModifiers,
-              let action = LanguageAction.matchingKeyboardShortcut(
+              let descriptor = LingobarActionCatalog.matchingKeyboardShortcut(
                 keyEquivalent: keyEquivalent,
                 command: event.modifierFlags.contains(.command),
                 option: event.modifierFlags.contains(.option),
                 control: event.modifierFlags.contains(.control),
                 shift: event.modifierFlags.contains(.shift),
-                actionOrder: AppSettings.actionOrder
-              ),
-              action != .copy else {
+                descriptors: AppSettings.actionDescriptors
+              ) else {
             return false
         }
 
-        onLanguageAction?(action)
+        onLanguageAction?(descriptor)
         return true
     }
 }

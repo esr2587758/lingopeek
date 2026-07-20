@@ -176,6 +176,8 @@ public struct SavedPhrase: Identifiable, Equatable, Codable, Sendable {
     public var sourceText: String
     public var sourceAppName: String
     public var sourceAction: LanguageAction?
+    public var sourceActionID: String?
+    public var sourceActionTitle: String?
     public var resultSnapshot: LingobarResult?
     public var createdAt: Date
 
@@ -187,6 +189,8 @@ public struct SavedPhrase: Identifiable, Equatable, Codable, Sendable {
         sourceText: String = "",
         sourceAppName: String = "Lingobar",
         sourceAction: LanguageAction? = nil,
+        sourceActionID: String? = nil,
+        sourceActionTitle: String? = nil,
         resultSnapshot: LingobarResult? = nil,
         createdAt: Date = Date()
     ) {
@@ -197,6 +201,8 @@ public struct SavedPhrase: Identifiable, Equatable, Codable, Sendable {
         self.sourceText = sourceText
         self.sourceAppName = sourceAppName
         self.sourceAction = sourceAction
+        self.sourceActionID = sourceActionID ?? sourceAction?.actionID
+        self.sourceActionTitle = sourceActionTitle ?? sourceAction?.title
         self.resultSnapshot = resultSnapshot
         self.createdAt = createdAt
     }
@@ -209,12 +215,15 @@ public struct SavedPhrase: Identifiable, Equatable, Codable, Sendable {
         case sourceText
         case sourceAppName
         case sourceAction
+        case sourceActionID
+        case sourceActionTitle
         case resultSnapshot
         case createdAt
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let sourceAction = try container.decodeIfPresent(LanguageAction.self, forKey: .sourceAction)
         self.init(
             id: try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID(),
             title: try container.decodeIfPresent(String.self, forKey: .title) ?? "",
@@ -222,7 +231,9 @@ public struct SavedPhrase: Identifiable, Equatable, Codable, Sendable {
             type: try container.decodeIfPresent(String.self, forKey: .type) ?? "文本",
             sourceText: try container.decodeIfPresent(String.self, forKey: .sourceText) ?? "",
             sourceAppName: try container.decodeIfPresent(String.self, forKey: .sourceAppName) ?? "Lingobar",
-            sourceAction: try container.decodeIfPresent(LanguageAction.self, forKey: .sourceAction),
+            sourceAction: sourceAction,
+            sourceActionID: try container.decodeIfPresent(String.self, forKey: .sourceActionID) ?? sourceAction?.actionID,
+            sourceActionTitle: try container.decodeIfPresent(String.self, forKey: .sourceActionTitle) ?? sourceAction?.title,
             resultSnapshot: try container.decodeIfPresent(LingobarResult.self, forKey: .resultSnapshot),
             createdAt: try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         )

@@ -78,13 +78,13 @@ public enum LingobarHubLibrary {
                 source: phrase.sourceAppName,
                 createdAt: phrase.createdAt,
                 action: phrase.sourceAction,
-                actionID: phrase.sourceAction?.actionID,
-                actionTitle: phrase.sourceAction?.title,
+                actionID: phrase.sourceActionID ?? phrase.sourceAction?.actionID,
+                actionTitle: phrase.sourceActionTitle ?? phrase.sourceAction?.title,
                 copyText: phrase.title,
                 sourceText: phrase.sourceText.isEmpty ? phrase.title : phrase.sourceText,
                 resultSnapshot: phrase.resultSnapshot,
                 resultSnapshots: phrase.resultSnapshot.map { snapshot in
-                    [LingobarHubLibrary.snapshotKey(for: phrase.sourceAction): LingobarStoredResultSnapshot(result: snapshot)]
+                    [LingobarHubLibrary.snapshotKey(for: phrase): LingobarStoredResultSnapshot(result: snapshot)]
                 } ?? [:]
             )
         }
@@ -117,7 +117,7 @@ public enum LingobarHubLibrary {
         }
     }
 
-    private static func snapshotKey(for action: LanguageAction?) -> String {
-        (action ?? .translate).rawValue
+    private static func snapshotKey(for phrase: SavedPhrase) -> String {
+        phrase.sourceActionID ?? phrase.sourceAction?.actionID ?? LanguageAction.translate.actionID
     }
 }

@@ -379,7 +379,7 @@ final class LingobarHubState: ObservableObject {
                 item.note,
                 item.itemType,
                 item.source,
-                item.action?.title ?? ""
+                item.actionTitle
             ].contains { $0.lowercased().contains(normalizedQuery) }
         }
     }
@@ -1041,8 +1041,8 @@ private struct HubLibraryCard: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
                 HubBadge(title: item.itemType)
-                if let action = item.action {
-                    HubBadge(title: action.title, tint: HubColor.accent)
+                if !item.actionTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HubBadge(title: item.actionTitle, tint: HubColor.accent)
                 }
                 if item.kind == .history, item.isSaved {
                     HubBadge(title: "已保存", tint: HubColor.ok)

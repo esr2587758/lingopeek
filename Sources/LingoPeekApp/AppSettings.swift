@@ -71,7 +71,7 @@ enum AppSettings {
     static var setupGateStatus: SetupGateStatus {
         if uiTestBypassesSetupGate {
             return SetupGateStatus(
-                aiAccessConfigured: aiConfiguration.isUsable,
+                aiAccessConfigured: true,
                 accessibilityPermissionGranted: true
             )
         }

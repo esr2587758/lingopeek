@@ -874,6 +874,7 @@ final class LingobarViewModel: ObservableObject {
                 sourceAppName: record.sourceAppName,
                 sourceAction: record.action,
                 sourceActionID: record.actionID,
+                sourceActionTitle: record.actionTitle,
                 resultSnapshot: snapshot.result,
                 grammarSnapshot: snapshot.grammarResult,
                 resultSnapshots: record.resultSnapshots
@@ -956,6 +957,10 @@ final class LingobarViewModel: ObservableObject {
     }
 
     func perform(_ newAction: LingobarActionDescriptor) {
+        guard !newAction.isCustomPrompt || actions.contains(where: { $0.id == newAction.id }) else {
+            status = "自定义动作已删除，无法重新生成"
+            return
+        }
         guard newAction.isAvailable(for: activeText) else {
             status = "\(newAction.title)仅支持英文内容"
             return
@@ -1319,6 +1324,8 @@ final class LingobarViewModel: ObservableObject {
             sourceText: activeText,
             sourceAppName: activeSourceAppName,
             sourceAction: action.builtInAction,
+            sourceActionID: action.id,
+            sourceActionTitle: action.title,
             resultSnapshot: snapshot
         )
         savedPhrases.insert(phrase, at: 0)
@@ -1439,6 +1446,7 @@ final class LingobarViewModel: ObservableObject {
         sourceAppName: String,
         sourceAction: LanguageAction?,
         sourceActionID: String? = nil,
+        sourceActionTitle: String? = nil,
         resultSnapshot: LingobarResult,
         grammarSnapshot: GrammarResult? = nil,
         resultSnapshots: [String: LingobarStoredResultSnapshot] = [:]
@@ -1451,9 +1459,11 @@ final class LingobarViewModel: ObservableObject {
         selectionSource = sourceAppName.isEmpty ? "Lingobar" : sourceAppName
         selectedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         inputText = ""
-        action = actionDescriptor(for: sourceActionID)
-            ?? sourceAction.flatMap { actionDescriptor(for: $0.actionID) }
-            ?? configuredDefaultSelectionAction(for: selectedText)
+        action = snapshotActionDescriptor(
+            sourceAction: sourceAction,
+            sourceActionID: sourceActionID,
+            sourceActionTitle: sourceActionTitle
+        )
         var snapshots = resultSnapshots
         snapshots[action.id] = LingobarStoredResultSnapshot(
             result: resultSnapshot,
@@ -1472,6 +1482,38 @@ final class LingobarViewModel: ObservableObject {
         currentHistoryRecord = nil
         status = "已从快照打开"
         onLayoutChanged?()
+    }
+
+    private func snapshotActionDescriptor(
+        sourceAction: LanguageAction?,
+        sourceActionID: String?,
+        sourceActionTitle: String?
+    ) -> LingobarActionDescriptor {
+        if let sourceActionID,
+           let descriptor = actionDescriptor(for: sourceActionID) {
+            return descriptor
+        }
+        if let sourceActionID,
+           sourceActionID.hasPrefix("custom:"),
+           let id = UUID(uuidString: String(sourceActionID.dropFirst("custom:".count))) {
+            let title = sourceActionTitle?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !title.isEmpty {
+                return LingobarActionDescriptor(
+                    customPromptAction: CustomPromptAction(
+                        id: id,
+                        title: title,
+                        promptTemplate: "",
+                        createdAt: .distantPast
+                    )
+                )
+            }
+        }
+        if let sourceAction,
+           let descriptor = actionDescriptor(for: sourceAction.actionID) {
+            return descriptor
+        }
+        return configuredDefaultSelectionAction(for: selectedText)
     }
 
     private func applyStoredSnapshot(

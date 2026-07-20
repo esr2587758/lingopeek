@@ -1498,6 +1498,33 @@ func checkLingobarHubLibraryItems() throws {
     try check(collectionItem.actionTitle == LanguageAction.translate.title, "collection item should preserve source action title")
     try check(collectionItem.resultSnapshot == phrase.resultSnapshot, "collection item should preserve the result snapshot")
 
+    let customActionID = "custom:88888888-8888-8888-8888-888888888888"
+    let customPhrase = SavedPhrase(
+        id: UUID(uuidString: "88888888-8888-8888-8888-888888888889")!,
+        title: "Concise interview answer",
+        note: "面试回答",
+        sourceText: "raw answer",
+        sourceAppName: "Notes",
+        sourceActionID: customActionID,
+        sourceActionTitle: "面试回答",
+        resultSnapshot: phrase.resultSnapshot,
+        createdAt: phraseDate
+    )
+    let decodedCustomPhrase = try JSONDecoder().decode(
+        SavedPhrase.self,
+        from: JSONEncoder().encode(customPhrase)
+    )
+    try check(decodedCustomPhrase.sourceActionID == customActionID, "saved custom collection should persist its action ID")
+    try check(decodedCustomPhrase.sourceActionTitle == "面试回答", "saved custom collection should persist its action title")
+    let customCollectionItem = LingobarHubLibrary.collectionItems(from: [decodedCustomPhrase])[0]
+    try check(customCollectionItem.action == nil, "custom collection should not invent a built-in action")
+    try check(customCollectionItem.actionID == customActionID, "custom collection item should preserve its descriptor ID")
+    try check(customCollectionItem.actionTitle == "面试回答", "custom collection item should preserve its descriptor title")
+    try check(
+        customCollectionItem.resultSnapshots[customActionID]?.result == phrase.resultSnapshot,
+        "custom collection snapshot should be keyed by its descriptor ID"
+    )
+
     let historyDate = Date(timeIntervalSince1970: 1_710_000_300)
     let history = try makeHistoryRecord(
         id: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!,
@@ -1593,6 +1620,26 @@ func checkLingobarRelaunchPlanner() throws {
     try check(
         LingobarRelaunchPlanner.plan(snapshots: snapshots, sourceAction: .translate, requestedAction: .rewrite) == .requestLLM(.rewrite),
         "relaunch should call AI only when the requested action is missing from the aggregate snapshot map"
+    )
+    let customActionID = "custom:99999999-9999-9999-9999-999999999999"
+    let customSnapshot = LingobarStoredResultSnapshot(
+        result: LingobarResult(
+            title: "面试回答",
+            shortcut: "⌘1",
+            summary: "Concise answer",
+            rows: [LingobarRow("结果", "Concise answer")],
+            sideTitle: "后续动作",
+            chips: []
+        )
+    )
+    try check(
+        LingobarRelaunchPlanner.plan(
+            snapshots: snapshots.merging([customActionID: customSnapshot]) { current, _ in current },
+            sourceAction: .rewrite,
+            sourceActionID: customActionID,
+            requestedAction: nil
+        ) == .openSnapshot(customSnapshot),
+        "relaunch should prefer a custom source action ID over its legacy built-in fallback"
     )
 }
 
@@ -2628,11 +2675,22 @@ func checkIssue15CustomActionSourceGate() throws {
         contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift"),
         encoding: .utf8
     )
+    let selectionLauncherSource = try sourceRegion(
+        rootViewSource,
+        from: "private var selectionLauncher: some View",
+        to: "private var inputPill: some View"
+    )
+    let inputResultPanelSource = try sourceRegion(
+        rootViewSource,
+        from: "private var inputResultPanel: some View",
+        to: "private func resultPanel"
+    )
 
     try check(
         appSettingsSource.contains("customPromptActionsKey") &&
             appSettingsSource.contains("saveCustomPromptAction") &&
             appSettingsSource.contains("deleteCustomPromptAction") &&
+            appSettingsSource.contains("aiAccessConfigured: true") &&
             appSettingsSource.contains("defaultEnglishActionIDKey") &&
             appSettingsSource.contains("defaultChineseMixedActionIDKey"),
         "settings persistence should include custom prompt actions and action-ID defaults"
@@ -2661,9 +2719,17 @@ func checkIssue15CustomActionSourceGate() throws {
         controllerSource.contains("presentInputFromHotKey") &&
             controllerSource.contains("presentSelectionFromHotKey") &&
             controllerSource.contains("presentSelectionLauncher") &&
+            controllerSource.contains("LINGOPEEK_UI_TEST_INPUT") &&
+            controllerSource.contains("LINGOPEEK_UI_TEST_LAUNCHER") &&
             controllerSource.contains("selectedTextIncludingClipboardFallback") &&
             controllerSource.contains("selectionReader.selectedText()"),
         "controller should separate input hotkey, selection hotkey, launcher, and AX-only hover reads"
+    )
+    try check(
+        controllerSource.contains("LingobarActionCatalog.matchingKeyboardShortcut") &&
+            controllerSource.contains("descriptors: AppSettings.actionDescriptors") &&
+            !controllerSource.contains("actionOrder: AppSettings.actionOrder"),
+        "panel shortcuts should follow the visible built-in and custom action descriptor order"
     )
     try check(
         viewModelSource.contains("presentRecentSelectionHistoryOrExample") &&
@@ -2672,11 +2738,29 @@ func checkIssue15CustomActionSourceGate() throws {
         "view model should support no-selection fallback to recent selection history or example text"
     )
     try check(
+        viewModelSource.contains("snapshotActionDescriptor") &&
+            viewModelSource.contains("sourceActionTitle: record.actionTitle") &&
+            viewModelSource.contains("自定义动作已删除，无法重新生成") &&
+            controllerSource.contains("sourceActionID: item.actionID") &&
+            controllerSource.contains("sourceActionTitle: item.actionTitle") &&
+            hubSource.contains("item.actionTitle"),
+        "saved custom action snapshots should reopen and render with their persisted identity"
+    )
+    try check(
         rootViewSource.contains("selectionLauncher") &&
             rootViewSource.contains("updateSelectedText") &&
             rootViewSource.contains("selectInputAction") &&
             rootViewSource.contains("viewModel.openFromLauncher"),
         "root view should expose launcher actions, editable selected text, and input action selection"
+    )
+    try check(
+        !selectionLauncherSource.contains("viewModel.selectedText") &&
+            rootViewSource.contains("viewModel.mode == .launcher ? Self.launcherWidth : Self.mainWidth"),
+        "selection launcher should keep the selected text private in a compact root surface"
+    )
+    try check(
+        inputResultPanelSource.contains("panelTitle(viewModel.action.title"),
+        "input result panel should identify the selected built-in or custom action"
     )
 }
 

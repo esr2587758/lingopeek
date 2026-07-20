@@ -50,6 +50,8 @@ public struct LingobarStoredResultSnapshot: Equatable, Codable, Sendable {
 public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable {
     public var id: UUID
     public var action: LanguageAction
+    public var actionID: String
+    public var actionTitle: String
     public var itemType: String
     public var visibleText: String
     public var copyText: String
@@ -65,6 +67,8 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
     public init(
         id: UUID = UUID(),
         action: LanguageAction,
+        actionID: String? = nil,
+        actionTitle: String? = nil,
         itemType: String,
         visibleText: String,
         copyText: String,
@@ -78,19 +82,24 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
         createdAt: Date = Date(),
         updatedAt: Date? = nil
     ) {
-        let primarySnapshot = resultSnapshot ?? resultSnapshots[action.rawValue]?.result ?? LingobarHistoryRecord.legacySnapshot(
+        let resolvedActionID = actionID ?? action.actionID
+        let resolvedActionTitle = actionTitle ?? action.title
+        let primarySnapshot = resultSnapshot ?? resultSnapshots[resolvedActionID]?.result ?? resultSnapshots[action.rawValue]?.result ?? LingobarHistoryRecord.legacySnapshot(
             action: action,
+            actionTitle: resolvedActionTitle,
             visibleText: visibleText,
             note: note,
             itemType: itemType
         )
         var snapshots = resultSnapshots
-        snapshots[action.rawValue] = LingobarStoredResultSnapshot(
+        snapshots[resolvedActionID] = LingobarStoredResultSnapshot(
             result: primarySnapshot,
-            grammarResult: grammarSnapshot ?? snapshots[action.rawValue]?.grammarResult
+            grammarResult: grammarSnapshot ?? snapshots[resolvedActionID]?.grammarResult
         )
         self.id = id
         self.action = action
+        self.actionID = resolvedActionID
+        self.actionTitle = resolvedActionTitle
         self.itemType = itemType
         self.visibleText = visibleText
         self.copyText = copyText
@@ -107,6 +116,8 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
     enum CodingKeys: String, CodingKey {
         case id
         case action
+        case actionID
+        case actionTitle
         case itemType
         case visibleText
         case copyText
@@ -123,6 +134,8 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let action = try container.decodeIfPresent(LanguageAction.self, forKey: .action) ?? .translate
+        let actionID = try container.decodeIfPresent(String.self, forKey: .actionID) ?? action.actionID
+        let actionTitle = try container.decodeIfPresent(String.self, forKey: .actionTitle) ?? action.title
         let itemType = try container.decodeIfPresent(String.self, forKey: .itemType) ?? "文本"
         let visibleText = try container.decodeIfPresent(String.self, forKey: .visibleText) ?? ""
         let note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
@@ -132,6 +145,8 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
         self.init(
             id: try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID(),
             action: action,
+            actionID: actionID,
+            actionTitle: actionTitle,
             itemType: itemType,
             visibleText: visibleText,
             copyText: try container.decodeIfPresent(String.self, forKey: .copyText) ?? visibleText,
@@ -155,10 +170,28 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
         createdAt: Date = Date(),
         id: UUID = UUID()
     ) -> LingobarHistoryRecord? {
-        switch action {
-        case .translate, .grammar, .rewrite, .examples, .pronounce:
-            break
-        case .copy, .collect:
+        make(
+            action: LingobarActionDescriptor(builtInAction: action),
+            sourceText: sourceText,
+            sourceAppName: sourceAppName,
+            result: result,
+            grammarSnapshot: grammarSnapshot,
+            createdAt: createdAt,
+            id: id
+        )
+    }
+
+    public static func make(
+        action: LingobarActionDescriptor,
+        sourceText: String,
+        sourceAppName: String,
+        result: LingobarResult,
+        grammarSnapshot: GrammarResult? = nil,
+        createdAt: Date = Date(),
+        id: UUID = UUID()
+    ) -> LingobarHistoryRecord? {
+        let fallbackAction = action.builtInAction ?? .rewrite
+        guard action.isResultProducing else {
             return nil
         }
 
@@ -185,7 +218,9 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
 
         return LingobarHistoryRecord(
             id: id,
-            action: action,
+            action: fallbackAction,
+            actionID: action.id,
+            actionTitle: action.title,
             itemType: bounded(itemType, limit: LingobarHistoryLimits.visibleTextLength),
             visibleText: bounded(visibleText, limit: LingobarHistoryLimits.visibleTextLength),
             copyText: bounded(visibleText, limit: LingobarHistoryLimits.copyTextLength),
@@ -199,11 +234,15 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
     }
 
     public func snapshot(for action: LanguageAction) -> LingobarResult? {
-        storedSnapshot(for: action)?.result
+        storedSnapshot(for: action.actionID)?.result
     }
 
     public func storedSnapshot(for action: LanguageAction) -> LingobarStoredResultSnapshot? {
-        resultSnapshots[action.rawValue]
+        storedSnapshot(for: action.actionID)
+    }
+
+    public func storedSnapshot(for actionID: String) -> LingobarStoredResultSnapshot? {
+        resultSnapshots[actionID]
     }
 
     func merged(with newer: LingobarHistoryRecord, markSaved: Bool = false) -> LingobarHistoryRecord {
@@ -214,6 +253,8 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
         return LingobarHistoryRecord(
             id: id,
             action: newer.action,
+            actionID: newer.actionID,
+            actionTitle: newer.actionTitle,
             itemType: newer.itemType,
             visibleText: newer.visibleText,
             copyText: newer.copyText,
@@ -221,7 +262,7 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
             sourceText: newer.sourceText,
             sourceAppName: newer.sourceAppName,
             resultSnapshot: newer.resultSnapshot,
-            grammarSnapshot: newer.storedSnapshot(for: newer.action)?.grammarResult,
+            grammarSnapshot: newer.storedSnapshot(for: newer.actionID)?.grammarResult,
             resultSnapshots: snapshots,
             isSaved: isSaved || newer.isSaved || markSaved,
             createdAt: createdAt,
@@ -237,6 +278,8 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
         return LingobarHistoryRecord(
             id: id,
             action: action,
+            actionID: actionID,
+            actionTitle: actionTitle,
             itemType: itemType,
             visibleText: visibleText,
             copyText: copyText,
@@ -244,7 +287,7 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
             sourceText: sourceText,
             sourceAppName: sourceAppName,
             resultSnapshot: resultSnapshot,
-            grammarSnapshot: storedSnapshot(for: action)?.grammarResult,
+            grammarSnapshot: storedSnapshot(for: actionID)?.grammarResult,
             resultSnapshots: snapshots,
             isSaved: isSaved || older.isSaved,
             createdAt: min(createdAt, older.createdAt),
@@ -254,13 +297,14 @@ public struct LingobarHistoryRecord: Identifiable, Equatable, Codable, Sendable 
 
     private static func legacySnapshot(
         action: LanguageAction,
+        actionTitle: String,
         visibleText: String,
         note: String,
         itemType: String
     ) -> LingobarResult {
         let summary = note.isEmpty ? visibleText : note
         return LingobarResult(
-            title: action.title,
+            title: actionTitle,
             shortcut: action.shortcut,
             summary: summary,
             rows: [LingobarRow(itemType.isEmpty ? "文本" : itemType, visibleText)],

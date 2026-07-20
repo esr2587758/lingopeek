@@ -176,9 +176,14 @@ public struct LingobarSettingsSnapshot: Equatable, Sendable {
     public var triggerOnSelection: Bool
     public var showSelectionFloatButton: Bool
     public var inputHotKeyDisplay: [String]
+    public var selectionHotKeyDisplay: [String]
     public var actionOrder: [LanguageAction]
+    public var actionOrderIDs: [String]
+    public var customPromptActions: [CustomPromptAction]
     public var defaultEnglishAction: LanguageAction
     public var defaultChineseMixedAction: LanguageAction
+    public var defaultEnglishActionID: String
+    public var defaultChineseMixedActionID: String
     public var collectionTarget: LingobarCollectionTarget
     public var autoReadClipboard: Bool
 
@@ -203,9 +208,14 @@ public struct LingobarSettingsSnapshot: Equatable, Sendable {
         triggerOnSelection: Bool = true,
         showSelectionFloatButton: Bool = true,
         inputHotKeyDisplay: [String] = ["⌥", "Space"],
+        selectionHotKeyDisplay: [String] = ["⌥", "⌘", "S"],
         actionOrder: [LanguageAction] = LingobarSettingsSnapshot.defaultActionOrder,
+        actionOrderIDs: [String]? = nil,
+        customPromptActions: [CustomPromptAction] = [],
         defaultEnglishAction: LanguageAction = .translate,
         defaultChineseMixedAction: LanguageAction = .rewrite,
+        defaultEnglishActionID: String? = nil,
+        defaultChineseMixedActionID: String? = nil,
         collectionTarget: LingobarCollectionTarget = .followCurrentPanel,
         autoReadClipboard: Bool = false
     ) {
@@ -220,9 +230,14 @@ public struct LingobarSettingsSnapshot: Equatable, Sendable {
         self.triggerOnSelection = triggerOnSelection
         self.showSelectionFloatButton = showSelectionFloatButton
         self.inputHotKeyDisplay = inputHotKeyDisplay
+        self.selectionHotKeyDisplay = selectionHotKeyDisplay
         self.actionOrder = actionOrder
+        self.actionOrderIDs = actionOrderIDs ?? LingobarActionCatalog.defaultOrderIDs(from: actionOrder)
+        self.customPromptActions = customPromptActions
         self.defaultEnglishAction = defaultEnglishAction
         self.defaultChineseMixedAction = defaultChineseMixedAction
+        self.defaultEnglishActionID = defaultEnglishActionID ?? defaultEnglishAction.actionID
+        self.defaultChineseMixedActionID = defaultChineseMixedActionID ?? defaultChineseMixedAction.actionID
         self.collectionTarget = collectionTarget
         self.autoReadClipboard = autoReadClipboard
     }
@@ -262,12 +277,24 @@ public struct LingobarSettingsSnapshot: Equatable, Sendable {
         actionOrder.insert(moving, at: targetIndex)
     }
 
+    public var actionDescriptors: [LingobarActionDescriptor] {
+        LingobarActionCatalog.descriptors(
+            customPromptActions: customPromptActions,
+            orderIDs: actionOrderIDs
+        )
+    }
+
+    public var resultProducingActionDescriptors: [LingobarActionDescriptor] {
+        actionDescriptors.filter(\.isResultProducing)
+    }
+
     @discardableResult
     public mutating func selectDefaultEnglishAction(_ action: LanguageAction) -> Bool {
         guard Self.englishDefaultActions.contains(action) else {
             return false
         }
         defaultEnglishAction = action
+        defaultEnglishActionID = action.actionID
         return true
     }
 
@@ -277,6 +304,31 @@ public struct LingobarSettingsSnapshot: Equatable, Sendable {
             return false
         }
         defaultChineseMixedAction = action
+        defaultChineseMixedActionID = action.actionID
+        return true
+    }
+
+    @discardableResult
+    public mutating func selectDefaultEnglishActionID(_ actionID: String) -> Bool {
+        guard resultProducingActionDescriptors.contains(where: { $0.id == actionID }) else {
+            return false
+        }
+        defaultEnglishActionID = actionID
+        if let builtIn = LanguageAction(rawValue: actionID) {
+            defaultEnglishAction = builtIn
+        }
+        return true
+    }
+
+    @discardableResult
+    public mutating func selectDefaultChineseMixedActionID(_ actionID: String) -> Bool {
+        guard resultProducingActionDescriptors.contains(where: { $0.id == actionID }) else {
+            return false
+        }
+        defaultChineseMixedActionID = actionID
+        if let builtIn = LanguageAction(rawValue: actionID) {
+            defaultChineseMixedAction = builtIn
+        }
         return true
     }
 

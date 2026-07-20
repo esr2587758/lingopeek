@@ -9,7 +9,10 @@ struct SettingsView: View {
     @State private var tokenInput = ""
     @State private var revealToken = false
     @State private var toastMessage: String?
-    @State private var actionDropTarget: LanguageAction?
+    @State private var actionDropTargetID: String?
+    @State private var customActionTitle = ""
+    @State private var customActionPrompt = ""
+    @State private var editingCustomActionID: UUID?
     @State private var aiConnectionTestState = AIConnectionTestState.idle
     @State private var aiConnectionTestID = UUID()
     private let permissionRefreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -487,15 +490,30 @@ struct SettingsView: View {
                 }
             }
 
-            SettingsGroup(title: "输入模式") {
-                SettingsRow(title: "呼出快捷键", description: "无选区时唤起输入模式，把想法改写成自然英文") {
+            SettingsGroup(title: "快捷键") {
+                SettingsRow(title: "输入模式", description: "直接打开输入框，把想法改写成自然英文") {
                     HStack(spacing: 8) {
-                        HotKeyRecorder(hotKey: hotKeyBinding)
+                        HotKeyRecorder(hotKey: inputHotKeyBinding)
                             .frame(width: 168, height: 28)
                         Button {
-                            AppSettings.resetHotKey()
+                            AppSettings.resetInputHotKey()
                             refreshSettings()
-                            flash("快捷键已恢复默认")
+                            flash("输入模式快捷键已恢复默认")
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                        }
+                        .buttonStyle(SettingsIconButtonStyle())
+                        .help("恢复默认")
+                    }
+                }
+                SettingsRow(title: "选择模式", description: "优先处理当前选区；没有选区时打开最近一次选择历史") {
+                    HStack(spacing: 8) {
+                        HotKeyRecorder(hotKey: selectionHotKeyBinding)
+                            .frame(width: 168, height: 28)
+                        Button {
+                            AppSettings.resetSelectionHotKey()
+                            refreshSettings()
+                            flash("选择模式快捷键已恢复默认")
                         } label: {
                             Image(systemName: "arrow.counterclockwise")
                         }
@@ -510,58 +528,99 @@ struct SettingsView: View {
     private var actionsSection: some View {
         VStack(spacing: 22) {
             SettingsGroup(title: "动作顺序") {
-                Text("拖动调整 Lingobar 工具条里语言动作的排列优先级。")
+                Text("拖动调整 Lingobar 工具条和划词浮标里的语言动作优先级。浮标会取前 5 个结果动作。")
                     .font(.system(size: 12))
                     .foregroundStyle(SettingsColor.text3)
                     .padding(.horizontal, 14)
                     .padding(.top, 11)
                     .padding(.bottom, 2)
                 VStack(spacing: 5) {
-                    ForEach(settings.actionOrder) { action in
+                    ForEach(settings.actionDescriptors, id: \.id) { action in
                         actionPriorityRow(action)
-                            .draggable(action.rawValue)
+                            .draggable(action.id)
                             .dropDestination(for: String.self) { items, _ in
-                                guard let rawValue = items.first,
-                                      let movingAction = LanguageAction(rawValue: rawValue) else {
+                                guard let movingActionID = items.first else {
                                     return false
                                 }
-                                moveAction(movingAction, before: action)
-                                actionDropTarget = nil
+                                moveAction(movingActionID, before: action.id)
+                                actionDropTargetID = nil
                                 return true
                             } isTargeted: { isTargeted in
-                                actionDropTarget = isTargeted ? action : nil
+                                actionDropTargetID = isTargeted ? action.id : nil
                             }
                     }
                 }
                 .padding(8)
             }
 
+            SettingsGroup(title: editingCustomActionID == nil ? "自定义 Prompt 动作" : "编辑自定义动作") {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsRow(title: "名称", description: "显示在 Lingobar、浮标和历史里") {
+                        SettingsTextField(placeholder: "例如：邮件润色", text: $customActionTitle)
+                            .frame(width: 260)
+                    }
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Prompt")
+                            .font(.system(size: 13.5, weight: .medium))
+                            .foregroundStyle(SettingsColor.text)
+                        Text("写自然语言指令即可；可使用 {text} 指定文本插入位置，不写也会自动附上当前文本。")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(SettingsColor.text3)
+                        TextEditor(text: $customActionPrompt)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(SettingsColor.text)
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: 92)
+                            .padding(8)
+                            .background(SettingsColor.chipHover, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(SettingsColor.hairline, lineWidth: 1)
+                            }
+                    }
+                    .padding(.horizontal, 15)
+
+                    HStack(spacing: 8) {
+                        Button(editingCustomActionID == nil ? "新增动作" : "保存修改") {
+                            saveCustomPromptAction()
+                        }
+                        .buttonStyle(SettingsPrimaryButtonStyle())
+                        .disabled(customActionTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                            customActionPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        if editingCustomActionID != nil || !customActionTitle.isEmpty || !customActionPrompt.isEmpty {
+                            Button("清空") {
+                                clearCustomPromptDraft()
+                            }
+                            .buttonStyle(SettingsSecondaryButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, 15)
+                    .padding(.bottom, 14)
+                }
+                .padding(.top, 4)
+            }
+
             SettingsGroup(title: "默认动作") {
                 SettingsRow(title: "选中英文时", description: "打开 Lingobar 的默认动作") {
-                    ActionSegmentedControl(
-                        actions: LingobarSettingsSnapshot.englishDefaultActions,
-                        selection: Binding(
-                            get: { settings.defaultEnglishAction },
-                            set: { action in
-                                if settings.selectDefaultEnglishAction(action) {
-                                    AppSettings.saveDefaultEnglishAction(action)
-                                }
-                            }
+                    DescriptorActionMenu(
+                        actions: settings.resultProducingActionDescriptors,
+                        selectedActionID: Binding(
+                            get: { settings.defaultEnglishActionID },
+                            set: { actionID in saveDefaultEnglishActionID(actionID) }
                         )
                     )
+                    .frame(width: 260)
                 }
                 SettingsRow(title: "选中中文 / 混合时", description: "中文或混合语言默认动作") {
-                    ActionSegmentedControl(
-                        actions: LingobarSettingsSnapshot.chineseMixedDefaultActions,
-                        selection: Binding(
-                            get: { settings.defaultChineseMixedAction },
-                            set: { action in
-                                if settings.selectDefaultChineseMixedAction(action) {
-                                    AppSettings.saveDefaultChineseMixedAction(action)
-                                }
-                            }
+                    DescriptorActionMenu(
+                        actions: settings.resultProducingActionDescriptors,
+                        selectedActionID: Binding(
+                            get: { settings.defaultChineseMixedActionID },
+                            set: { actionID in saveDefaultChineseMixedActionID(actionID) }
                         )
                     )
+                    .frame(width: 260)
                 }
             }
         }
@@ -678,9 +737,9 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    private func actionPriorityRow(_ action: LanguageAction) -> some View {
-        let index = settings.actionOrder.firstIndex(of: action) ?? 0
-        let isDropTarget = actionDropTarget == action
+    private func actionPriorityRow(_ action: LingobarActionDescriptor) -> some View {
+        let index = settings.actionOrderIDs.firstIndex(of: action.id) ?? 0
+        let isDropTarget = actionDropTargetID == action.id
 
         return HStack(spacing: 11) {
             Image(systemName: "line.3.horizontal")
@@ -703,6 +762,27 @@ struct SettingsView: View {
                 .foregroundStyle(SettingsColor.text)
             actionNote(for: action)
             Spacer()
+            if let custom = action.customPromptAction {
+                Button {
+                    beginEditing(custom)
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(SettingsIconButtonStyle())
+                .help("编辑")
+                Button {
+                    AppSettings.deleteCustomPromptAction(id: custom.id)
+                    if editingCustomActionID == custom.id {
+                        clearCustomPromptDraft()
+                    }
+                    refreshSettings()
+                    flash("自定义动作已删除")
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(SettingsIconButtonStyle())
+                .help("删除")
+            }
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
@@ -714,30 +794,82 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func actionNote(for action: LanguageAction) -> some View {
-        switch action {
-        case .translate:
-            ActionNote("英文默认")
-        case .grammar:
-            ActionNote("仅英文")
-        case .rewrite:
-            ActionNote("中文默认")
-        default:
-            EmptyView()
+    private func actionNote(for action: LingobarActionDescriptor) -> some View {
+        if action.isCustomPrompt {
+            ActionNote("自定义")
+        } else {
+            switch action.builtInAction {
+            case .translate:
+                ActionNote("英文默认")
+            case .grammar:
+                ActionNote("仅英文")
+            case .rewrite:
+                ActionNote("中文默认")
+            default:
+                EmptyView()
+            }
         }
     }
 
-    private func moveAction(_ action: LanguageAction, before target: LanguageAction) {
-        guard action != target,
-              let fromIndex = settings.actionOrder.firstIndex(of: action),
-              let toIndex = settings.actionOrder.firstIndex(of: target) else {
+    private func moveAction(_ actionID: String, before targetID: String) {
+        guard actionID != targetID,
+              let fromIndex = settings.actionOrderIDs.firstIndex(of: actionID),
+              let toIndex = settings.actionOrderIDs.firstIndex(of: targetID) else {
             return
         }
 
-        let moving = settings.actionOrder.remove(at: fromIndex)
+        let moving = settings.actionOrderIDs.remove(at: fromIndex)
         let adjustedIndex = fromIndex < toIndex ? toIndex - 1 : toIndex
-        settings.actionOrder.insert(moving, at: adjustedIndex)
-        AppSettings.saveActionOrder(settings.actionOrder)
+        settings.actionOrderIDs.insert(moving, at: adjustedIndex)
+        AppSettings.saveActionOrderIDs(settings.actionOrderIDs)
+        refreshSettings()
+    }
+
+    private func beginEditing(_ action: CustomPromptAction) {
+        editingCustomActionID = action.id
+        customActionTitle = action.title
+        customActionPrompt = action.promptTemplate
+    }
+
+    private func clearCustomPromptDraft() {
+        editingCustomActionID = nil
+        customActionTitle = ""
+        customActionPrompt = ""
+    }
+
+    private func saveCustomPromptAction() {
+        let existing = editingCustomActionID.flatMap { id in
+            settings.customPromptActions.first { $0.id == id }
+        }
+        let action = CustomPromptAction(
+            id: editingCustomActionID ?? UUID(),
+            title: customActionTitle,
+            promptTemplate: customActionPrompt,
+            createdAt: existing?.createdAt ?? Date()
+        )
+        if AppSettings.saveCustomPromptAction(action) {
+            clearCustomPromptDraft()
+            refreshSettings()
+            flash("自定义动作已保存")
+        } else {
+            flash("动作名称和 Prompt 不能为空，且名称不能重复")
+        }
+    }
+
+    private func saveDefaultEnglishActionID(_ actionID: String) {
+        guard settings.selectDefaultEnglishActionID(actionID) else {
+            return
+        }
+        AppSettings.saveDefaultEnglishActionID(actionID)
+        refreshSettings()
+    }
+
+    private func saveDefaultChineseMixedActionID(_ actionID: String) {
+        guard settings.selectDefaultChineseMixedActionID(actionID) else {
+            return
+        }
+        AppSettings.saveDefaultChineseMixedActionID(actionID)
+        refreshSettings()
     }
 
     private func binding(
@@ -752,11 +884,20 @@ struct SettingsView: View {
         }
     }
 
-    private var hotKeyBinding: Binding<LingobarHotKey> {
+    private var inputHotKeyBinding: Binding<LingobarHotKey> {
         Binding {
-            AppSettings.hotKey
+            AppSettings.inputHotKey
         } set: { hotKey in
-            AppSettings.saveHotKey(hotKey)
+            AppSettings.saveInputHotKey(hotKey)
+            refreshSettings()
+        }
+    }
+
+    private var selectionHotKeyBinding: Binding<LingobarHotKey> {
+        Binding {
+            AppSettings.selectionHotKey
+        } set: { hotKey in
+            AppSettings.saveSelectionHotKey(hotKey)
             refreshSettings()
         }
     }
@@ -1191,6 +1332,21 @@ private struct SettingsInlineButtonStyle: ButtonStyle {
     }
 }
 
+private struct SettingsSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(SettingsColor.text2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(SettingsColor.chipHover.opacity(configuration.isPressed ? 0.7 : 1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(SettingsColor.hairline, lineWidth: 1)
+            }
+    }
+}
+
 private struct SettingsIconButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -1246,6 +1402,45 @@ private struct ActionSegmentedControl: View {
         }
         .padding(3)
         .background(SettingsColor.blackField, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+}
+
+private struct DescriptorActionMenu: View {
+    var actions: [LingobarActionDescriptor]
+    @Binding var selectedActionID: String
+
+    private var selectedAction: LingobarActionDescriptor? {
+        actions.first { $0.id == selectedActionID }
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(actions, id: \.id) { action in
+                Button {
+                    selectedActionID = action.id
+                } label: {
+                    Label(action.title, systemImage: action.symbol)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: selectedAction?.symbol ?? "sparkles")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SettingsColor.accentText)
+                Text(selectedAction?.title ?? "选择动作")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(SettingsColor.text)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(SettingsColor.text3)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(SettingsColor.blackField, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 

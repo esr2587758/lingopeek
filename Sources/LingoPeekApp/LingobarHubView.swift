@@ -253,15 +253,27 @@ final class LingobarHubState: ObservableObject {
     }
 
     func resetHotKey() {
-        AppSettings.resetHotKey()
+        AppSettings.resetInputHotKey()
         refreshSettings()
         flash("快捷键已重置")
     }
 
     func saveHotKey(_ hotKey: LingobarHotKey) {
-        AppSettings.saveHotKey(hotKey)
+        AppSettings.saveInputHotKey(hotKey)
         refreshSettings()
         flash("快捷键已保存")
+    }
+
+    func resetSelectionHotKey() {
+        AppSettings.resetSelectionHotKey()
+        refreshSettings()
+        flash("选择模式快捷键已重置")
+    }
+
+    func saveSelectionHotKey(_ hotKey: LingobarHotKey) {
+        AppSettings.saveSelectionHotKey(hotKey)
+        refreshSettings()
+        flash("选择模式快捷键已保存")
     }
 
     func moveAction(_ action: LanguageAction, offset: Int) {
@@ -274,6 +286,19 @@ final class LingobarHubState: ObservableObject {
         }
         settings.actionOrder.swapAt(index, newIndex)
         AppSettings.saveActionOrder(settings.actionOrder)
+        refreshSettings()
+    }
+
+    func moveAction(_ action: LingobarActionDescriptor, offset: Int) {
+        guard let index = settings.actionOrderIDs.firstIndex(of: action.id) else {
+            return
+        }
+        let newIndex = index + offset
+        guard settings.actionOrderIDs.indices.contains(newIndex) else {
+            return
+        }
+        settings.actionOrderIDs.swapAt(index, newIndex)
+        AppSettings.saveActionOrderIDs(settings.actionOrderIDs)
         refreshSettings()
     }
 
@@ -291,6 +316,38 @@ final class LingobarHubState: ObservableObject {
         }
         AppSettings.saveDefaultChineseMixedAction(action)
         refreshSettings()
+    }
+
+    func saveDefaultEnglishActionID(_ actionID: String) {
+        guard settings.selectDefaultEnglishActionID(actionID) else {
+            return
+        }
+        AppSettings.saveDefaultEnglishActionID(actionID)
+        refreshSettings()
+    }
+
+    func saveDefaultChineseMixedActionID(_ actionID: String) {
+        guard settings.selectDefaultChineseMixedActionID(actionID) else {
+            return
+        }
+        AppSettings.saveDefaultChineseMixedActionID(actionID)
+        refreshSettings()
+    }
+
+    func saveCustomPromptAction(_ action: CustomPromptAction) -> Bool {
+        guard AppSettings.saveCustomPromptAction(action) else {
+            flash("动作名称和 Prompt 不能为空，且名称不能重复")
+            return false
+        }
+        refreshSettings()
+        flash("自定义动作已保存")
+        return true
+    }
+
+    func deleteCustomPromptAction(id: UUID) {
+        AppSettings.deleteCustomPromptAction(id: id)
+        refreshSettings()
+        flash("自定义动作已删除")
     }
 
     func saveCollectionTarget(_ target: LingobarCollectionTarget) {
@@ -322,7 +379,7 @@ final class LingobarHubState: ObservableObject {
                 item.note,
                 item.itemType,
                 item.source,
-                item.action?.title ?? ""
+                item.actionTitle
             ].contains { $0.lowercased().contains(normalizedQuery) }
         }
     }
@@ -984,8 +1041,8 @@ private struct HubLibraryCard: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
                 HubBadge(title: item.itemType)
-                if let action = item.action {
-                    HubBadge(title: action.title, tint: HubColor.accent)
+                if !item.actionTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HubBadge(title: item.actionTitle, tint: HubColor.accent)
                 }
                 if item.kind == .history, item.isSaved {
                     HubBadge(title: "已保存", tint: HubColor.ok)
@@ -1443,13 +1500,13 @@ private struct TriggerSettingsSection: View {
             )
         }
 
-        HubSettingsGroup(title: "输入模式") {
+        HubSettingsGroup(title: "快捷键") {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("呼出快捷键")
+                    Text("输入模式")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(HubColor.primaryText)
-                    Text("无选区时唤起输入模式，把想法改写成自然英文。")
+                    Text("直接打开输入框，把想法改写成自然英文。")
                         .font(.system(size: 12))
                         .foregroundStyle(HubColor.secondaryText)
                 }
@@ -1466,17 +1523,43 @@ private struct TriggerSettingsSection: View {
                 }
                 .buttonStyle(HubSecondaryButtonStyle())
             }
+            HubDivider()
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("选择模式")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(HubColor.primaryText)
+                    Text("优先处理当前选区；没有选区时打开最近一次选择历史。")
+                        .font(.system(size: 12))
+                        .foregroundStyle(HubColor.secondaryText)
+                }
+                Spacer()
+                HubHotKeyRecorder(
+                    hotKey: Binding(
+                        get: { AppSettings.selectionHotKey },
+                        set: { hotKey in state.saveSelectionHotKey(hotKey) }
+                    )
+                )
+                .frame(width: 168, height: 30)
+                Button("重置") {
+                    state.resetSelectionHotKey()
+                }
+                .buttonStyle(HubSecondaryButtonStyle())
+            }
         }
     }
 }
 
 private struct ActionsSettingsSection: View {
     @ObservedObject var state: LingobarHubState
+    @State private var customTitle = ""
+    @State private var customPrompt = ""
+    @State private var editingCustomID: UUID?
 
     var body: some View {
         HubSettingsGroup(title: "动作顺序") {
             VStack(spacing: 8) {
-                ForEach(state.settings.actionOrder) { action in
+                ForEach(state.settings.actionDescriptors, id: \.id) { action in
                     HStack(spacing: 10) {
                         Image(systemName: action.symbol)
                             .frame(width: 18)
@@ -1485,7 +1568,7 @@ private struct ActionsSettingsSection: View {
                             Text(action.title)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(HubColor.primaryText)
-                            Text(LanguageAction.shortcut(for: action, in: state.settings.actionOrder))
+                            Text(actionSubtitle(action))
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(HubColor.tertiaryText)
                         }
@@ -1495,6 +1578,17 @@ private struct ActionsSettingsSection: View {
                         }
                         HubIconButton(systemName: "chevron.down", help: "下移") {
                             state.moveAction(action, offset: 1)
+                        }
+                        if let customAction = action.customPromptAction {
+                            HubIconButton(systemName: "pencil", help: "编辑") {
+                                beginEditing(customAction)
+                            }
+                            HubIconButton(systemName: "trash", help: "删除") {
+                                state.deleteCustomPromptAction(id: customAction.id)
+                                if editingCustomID == customAction.id {
+                                    clearCustomDraft()
+                                }
+                            }
                         }
                     }
                     .padding(10)
@@ -1506,20 +1600,104 @@ private struct ActionsSettingsSection: View {
             }
         }
 
+        HubSettingsGroup(title: editingCustomID == nil ? "自定义 Prompt 动作" : "编辑自定义动作") {
+            VStack(alignment: .leading, spacing: 12) {
+                HubTextFieldRow(
+                    title: "名称",
+                    subtitle: "显示在 Lingobar、浮标和历史里。",
+                    text: $customTitle
+                )
+                HubDivider()
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Prompt")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(HubColor.primaryText)
+                    Text("写自然语言指令即可；可使用 {text} 指定文本插入位置，不写也会自动附上当前文本。")
+                        .font(.system(size: 12))
+                        .foregroundStyle(HubColor.secondaryText)
+                    TextEditor(text: $customPrompt)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(HubColor.primaryText)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 90)
+                        .padding(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(Color.black.opacity(0.24))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .stroke(HubColor.strongHairline, lineWidth: 1)
+                        )
+                }
+
+                HStack(spacing: 8) {
+                    Button(editingCustomID == nil ? "新增动作" : "保存修改") {
+                        saveCustomAction()
+                    }
+                    .buttonStyle(HubPrimaryButtonStyle())
+                    .disabled(customTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if editingCustomID != nil || !customTitle.isEmpty || !customPrompt.isEmpty {
+                        Button("清空") {
+                            clearCustomDraft()
+                        }
+                        .buttonStyle(HubSecondaryButtonStyle())
+                    }
+                }
+            }
+        }
+
         HubSettingsGroup(title: "默认动作") {
-            HubSegmentedActionRow(
+            HubSegmentedDescriptorRow(
                 title: "英文选区",
-                actions: LingobarSettingsSnapshot.englishDefaultActions,
-                selectedAction: state.settings.defaultEnglishAction,
-                onSelect: state.saveDefaultEnglishAction
+                actions: state.settings.resultProducingActionDescriptors,
+                selectedActionID: state.settings.defaultEnglishActionID,
+                onSelect: state.saveDefaultEnglishActionID
             )
             HubDivider()
-            HubSegmentedActionRow(
+            HubSegmentedDescriptorRow(
                 title: "中英混合",
-                actions: LingobarSettingsSnapshot.chineseMixedDefaultActions,
-                selectedAction: state.settings.defaultChineseMixedAction,
-                onSelect: state.saveDefaultChineseMixedAction
+                actions: state.settings.resultProducingActionDescriptors,
+                selectedActionID: state.settings.defaultChineseMixedActionID,
+                onSelect: state.saveDefaultChineseMixedActionID
             )
+        }
+    }
+
+    private func actionSubtitle(_ action: LingobarActionDescriptor) -> String {
+        let shortcut = LingobarActionCatalog.shortcut(for: action, in: state.settings.actionDescriptors)
+        let kind = action.isCustomPrompt ? "自定义 Prompt" : "内置动作"
+        return shortcut.isEmpty ? kind : "\(shortcut) · \(kind)"
+    }
+
+    private func beginEditing(_ action: CustomPromptAction) {
+        editingCustomID = action.id
+        customTitle = action.title
+        customPrompt = action.promptTemplate
+    }
+
+    private func clearCustomDraft() {
+        editingCustomID = nil
+        customTitle = ""
+        customPrompt = ""
+    }
+
+    private func saveCustomAction() {
+        let existing = editingCustomID.flatMap { id in
+            state.settings.customPromptActions.first { $0.id == id }
+        }
+        let id = editingCustomID ?? UUID()
+        let createdAt = existing?.createdAt ?? Date()
+        let action = CustomPromptAction(
+            id: id,
+            title: customTitle,
+            promptTemplate: customPrompt,
+            createdAt: createdAt
+        )
+        if state.saveCustomPromptAction(action) {
+            clearCustomDraft()
         }
     }
 }
@@ -1612,6 +1790,45 @@ private struct HubSegmentedActionRow: View {
                                 Capsule()
                                     .fill(selectedAction == action ? HubColor.selectedFill : HubColor.chip)
                             )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+private struct HubSegmentedDescriptorRow: View {
+    var title: String
+    var actions: [LingobarActionDescriptor]
+    var selectedActionID: String
+    var onSelect: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(HubColor.primaryText)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 7) {
+                ForEach(actions, id: \.id) { action in
+                    Button {
+                        onSelect(action.id)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: action.symbol)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(action.title)
+                                .font(.system(size: 12, weight: .semibold))
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundStyle(selectedActionID == action.id ? HubColor.accentText : HubColor.secondaryText)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(selectedActionID == action.id ? HubColor.selectedFill : HubColor.chip)
+                        )
                     }
                     .buttonStyle(.plain)
                 }

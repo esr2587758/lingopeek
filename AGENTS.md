@@ -11,6 +11,7 @@ This repository is a native macOS Swift package for LingoPeek/Lingobar, a select
 
 ## Verification
 
+- Every code change must be verified before completion. For app-facing code changes, use `$verify-app-change` (`/Users/lancer/.codex/skills/verify-app-change/SKILL.md`) and follow its launch, interaction, screenshot/visual check, log review, and automated-check loop before the final response.
 - Build the app with `swift build --product LingoPeek`.
 - Run the zero-dependency check suite with `swift run LingoPeekCoreChecks`.
 - DeepSeek connectivity checks require secrets and should be run only with user-provided environment variables.

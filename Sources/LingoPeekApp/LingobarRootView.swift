@@ -5,6 +5,7 @@ import SwiftUI
 
 struct LingobarRootView: View {
     private static let mainWidth: CGFloat = 720
+    private static let launcherWidth: CGFloat = 216
     private static let followUpPaneWidth: CGFloat = 420
     private static let followUpGap: CGFloat = 14
     private static let followUpMinimumHeight: CGFloat = 500
@@ -23,7 +24,7 @@ struct LingobarRootView: View {
         HStack(alignment: .top, spacing: viewModel.isFollowUpOpen ? Self.followUpGap : 0) {
             mainContent
                 .frame(
-                    width: Self.mainWidth,
+                    width: mainContentWidth,
                     height: rootHeight,
                     alignment: .top
                 )
@@ -57,6 +58,8 @@ struct LingobarRootView: View {
         VStack(spacing: 8) {
             if viewModel.mode == .setup {
                 setupPanel
+            } else if viewModel.mode == .launcher {
+                selectionLauncher
             } else if viewModel.mode == .selection {
                 selectionPill
                 resultPanel(showActionBar: true)
@@ -158,14 +161,20 @@ struct LingobarRootView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.lingoSubtle)
                         .fixedSize(horizontal: true, vertical: false)
+                        .allowsHitTesting(false)
 
-                        Text(viewModel.selectedText)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color.lingoMuted)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                        TextField("", text: Binding(
+                            get: { viewModel.selectedText },
+                            set: { viewModel.updateSelectedText($0) }
+                        ))
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.lingoMuted)
+                        .lineLimit(1)
+                        .onSubmit {
+                            viewModel.regenerateCurrentAction()
+                        }
                     }
-                    .allowsHitTesting(false)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
@@ -202,6 +211,45 @@ struct LingobarRootView: View {
         .lingobarShadow(pinned: viewModel.isPinned)
     }
 
+    private var selectionLauncher: some View {
+        HStack(spacing: 5) {
+            ForEach(viewModel.launcherActions, id: \.id) { action in
+                Button {
+                    viewModel.openFromLauncher(action)
+                } label: {
+                    Image(systemName: action.symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 30, height: 30)
+                        .foregroundStyle(Color.lingoText)
+                        .hoverChrome(
+                            fill: Color.lingoChip,
+                            hoverFill: Color.lingoChipHover,
+                            stroke: Color.lingoHairline,
+                            hoverStroke: Color.lingoHairlineStrong,
+                            cornerRadius: 8
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(action.title)
+            }
+
+            iconButton(systemName: "xmark", help: "关闭") {
+                onClose()
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .frame(height: 46)
+        .background {
+            ZStack {
+                pillBackground
+                dragSurface()
+            }
+        }
+        .overlay(pillBorder)
+        .lingobarShadow()
+    }
+
     private var inputPill: some View {
         HStack(alignment: .center, spacing: 8) {
             ZStack(alignment: .leading) {
@@ -232,6 +280,29 @@ struct LingobarRootView: View {
                     viewModel.status = "语音输入暂未启用"
                 }
 
+                Menu {
+                    ForEach(viewModel.actions.filter(\.isResultProducing), id: \.id) { action in
+                        Button {
+                            viewModel.selectInputAction(action)
+                        } label: {
+                            Label(action.title, systemImage: action.symbol)
+                        }
+                    }
+                } label: {
+                    Image(systemName: viewModel.action.symbol)
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                        .foregroundStyle(Color.lingoAccentText)
+                        .hoverChrome(
+                            fill: Color.lingoAccent.opacity(0.12),
+                            hoverFill: Color.lingoAccent.opacity(0.20),
+                            cornerRadius: 8
+                        )
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("输入动作：\(viewModel.action.title)")
+
                 inputIconButton(systemName: "gearshape", highlighted: false, dimmed: false, help: "设置") {
                     onOpenSettings()
                 }
@@ -240,7 +311,7 @@ struct LingobarRootView: View {
                     systemName: "arrow.right",
                     highlighted: true,
                     dimmed: viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                    help: "改写"
+                    help: viewModel.action.title
                 ) {
                     viewModel.submitInput()
                 }
@@ -272,7 +343,7 @@ struct LingobarRootView: View {
 
     private var inputResultPanel: some View {
         VStack(spacing: 0) {
-            panelTitle("改写 · 自然英文", shortcut: viewModel.shortcut(for: viewModel.action))
+            panelTitle(viewModel.action.title, shortcut: viewModel.shortcut(for: viewModel.action))
             panelBody(height: 244, scrolls: false)
             if !viewModel.isLoading {
                 resultFooter
@@ -285,7 +356,7 @@ struct LingobarRootView: View {
         .frame(maxWidth: .infinity)
     }
     private func resultPanel(showActionBar: Bool) -> some View {
-        if viewModel.action == .grammar, let grammarResult = viewModel.grammarResult {
+        if viewModel.action.builtInAction == .grammar, let grammarResult = viewModel.grammarResult {
             return AnyView(grammarResultPanel(grammarResult))
         }
 
@@ -337,7 +408,7 @@ struct LingobarRootView: View {
 
     private var actionBar: some View {
         HStack(spacing: 6) {
-            ForEach(viewModel.actions) { action in
+            ForEach(viewModel.actions, id: \.id) { action in
                 let available = viewModel.isAvailable(action)
                 let highlighted = viewModel.isActionHighlighted(action)
                 Button {
@@ -860,7 +931,7 @@ struct LingobarRootView: View {
         lineSpacing: CGFloat = 0
     ) -> some View {
         SelectableResultText(
-            sourceID: "\(viewModel.action.rawValue)-\(id)",
+            sourceID: "\(viewModel.action.id)-\(id)",
             text: text,
             font: .systemFont(ofSize: size, weight: weight),
             textColor: color,
@@ -882,7 +953,11 @@ struct LingobarRootView: View {
     }
 
     private var rootWidth: CGFloat {
-        Self.mainWidth + (viewModel.isFollowUpOpen ? Self.followUpGap + Self.followUpPaneWidth : 0)
+        mainContentWidth + (viewModel.isFollowUpOpen ? Self.followUpGap + Self.followUpPaneWidth : 0)
+    }
+
+    private var mainContentWidth: CGFloat {
+        viewModel.mode == .launcher ? Self.launcherWidth : Self.mainWidth
     }
 
     private var rootHeight: CGFloat {
@@ -901,8 +976,10 @@ struct LingobarRootView: View {
             } else {
                 360
             }
+        case .launcher:
+            46
         case .selection:
-            if viewModel.action == .grammar, viewModel.grammarResult != nil {
+            if viewModel.action.builtInAction == .grammar, viewModel.grammarResult != nil {
                 812
             } else {
                 viewModel.isLoading ? 441 : 492
@@ -946,7 +1023,7 @@ struct LingobarRootView: View {
     private var shouldShowLearningInsights: Bool {
         viewModel.mode == .selection &&
             !viewModel.visibleLearningInsights.isEmpty &&
-            ![LanguageAction.copy, .collect].contains(viewModel.action)
+            (viewModel.action.builtInAction.map { ![LanguageAction.copy, .collect].contains($0) } ?? true)
     }
 
     private func collect(_ fragment: LingobarCollectionFragment) {
@@ -967,7 +1044,7 @@ struct LingobarRootView: View {
 
     @ViewBuilder
     private var resultBody: some View {
-        switch viewModel.action {
+        switch viewModel.action.builtInAction {
         case .translate:
             VStack(spacing: 0) {
                 if translationVariantRows.isEmpty {
@@ -1103,6 +1180,19 @@ struct LingobarRootView: View {
                 color: .lingoTextColor,
                 lineSpacing: 3
             )
+        case nil:
+            selectableText(
+                viewModel.result.summary,
+                id: "custom-summary",
+                size: 15,
+                color: .lingoTextColor,
+                lineSpacing: 3
+            )
+            VStack(spacing: 0) {
+                ForEach(viewModel.result.rows, id: \.label) { row in
+                    resultRow(row)
+                }
+            }
         }
     }
 
@@ -1196,7 +1286,7 @@ struct LingobarRootView: View {
             }
         }
         .padding(.top, 2)
-        .accessibilityIdentifier("action-learning-insights-\(viewModel.action.rawValue)")
+        .accessibilityIdentifier("action-learning-insights-\(viewModel.action.id)")
     }
 
     private func learningColumn(icon: String, title: String, rows: [LearningInsightRow]) -> some View {
@@ -1494,7 +1584,7 @@ struct LingobarRootView: View {
 
     @ViewBuilder
     private var loadingBody: some View {
-        if viewModel.action == .grammar {
+        if viewModel.action.builtInAction == .grammar {
             grammarLoadingBody
         } else {
             loadingRow("正在生成…")
@@ -1609,37 +1699,37 @@ struct LingobarRootView: View {
         }
     }
 
-    private func actionForeground(_ action: LanguageAction, available: Bool) -> Color {
+    private func actionForeground(_ action: LingobarActionDescriptor, available: Bool) -> Color {
         guard available else {
             return Color.lingoSubtle.opacity(0.55)
         }
         return viewModel.isActionHighlighted(action) ? Color.lingoAccentText : Color.lingoMuted
     }
 
-    private func actionFill(_ action: LanguageAction, available: Bool) -> Color {
+    private func actionFill(_ action: LingobarActionDescriptor, available: Bool) -> Color {
         guard available else {
             return Color.clear
         }
         return viewModel.isActionHighlighted(action) ? Color.lingoAccentWeak : Color.clear
     }
 
-    private func actionHoverFill(_ action: LanguageAction, available: Bool) -> Color {
+    private func actionHoverFill(_ action: LingobarActionDescriptor, available: Bool) -> Color {
         guard available else {
             return Color.clear
         }
         return viewModel.isActionHighlighted(action) ? Color.lingoAccentWeak : Color.lingoChip
     }
 
-    private func actionStroke(_ action: LanguageAction, available: Bool) -> Color {
+    private func actionStroke(_ action: LingobarActionDescriptor, available: Bool) -> Color {
         viewModel.isActionHighlighted(action) || !available ? Color.clear : Color.lingoHairline
     }
 
-    private func actionHoverStroke(_ action: LanguageAction, available: Bool) -> Color {
+    private func actionHoverStroke(_ action: LingobarActionDescriptor, available: Bool) -> Color {
         viewModel.isActionHighlighted(action) || !available ? Color.clear : Color.lingoHairline
     }
 
-    private func actionSymbol(_ action: LanguageAction, highlighted: Bool) -> String {
-        action == .collect && highlighted ? "bookmark.fill" : action.symbol
+    private func actionSymbol(_ action: LingobarActionDescriptor, highlighted: Bool) -> String {
+        action.builtInAction == .collect && highlighted ? "bookmark.fill" : action.symbol
     }
 
     private func iconButton(

@@ -10,6 +10,11 @@ struct LingobarHotKey: Equatable {
         carbonModifiers: UInt32(cmdKey | optionKey)
     )
 
+    static let defaultSelection = LingobarHotKey(
+        keyCode: UInt32(kVK_ANSI_S),
+        carbonModifiers: UInt32(cmdKey | optionKey)
+    )
+
     init(keyCode: UInt32, carbonModifiers: UInt32) {
         self.keyCode = keyCode
         self.carbonModifiers = carbonModifiers

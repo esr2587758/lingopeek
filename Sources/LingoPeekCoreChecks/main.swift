@@ -166,6 +166,111 @@ func checkLanguageActionKeyboardShortcuts() throws {
     )
 }
 
+func checkLingobarActionDescriptorCatalog() throws {
+    let customID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+    let createdAt = Date(timeIntervalSince1970: 1_710_000_500)
+    let custom = CustomPromptAction(
+        id: customID,
+        title: "润色邮件",
+        promptTemplate: "Polish this email and preserve meaning:\n{text}",
+        createdAt: createdAt
+    )
+    try check(
+        custom.actionID == "custom:\(customID.uuidString)",
+        "custom prompt action IDs should be stable custom-prefixed UUIDs"
+    )
+    try check(
+        custom.userPrompt(for: "hello").contains("Polish this email") &&
+            custom.userPrompt(for: "hello").contains("hello") &&
+            !custom.userPrompt(for: "hello").contains("{text}"),
+        "custom prompt action should replace the optional {text} placeholder"
+    )
+
+    let noPlaceholder = CustomPromptAction(
+        id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+        title: "提炼观点",
+        promptTemplate: "Summarize the user's point in one sentence.",
+        createdAt: createdAt
+    )
+    try check(
+        noPlaceholder.userPrompt(for: "source text").contains("Text:\nsource text"),
+        "custom prompt action without {text} should append the current text automatically"
+    )
+
+    let descriptors = LingobarActionCatalog.descriptors(
+        customPromptActions: [custom],
+        orderIDs: [custom.actionID, LanguageAction.rewrite.actionID, LanguageAction.translate.actionID]
+    )
+    try check(Array(descriptors.map(\.id).prefix(3)) == [custom.actionID, "rewrite", "translate"], "descriptor order should respect saved action IDs")
+    try check(descriptors.first?.title == "润色邮件", "custom descriptor should expose its saved title")
+    try check(descriptors.first?.symbol == "sparkles", "custom descriptor should use the custom action symbol")
+    try check(
+        LingobarActionCatalog.shortcut(for: descriptors[0], in: descriptors) == "⌘1" &&
+            LingobarActionCatalog.shortcut(for: descriptors[1], in: descriptors) == "⌘2",
+        "custom and built-in actions should share the ordered shortcut slots"
+    )
+    try check(
+        LingobarActionCatalog.matchingKeyboardShortcut(
+            keyEquivalent: "1",
+            command: true,
+            descriptors: descriptors
+        )?.id == custom.actionID,
+        "⌘1 should resolve to the first descriptor, including custom prompt actions"
+    )
+    try check(
+        LingobarActionCatalog.nextEligibleDefaultActionID(
+            after: custom.actionID,
+            orderIDs: [LanguageAction.translate.actionID, custom.actionID, LanguageAction.grammar.actionID],
+            customPromptActions: []
+        ) == LanguageAction.grammar.actionID,
+        "deleting a default custom action should advance to the next ordered result action"
+    )
+}
+
+func checkCustomPromptActionHistorySnapshot() throws {
+    let custom = CustomPromptAction(
+        id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+        title: "面试回答",
+        promptTemplate: "Turn {text} into a concise interview answer.",
+        createdAt: Date(timeIntervalSince1970: 1_710_000_501)
+    )
+    let descriptor = LingobarActionDescriptor(customPromptAction: custom)
+    let result = LingobarResult(
+        title: custom.title,
+        shortcut: "⌘1",
+        summary: "A concise answer.",
+        rows: [LingobarRow("版本", "A concise answer.")],
+        sideTitle: "后续动作",
+        chips: [],
+        moreActionTitle: "继续处理",
+        defaultCollectionItem: DefaultCollectionItem(title: "A concise answer.", note: "面试回答", type: "文本")
+    )
+    let record = try requireHistoryRecord(
+        LingobarHistoryRecord.make(
+            action: descriptor,
+            sourceText: "raw answer",
+            sourceAppName: "Safari",
+            result: result,
+            createdAt: Date(timeIntervalSince1970: 1_710_000_502),
+            id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
+        ),
+        "custom prompt history record should be created"
+    )
+
+    try check(record.action == .rewrite, "custom prompt history should use rewrite as a Codable legacy fallback action")
+    try check(record.actionID == custom.actionID, "custom prompt history should preserve the custom action ID")
+    try check(record.actionTitle == custom.title, "custom prompt history should preserve the custom action title")
+    try check(record.storedSnapshot(for: custom.actionID)?.result == result, "custom prompt history should key snapshots by action ID")
+
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let decoded = try decoder.decode(LingobarHistoryRecord.self, from: try encoder.encode(record))
+    try check(decoded.actionID == custom.actionID, "custom prompt action ID should survive history JSON round-trip")
+    try check(decoded.actionTitle == custom.title, "custom prompt action title should survive history JSON round-trip")
+}
+
 func checkDeepSeekRequestFactory() throws {
     let request = try DeepSeekRequestFactory.request(
         baseURL: URL(string: "https://api.deepseek.com")!,
@@ -1389,7 +1494,36 @@ func checkLingobarHubLibraryItems() throws {
     try check(collectionItem.itemType == "短语", "collection item type should preserve SavedPhrase type")
     try check(collectionItem.sourceText == "Selection-first interaction", "collection item should preserve source text snapshot")
     try check(collectionItem.action == .translate, "collection item should preserve source action")
+    try check(collectionItem.actionID == LanguageAction.translate.actionID, "collection item should preserve source action ID")
+    try check(collectionItem.actionTitle == LanguageAction.translate.title, "collection item should preserve source action title")
     try check(collectionItem.resultSnapshot == phrase.resultSnapshot, "collection item should preserve the result snapshot")
+
+    let customActionID = "custom:88888888-8888-8888-8888-888888888888"
+    let customPhrase = SavedPhrase(
+        id: UUID(uuidString: "88888888-8888-8888-8888-888888888889")!,
+        title: "Concise interview answer",
+        note: "面试回答",
+        sourceText: "raw answer",
+        sourceAppName: "Notes",
+        sourceActionID: customActionID,
+        sourceActionTitle: "面试回答",
+        resultSnapshot: phrase.resultSnapshot,
+        createdAt: phraseDate
+    )
+    let decodedCustomPhrase = try JSONDecoder().decode(
+        SavedPhrase.self,
+        from: JSONEncoder().encode(customPhrase)
+    )
+    try check(decodedCustomPhrase.sourceActionID == customActionID, "saved custom collection should persist its action ID")
+    try check(decodedCustomPhrase.sourceActionTitle == "面试回答", "saved custom collection should persist its action title")
+    let customCollectionItem = LingobarHubLibrary.collectionItems(from: [decodedCustomPhrase])[0]
+    try check(customCollectionItem.action == nil, "custom collection should not invent a built-in action")
+    try check(customCollectionItem.actionID == customActionID, "custom collection item should preserve its descriptor ID")
+    try check(customCollectionItem.actionTitle == "面试回答", "custom collection item should preserve its descriptor title")
+    try check(
+        customCollectionItem.resultSnapshots[customActionID]?.result == phrase.resultSnapshot,
+        "custom collection snapshot should be keyed by its descriptor ID"
+    )
 
     let historyDate = Date(timeIntervalSince1970: 1_710_000_300)
     let history = try makeHistoryRecord(
@@ -1409,6 +1543,8 @@ func checkLingobarHubLibraryItems() throws {
     try check(historyItem.id == history.id, "history item should preserve record id")
     try check(historyItem.kind == .history, "history item kind should be history")
     try check(historyItem.action == .examples, "history item should preserve action")
+    try check(historyItem.actionID == LanguageAction.examples.actionID, "history item should preserve action ID")
+    try check(historyItem.actionTitle == LanguageAction.examples.title, "history item should preserve action title")
     try check(historyItem.itemType == "例句", "history item should preserve item type")
     try check(historyItem.source == "Safari", "history item should preserve source app")
     try check(historyItem.createdAt == historyDate, "history item should preserve created date")
@@ -1484,6 +1620,26 @@ func checkLingobarRelaunchPlanner() throws {
     try check(
         LingobarRelaunchPlanner.plan(snapshots: snapshots, sourceAction: .translate, requestedAction: .rewrite) == .requestLLM(.rewrite),
         "relaunch should call AI only when the requested action is missing from the aggregate snapshot map"
+    )
+    let customActionID = "custom:99999999-9999-9999-9999-999999999999"
+    let customSnapshot = LingobarStoredResultSnapshot(
+        result: LingobarResult(
+            title: "面试回答",
+            shortcut: "⌘1",
+            summary: "Concise answer",
+            rows: [LingobarRow("结果", "Concise answer")],
+            sideTitle: "后续动作",
+            chips: []
+        )
+    )
+    try check(
+        LingobarRelaunchPlanner.plan(
+            snapshots: snapshots.merging([customActionID: customSnapshot]) { current, _ in current },
+            sourceAction: .rewrite,
+            sourceActionID: customActionID,
+            requestedAction: nil
+        ) == .openSnapshot(customSnapshot),
+        "relaunch should prefer a custom source action ID over its legacy built-in fallback"
     )
 }
 
@@ -1824,10 +1980,10 @@ func checkActionTabLearningInsightsSourceGate() throws {
 
     let learningSection = try sourceRegion(rootViewSource, from: "private func learningInsightsSection", to: "private func learningColumn")
     try check(
-        learningSection.contains("固定搭配") &&
+            learningSection.contains("固定搭配") &&
             learningSection.contains("常见词组") &&
             learningSection.contains("语法点") &&
-            learningSection.contains("action-learning-insights-\\(viewModel.action.rawValue)") &&
+            learningSection.contains("action-learning-insights-\\(viewModel.action.id)") &&
             learningSection.contains("rows: insights.collocations.map") &&
             learningSection.contains("rows: insights.phrases.map") &&
             learningSection.contains("rows: insights.grammarPoints.map") &&
@@ -1855,7 +2011,7 @@ func checkActionTabLearningInsightsSourceGate() throws {
     )
     let runAI = try sourceRegion(viewModelSource, from: "private func runAIIfAvailable", to: "private func completeGrammarSpine")
     try check(
-        runAI.contains("if action != .grammar") &&
+        runAI.contains("if action.builtInAction != .grammar") &&
             runAI.contains("warmSharedLearningInsightsIfAvailable(for: text, aiClient: aiClient)") &&
             runAI.contains("grammarRequests[grammarKey]"),
         "non-grammar actions should warm the full grammar task while grammar actions own their visible grammar request"
@@ -2367,7 +2523,12 @@ func checkLingobarInputModeIssue9SourceGate() throws {
     )
     try check(submitInput.contains("activeResultSnapshots = [:]"), "input submit should clear stale rewrite snapshots before a new request")
     try check(submitInput.contains("currentHistoryRecord = nil"), "input submit should detach the previous result's saved-history state")
-    try check(submitInput.contains("perform(.rewrite)"), "input submit should always route non-empty input to rewrite")
+    try check(submitInput.contains("perform(action)"), "input submit should route non-empty input to the currently selected input action")
+    try check(
+        viewModelSource.contains("func selectInputAction(_ descriptor: LingobarActionDescriptor)") &&
+            viewModelSource.contains("descriptor.isResultProducing"),
+        "input mode should allow explicit result-producing action selection while defaulting to rewrite"
+    )
 
     let inputPill = try sourceRegion(rootViewSource, from: "private var inputPill", to: "private var inputPlaceholder")
     try check(
@@ -2484,9 +2645,129 @@ func checkSelectionPermissionSourceGate() throws {
     )
 }
 
+func checkIssue15CustomActionSourceGate() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let appSettingsSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/AppSettings.swift"),
+        encoding: .utf8
+    )
+    let hotKeySource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/HotKeyManager.swift"),
+        encoding: .utf8
+    )
+    let controllerSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarController.swift"),
+        encoding: .utf8
+    )
+    let hubSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarHubView.swift"),
+        encoding: .utf8
+    )
+    let rootViewSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarRootView.swift"),
+        encoding: .utf8
+    )
+    let settingsViewSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/SettingsView.swift"),
+        encoding: .utf8
+    )
+    let viewModelSource = try String(
+        contentsOf: root.appending(path: "Sources/LingoPeekApp/LingobarViewModel.swift"),
+        encoding: .utf8
+    )
+    let selectionLauncherSource = try sourceRegion(
+        rootViewSource,
+        from: "private var selectionLauncher: some View",
+        to: "private var inputPill: some View"
+    )
+    let inputResultPanelSource = try sourceRegion(
+        rootViewSource,
+        from: "private var inputResultPanel: some View",
+        to: "private func resultPanel"
+    )
+
+    try check(
+        appSettingsSource.contains("customPromptActionsKey") &&
+            appSettingsSource.contains("saveCustomPromptAction") &&
+            appSettingsSource.contains("deleteCustomPromptAction") &&
+            appSettingsSource.contains("aiAccessConfigured: true") &&
+            appSettingsSource.contains("defaultEnglishActionIDKey") &&
+            appSettingsSource.contains("defaultChineseMixedActionIDKey"),
+        "settings persistence should include custom prompt actions and action-ID defaults"
+    )
+    try check(
+        hubSource.contains("自定义 Prompt 动作") &&
+            hubSource.contains("HubSegmentedDescriptorRow") &&
+            hubSource.contains("deleteCustomPromptAction") &&
+            hubSource.contains("saveDefaultEnglishActionID"),
+        "Hub settings should expose custom action create/delete and descriptor defaults"
+    )
+    try check(
+        settingsViewSource.contains("自定义 Prompt 动作") &&
+            settingsViewSource.contains("DescriptorActionMenu") &&
+            settingsViewSource.contains("saveCustomPromptAction") &&
+            settingsViewSource.contains("selectionHotKeyBinding"),
+        "standalone SettingsView should expose custom action create/delete, descriptor defaults, and separate selection hotkey"
+    )
+    try check(
+        hotKeySource.contains("callbacks: [UInt32") &&
+            hotKeySource.contains("GetEventParameter") &&
+            hotKeySource.contains("hotKeyID.id"),
+        "global hotkey manager should dispatch multiple hotkeys by Carbon hotkey ID"
+    )
+    try check(
+        controllerSource.contains("presentInputFromHotKey") &&
+            controllerSource.contains("presentSelectionFromHotKey") &&
+            controllerSource.contains("presentSelectionLauncher") &&
+            controllerSource.contains("LINGOPEEK_UI_TEST_INPUT") &&
+            controllerSource.contains("LINGOPEEK_UI_TEST_LAUNCHER") &&
+            controllerSource.contains("selectedTextIncludingClipboardFallback") &&
+            controllerSource.contains("selectionReader.selectedText()"),
+        "controller should separate input hotkey, selection hotkey, launcher, and AX-only hover reads"
+    )
+    try check(
+        controllerSource.contains("LingobarActionCatalog.matchingKeyboardShortcut") &&
+            controllerSource.contains("descriptors: AppSettings.actionDescriptors") &&
+            !controllerSource.contains("actionOrder: AppSettings.actionOrder"),
+        "panel shortcuts should follow the visible built-in and custom action descriptor order"
+    )
+    try check(
+        viewModelSource.contains("presentRecentSelectionHistoryOrExample") &&
+            viewModelSource.contains("recentSelectionHistoryRecord") &&
+            viewModelSource.contains("defaultExampleSelection"),
+        "view model should support no-selection fallback to recent selection history or example text"
+    )
+    try check(
+        viewModelSource.contains("snapshotActionDescriptor") &&
+            viewModelSource.contains("sourceActionTitle: record.actionTitle") &&
+            viewModelSource.contains("自定义动作已删除，无法重新生成") &&
+            controllerSource.contains("sourceActionID: item.actionID") &&
+            controllerSource.contains("sourceActionTitle: item.actionTitle") &&
+            hubSource.contains("item.actionTitle"),
+        "saved custom action snapshots should reopen and render with their persisted identity"
+    )
+    try check(
+        rootViewSource.contains("selectionLauncher") &&
+            rootViewSource.contains("updateSelectedText") &&
+            rootViewSource.contains("selectInputAction") &&
+            rootViewSource.contains("viewModel.openFromLauncher"),
+        "root view should expose launcher actions, editable selected text, and input action selection"
+    )
+    try check(
+        !selectionLauncherSource.contains("viewModel.selectedText") &&
+            rootViewSource.contains("viewModel.mode == .launcher ? Self.launcherWidth : Self.mainWidth"),
+        "selection launcher should keep the selected text private in a compact root surface"
+    )
+    try check(
+        inputResultPanelSource.contains("panelTitle(viewModel.action.title"),
+        "input result panel should identify the selected built-in or custom action"
+    )
+}
+
 do {
     try checkLocalLanguageEngine()
     try checkLanguageActionKeyboardShortcuts()
+    try checkLingobarActionDescriptorCatalog()
     try checkDeepSeekRequestFactory()
     try checkOpenAICompatibleRequestFactory()
     try checkSetupGate()
@@ -2502,6 +2783,7 @@ do {
     try checkLanguageActionCodable()
     try checkLingobarHistoryStore()
     try checkLingobarHistoryRecordBuilderPrivacy()
+    try checkCustomPromptActionHistorySnapshot()
     try checkLingobarHubLibraryItems()
     try checkLingobarRelaunchPlanner()
     try checkLingobarViewModelHistoryRecordingSourceGate()
@@ -2511,6 +2793,7 @@ do {
     try checkActionTabLearningInsightsSourceGate()
     try checkFollowUpThreadMemorySourceGate()
     try checkSelectionPermissionSourceGate()
+    try checkIssue15CustomActionSourceGate()
     try checkPhraseStore()
     try checkLingobarHubShellSourceGate()
     try checkLingobarPanelSpaceBehaviorSourceGate()

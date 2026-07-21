@@ -2619,6 +2619,17 @@ func checkSelectionPermissionSourceGate() throws {
     try check(selectionReaderSource.contains("private static var canReadSelection"), "selection reader should centralize its permission gate")
     try check(selectionReaderSource.contains("AXIsProcessTrusted()"), "selection reader should ask the system Accessibility trust API")
     try check(
+        selectionReaderSource.contains("AXUIElementGetTypeID()") &&
+            selectionReaderSource.contains("AXValueGetTypeID()") &&
+            !selectionReaderSource.contains("as!"),
+        "selection reader should reject unexpected Accessibility payload types instead of force-casting them"
+    )
+    try check(
+        selectionReaderSource.contains("LINGOPEEK_UI_TEST_MODE") &&
+            selectionReaderSource.contains("LINGOPEEK_UI_TEST_SELECTION_FILE"),
+        "selection reader should expose a UI-test-only selection source for deterministic launcher lifecycle checks"
+    )
+    try check(
         selectionReaderSource.contains("guard Self.canReadSelection else") &&
             selectionReaderSource.contains("selectedTextByCopyingSelection"),
         "selection reader should refuse AX and copy fallback reads when Accessibility is disabled"
@@ -2679,6 +2690,11 @@ func checkIssue15CustomActionSourceGate() throws {
         rootViewSource,
         from: "private var selectionLauncher: some View",
         to: "private var inputPill: some View"
+    )
+    let selectionPollingSource = try sourceRegion(
+        controllerSource,
+        from: "private func startSelectionPolling()",
+        to: "private var isLingoPeekFrontmost"
     )
     let inputResultPanelSource = try sourceRegion(
         rootViewSource,
@@ -2757,6 +2773,25 @@ func checkIssue15CustomActionSourceGate() throws {
         !selectionLauncherSource.contains("viewModel.selectedText") &&
             rootViewSource.contains("viewModel.mode == .launcher ? Self.launcherWidth : Self.mainWidth"),
         "selection launcher should keep the selected text private in a compact root surface"
+    )
+    try check(
+        controllerSource.contains("private static let selectionPollInterval: TimeInterval = 0.15") &&
+            selectionPollingSource.contains("NSEvent.addGlobalMonitorForEvents") &&
+            selectionPollingSource.contains(".leftMouseUp") &&
+            selectionPollingSource.contains(".keyUp") &&
+            controllerSource.contains("NSEvent.removeMonitor"),
+        "selection launcher should react immediately to selection gestures and clean up its event monitor"
+    )
+    try check(
+        !selectionPollingSource.contains("pendingLauncherSelection") &&
+            !selectionPollingSource.contains("stableSelectionPollCount"),
+        "selection launcher should not delay presentation for repeated stable polls"
+    )
+    try check(
+        selectionPollingSource.contains("hideSelectionLauncher()") &&
+            selectionPollingSource.contains("emptySelectionPollCount >= 2") &&
+            !selectionPollingSource.contains("panel?.isVisible == true, viewModel.mode != .launcher"),
+        "selection polling should hide a confirmed stale launcher and continue while the full Lingobar is visible"
     )
     try check(
         inputResultPanelSource.contains("panelTitle(viewModel.action.title"),

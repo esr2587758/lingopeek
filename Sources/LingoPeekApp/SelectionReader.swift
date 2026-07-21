@@ -5,6 +5,9 @@ import Foundation
 
 struct SelectionReader {
     func selectedTextIncludingClipboardFallback() -> String? {
+        if Self.uiTestSelectionFilePath != nil {
+            return selectedText()
+        }
         guard Self.canReadSelection else {
             return nil
         }
@@ -18,17 +21,18 @@ struct SelectionReader {
     }
 
     func selectedText() -> String? {
+        if let path = Self.uiTestSelectionFilePath {
+            let selected = try? String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
+            let trimmed = selected?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
         guard Self.canReadSelection else {
             return nil
         }
-        let system = AXUIElementCreateSystemWide()
-        var focusedValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
-              let focused = focusedValue else {
+        guard let focusedElement else {
             return nil
         }
 
-        let focusedElement = focused as! AXUIElement
         var selectedValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(focusedElement, kAXSelectedTextAttribute as CFString, &selectedValue) == .success,
               let selected = selectedValue as? String else {
@@ -43,25 +47,43 @@ struct SelectionReader {
         AXIsProcessTrusted()
     }
 
+    private static var uiTestSelectionFilePath: String? {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["LINGOPEEK_UI_TEST_MODE"] == "1",
+              let path = environment["LINGOPEEK_UI_TEST_SELECTION_FILE"],
+              !path.isEmpty else {
+            return nil
+        }
+        return path
+    }
+
+    private var focusedElement: AXUIElement? {
+        let system = AXUIElementCreateSystemWide()
+        var focusedValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
+              let focused = focusedValue,
+              CFGetTypeID(focused) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        return unsafeDowncast(focused, to: AXUIElement.self)
+    }
+
     private func selectedTextRangeLength() -> Int? {
         guard Self.canReadSelection else {
             return nil
         }
-        let system = AXUIElementCreateSystemWide()
-        var focusedValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
-              let focused = focusedValue else {
+        guard let focusedElement else {
             return nil
         }
 
-        let focusedElement = focused as! AXUIElement
         var rangeValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(focusedElement, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
-              let rangeValue else {
+              let rangeValue,
+              CFGetTypeID(rangeValue) == AXValueGetTypeID() else {
             return nil
         }
 
-        let rangeAXValue = rangeValue as! AXValue
+        let rangeAXValue = unsafeDowncast(rangeValue, to: AXValue.self)
         var range = CFRange()
         guard AXValueGetValue(rangeAXValue, .cfRange, &range) else {
             return nil

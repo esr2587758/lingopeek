@@ -12,6 +12,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
     private static let inputEmptyPanelSize = NSSize(width: 720, height: 72)
     private static let inputLoadingPanelSize = NSSize(width: 720, height: 287)
     private static let inputResultPanelSize = NSSize(width: 720, height: 420)
+    private static let selectionPollInterval: TimeInterval = 0.15
     private static let followUpPaneWidth: CGFloat = 420
     private static let followUpGap: CGFloat = 14
     private static let followUpMinimumHeight: CGFloat = 500
@@ -32,8 +33,8 @@ final class LingobarController: NSObject, NSWindowDelegate {
     private var registeredInputHotKey: LingobarHotKey?
     private var registeredSelectionHotKey: LingobarHotKey?
     private var selectionPollTimer: Timer?
-    private var pendingLauncherSelection: String?
-    private var stableSelectionPollCount = 0
+    private var selectionEventMonitor: Any?
+    private var emptySelectionPollCount = 0
     private var lastPresentedLauncherSelection: String?
     private var isPositioningProgrammatically = false
     private let appUpdater: AppUpdater?
@@ -100,8 +101,7 @@ final class LingobarController: NSObject, NSWindowDelegate {
         hotKeyManager?.unregister()
         registeredInputHotKey = nil
         registeredSelectionHotKey = nil
-        selectionPollTimer?.invalidate()
-        selectionPollTimer = nil
+        stopSelectionMonitoring()
         if let hotKeyObserver {
             NotificationCenter.default.removeObserver(hotKeyObserver)
             self.hotKeyObserver = nil
@@ -262,8 +262,13 @@ final class LingobarController: NSObject, NSWindowDelegate {
     }
 
     private func startSelectionPolling() {
-        selectionPollTimer?.invalidate()
-        let timer = Timer(timeInterval: 0.35, repeats: true) { [weak self] _ in
+        stopSelectionMonitoring()
+        selectionEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp, .keyUp]) { [weak self] _ in
+            Task { @MainActor in
+                self?.pollSelectionForLauncher()
+            }
+        }
+        let timer = Timer(timeInterval: Self.selectionPollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.pollSelectionForLauncher()
             }
@@ -272,45 +277,60 @@ final class LingobarController: NSObject, NSWindowDelegate {
         selectionPollTimer = timer
     }
 
+    private func stopSelectionMonitoring() {
+        selectionPollTimer?.invalidate()
+        selectionPollTimer = nil
+        if let selectionEventMonitor {
+            NSEvent.removeMonitor(selectionEventMonitor)
+            self.selectionEventMonitor = nil
+        }
+    }
+
     private func pollSelectionForLauncher() {
         guard AppSettings.triggerOnSelection,
               AppSettings.showSelectionFloatButton,
-              AppSettings.setupGateStatus.requiredAction == .useLingobar,
-              !isLingoPeekFrontmost else {
-            resetSelectionPollingCandidate()
+              AppSettings.setupGateStatus.requiredAction == .useLingobar else {
+            hideSelectionLauncher()
             return
         }
-        if panel?.isVisible == true, viewModel.mode != .launcher {
+        guard !isLingoPeekFrontmost else {
             return
         }
         guard let selection = selectionReader.selectedText(),
               !selection.isEmpty else {
-            resetSelectionPollingCandidate()
+            handleMissingSelection()
             return
         }
 
-        if pendingLauncherSelection == selection {
-            stableSelectionPollCount += 1
-        } else {
-            pendingLauncherSelection = selection
-            stableSelectionPollCount = 1
-        }
-
-        guard stableSelectionPollCount >= 2,
-              lastPresentedLauncherSelection != selection else {
+        emptySelectionPollCount = 0
+        guard lastPresentedLauncherSelection != selection else {
             return
         }
         presentLauncher(selection: selection, sourceAppName: frontmostSourceAppName())
     }
 
-    private var isLingoPeekFrontmost: Bool {
-        NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier
+    private func handleMissingSelection() {
+        guard viewModel.mode == .launcher else {
+            emptySelectionPollCount = 0
+            lastPresentedLauncherSelection = nil
+            return
+        }
+        emptySelectionPollCount += 1
+        if emptySelectionPollCount >= 2 {
+            hideSelectionLauncher()
+        }
     }
 
-    private func resetSelectionPollingCandidate() {
-        pendingLauncherSelection = nil
-        stableSelectionPollCount = 0
+    private func hideSelectionLauncher() {
+        if viewModel.mode == .launcher {
+            panel?.orderOut(nil)
+        }
+        emptySelectionPollCount = 0
         lastPresentedLauncherSelection = nil
+    }
+
+    private var isLingoPeekFrontmost: Bool {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier
     }
 
     private func presentLauncher(selection: String, sourceAppName: String) {

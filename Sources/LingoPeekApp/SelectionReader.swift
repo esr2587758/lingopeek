@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
 import Foundation
+import LingobarCore
 
 struct SelectionReader {
     func selectedTextIncludingClipboardFallback() -> String? {
@@ -58,9 +59,28 @@ struct SelectionReader {
     }
 
     private var focusedElement: AXUIElement? {
-        let system = AXUIElementCreateSystemWide()
+        SelectionFocusResolver.resolve(
+            frontmostApplication: {
+                guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else {
+                    return nil
+                }
+                return focusedElement(
+                    in: AXUIElementCreateApplication(frontmostApplication.processIdentifier)
+                )
+            },
+            systemWide: {
+                focusedElement(in: AXUIElementCreateSystemWide())
+            }
+        )
+    }
+
+    private func focusedElement(in rootElement: AXUIElement) -> AXUIElement? {
         var focusedValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
+        guard AXUIElementCopyAttributeValue(
+            rootElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        ) == .success,
               let focused = focusedValue,
               CFGetTypeID(focused) == AXUIElementGetTypeID() else {
             return nil

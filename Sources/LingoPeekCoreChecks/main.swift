@@ -2625,6 +2625,13 @@ func checkSelectionPermissionSourceGate() throws {
         "selection reader should reject unexpected Accessibility payload types instead of force-casting them"
     )
     try check(
+        selectionReaderSource.contains("SelectionFocusResolver.resolve") &&
+            selectionReaderSource.contains("NSWorkspace.shared.frontmostApplication") &&
+            selectionReaderSource.contains("AXUIElementCreateApplication") &&
+            selectionReaderSource.contains("AXUIElementCreateSystemWide"),
+        "selection reader should use the tested browser-first focus resolver"
+    )
+    try check(
         selectionReaderSource.contains("LINGOPEEK_UI_TEST_MODE") &&
             selectionReaderSource.contains("LINGOPEEK_UI_TEST_SELECTION_FILE"),
         "selection reader should expose a UI-test-only selection source for deterministic launcher lifecycle checks"
@@ -2654,6 +2661,38 @@ func checkSelectionPermissionSourceGate() throws {
         setupPanel.contains("dragSurface()"),
         "setup gate panel should expose a draggable background like the normal Lingobar surfaces"
     )
+}
+
+func checkSelectionFocusResolver() throws {
+    var calls: [String] = []
+    let browserFocus = SelectionFocusResolver.resolve(
+        frontmostApplication: {
+            calls.append("frontmost")
+            return "browser focus"
+        },
+        systemWide: {
+            calls.append("system-wide")
+            return nil
+        }
+    )
+
+    try check(browserFocus == "browser focus", "frontmost-app browser focus should be returned")
+    try check(calls == ["frontmost"], "system-wide focus should not be queried when browser focus is available")
+
+    calls = []
+    let fallbackFocus: String? = SelectionFocusResolver.resolve(
+        frontmostApplication: {
+            calls.append("frontmost")
+            return nil
+        },
+        systemWide: {
+            calls.append("system-wide")
+            return "system focus"
+        }
+    )
+
+    try check(fallbackFocus == "system focus", "system-wide focus should remain available as a fallback")
+    try check(calls == ["frontmost", "system-wide"], "focus lookup should use browser-first fallback order")
 }
 
 func checkIssue15CustomActionSourceGate() throws {
@@ -2827,6 +2866,7 @@ do {
     try checkGrammarTabLearningSectionsSourceGate()
     try checkActionTabLearningInsightsSourceGate()
     try checkFollowUpThreadMemorySourceGate()
+    try checkSelectionFocusResolver()
     try checkSelectionPermissionSourceGate()
     try checkIssue15CustomActionSourceGate()
     try checkPhraseStore()
